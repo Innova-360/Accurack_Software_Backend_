@@ -1,0 +1,391 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  super_admin
+  admin
+  manager
+  employee
+}
+
+enum Action {
+  create
+  read
+  update
+  delete
+}
+
+enum Status {
+  active
+  inactive
+  pending
+  suspended
+}
+
+enum TaxMode {
+  inclusive
+  exclusive
+}
+
+model Clients {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  address   String?
+  status    Status   @default(active)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users    Users[]
+  stores   Stores[]
+  products Products[]
+}
+
+model Users {
+  id           String   @id @default(uuid())
+  firstName    String
+  lastName     String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  clientId     String
+  status       Status   @default(active)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client         Clients           @relation(fields: [clientId], references: [id])
+  stores         UserStoreMap[]
+  inviteLinks    InviteLinks[]
+  permissions    Permissions[]
+  notifications  Notifications[]
+  auditLogs      AuditLogs[]
+  apiTokens      ApiTokens[]
+  passwordResetTokens PasswordResetTokens[]
+}
+
+model Stores {
+  id          String   @id @default(uuid())
+  name        String
+  address     String?
+  phone       String?
+  email       String?
+  clientId    String
+  status      Status   @default(active)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client          Clients           @relation(fields: [clientId], references: [id])
+  settings        StoreSettings?
+  users           UserStoreMap[]
+  employees       Employees[]
+  products        Products[]
+  categories      ProductCategories[]
+  inventory       InventoryEntries[]
+  suppliers       Suppliers[]
+  sales           Sales[]
+  purchaseOrders  PurchaseOrders[]
+  expenses        Expenses[]
+  reports         Reports[]
+}
+
+model StoreSettings {
+  id                String   @id @default(uuid())
+  storeId          String   @unique
+  currency         String   @default("USD")
+  taxRate          Float    @default(0)
+  taxMode          TaxMode  @default(exclusive)
+  lowStockAlert    Int      @default(10)
+  enableNotifications Boolean @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  store            Stores   @relation(fields: [storeId], references: [id])
+}
+
+model UserStoreMap {
+  id        String   @id @default(uuid())
+  userId    String
+  storeId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      Users    @relation(fields: [userId], references: [id])
+  store     Stores   @relation(fields: [storeId], references: [id])
+
+  @@unique([userId, storeId])
+}
+
+model InviteLinks {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique
+  role      Role
+  userId    String
+  status    Status   @default(pending)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      Users    @relation(fields: [userId], references: [id])
+}
+
+model Permissions {
+  id        String   @id @default(uuid())
+  userId    String
+  action    Action
+  resource  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      Users    @relation(fields: [userId], references: [id])
+
+  @@unique([userId, action, resource])
+}
+
+model EmployeePermissions {
+  id        String   @id @default(uuid())
+  employeeId String
+  action    Action
+  resource  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee  Employees @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, action, resource])
+}
+
+model PermissionGroups {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       PermissionGroupItems[]
+  employees   EmployeePermissionGroups[]
+}
+
+model PermissionGroupItems {
+  id                String   @id @default(uuid())
+  permissionGroupId String
+  action           Action
+  resource         String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  permissionGroup   PermissionGroups @relation(fields: [permissionGroupId], references: [id])
+
+  @@unique([permissionGroupId, action, resource])
+}
+
+model EmployeePermissionGroups {
+  id                String   @id @default(uuid())
+  employeeId       String
+  permissionGroupId String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  employee         Employees      @relation(fields: [employeeId], references: [id])
+  permissionGroup  PermissionGroups @relation(fields: [permissionGroupId], references: [id])
+
+  @@unique([employeeId, permissionGroupId])
+}
+
+model Employees {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  storeId   String
+  status    Status   @default(active)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store               Stores                @relation(fields: [storeId], references: [id])
+  permissions         EmployeePermissions[]
+  permissionGroups    EmployeePermissionGroups[]
+  sales               Sales[]
+  purchaseOrders      PurchaseOrders[]
+  expenses           Expenses[]
+}
+
+model Notifications {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      Users    @relation(fields: [userId], references: [id])
+}
+
+model AuditLogs {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  resource  String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  user      Users    @relation(fields: [userId], references: [id])
+}
+
+model ApiTokens {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  name      String
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      Users    @relation(fields: [userId], references: [id])
+}
+
+model PasswordResetTokens {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user      Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Products {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  sku         String   @unique
+  barcode     String?
+  price       Float
+  costPrice   Float
+  quantity    Int      @default(0)
+  clientId    String
+  storeId     String
+  categoryId  String?
+  status      Status   @default(active)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client      Clients           @relation(fields: [clientId], references: [id])
+  store       Stores            @relation(fields: [storeId], references: [id])
+  category    ProductCategories? @relation(fields: [categoryId], references: [id])
+  inventory   InventoryEntries[]
+  sales       Sales[]
+  purchaseOrders PurchaseOrders[]
+}
+
+model ProductCategories {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  storeId     String
+  status      Status   @default(active)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store       Stores    @relation(fields: [storeId], references: [id])
+  products    Products[]
+}
+
+model InventoryEntries {
+  id          String   @id @default(uuid())
+  productId   String
+  storeId     String
+  quantity    Int
+  type        String
+  reference   String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product     Products @relation(fields: [productId], references: [id])
+  store       Stores   @relation(fields: [storeId], references: [id])
+}
+
+model Suppliers {
+  id          String   @id @default(uuid())
+  name        String
+  contactName String?
+  email       String?
+  phone       String?
+  address     String?
+  storeId     String
+  status      Status   @default(active)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store       Stores           @relation(fields: [storeId], references: [id])
+  purchaseOrders PurchaseOrders[]
+}
+
+model Sales {
+  id          String   @id @default(uuid())
+  productId   String
+  employeeId  String
+  storeId     String
+  quantity    Int
+  price       Float
+  total       Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product     Products  @relation(fields: [productId], references: [id])
+  employee    Employees @relation(fields: [employeeId], references: [id])
+  store       Stores    @relation(fields: [storeId], references: [id])
+}
+
+model PurchaseOrders {
+  id          String   @id @default(uuid())
+  productId   String
+  supplierId  String
+  employeeId  String
+  storeId     String
+  quantity    Int
+  price       Float
+  total       Float
+  status      Status   @default(pending)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product     Products  @relation(fields: [productId], references: [id])
+  supplier    Suppliers @relation(fields: [supplierId], references: [id])
+  employee    Employees @relation(fields: [employeeId], references: [id])
+  store       Stores    @relation(fields: [storeId], references: [id])
+}
+
+model Expenses {
+  id          String   @id @default(uuid())
+  employeeId  String
+  storeId     String
+  amount      Float
+  description String
+  date        DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employee    Employees @relation(fields: [employeeId], references: [id])
+  store       Stores    @relation(fields: [storeId], references: [id])
+}
+
+model Reports {
+  id          String   @id @default(uuid())
+  storeId     String
+  type        String
+  data        Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store       Stores    @relation(fields: [storeId], references: [id])
+}
