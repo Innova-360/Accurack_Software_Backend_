@@ -1,5 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { VersioningType } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
+
 import * as dotenv from 'dotenv';
 
 // Load environment variables
@@ -7,19 +10,19 @@ dotenv.config();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-
-  // Enable CORS for frontend integration
-  app.enableCors({
-    origin: '*',
-    credentials: true,
+  app.setGlobalPrefix('api'); // Ensure /api prefix
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
   });
-
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
-  console.log(`🚀 Application is running on: http://localhost:${port}`);
-  console.log(`📋 Google OAuth: http://localhost:${port}/auth/google`);
-  console.log(
-    `📄 Test Instructions: http://localhost:${port}/test/google-auth-flow`,
-  );
+  app.useGlobalPipes(new ValidationPipe({ transform: true }));
+  // app.use(helmet());
+  app.enableCors({
+    // origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    // credentials: true,
+  });
+  await app.listen(4000);
 }
 bootstrap();

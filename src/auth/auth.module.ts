@@ -8,13 +8,32 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { GoogleOAuthGuard } from '../guards/google-oauth.guard';
 import { RolesGuard } from '../guards/roles.guard';
+import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 
 @Module({
   imports: [
-    PassportModule,
+    PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
       signOptions: { expiresIn: '24h' },
+    }),
+    MailerModule.forRoot({
+      transport: {
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT),
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      },
+      defaults: {
+        from: '"Accurack" <no-reply@accurack.com>',
+      },
+      template: {
+        dir: process.cwd() + '/templates/',
+        adapter: new HandlebarsAdapter(),
+        options: { strict: true },
+      },
     }),
   ],
   controllers: [AuthController],
@@ -26,6 +45,14 @@ import { RolesGuard } from '../guards/roles.guard';
     GoogleOAuthGuard,
     RolesGuard,
   ],
-  exports: [AuthService, JwtAuthGuard, GoogleOAuthGuard, RolesGuard, JwtModule],
+  exports: [
+    AuthService,
+    JwtAuthGuard,
+    GoogleOAuthGuard,
+    RolesGuard,
+    JwtModule,
+    PrismaClientService,
+    JwtStrategy,
+  ],
 })
 export class AuthModule {}
