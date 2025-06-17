@@ -6,12 +6,28 @@ import { GoogleProfileDto } from '../dto/auth.dto';
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor() {
+    // Validate required environment variables
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+    if (!clientId) {
+      throw new Error(
+        'GOOGLE_CLIENT_ID environment variable is required for Google OAuth',
+      );
+    }
+
+    if (!clientSecret) {
+      throw new Error(
+        'GOOGLE_CLIENT_SECRET environment variable is required for Google OAuth',
+      );
+    }
+
     super({
-      clientID: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      clientID: clientId,
+      clientSecret: clientSecret,
       callbackURL:
         process.env.GOOGLE_CALLBACK_URL ||
-        'http://localhost:3000/auth/google/callback',
+        'http://localhost:4000/api/v1/auth/google/callback',
       scope: ['email', 'profile'],
     });
   }

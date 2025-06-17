@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { VersioningType } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
+import { EnvValidation } from './utils/env-validation';
 
 import * as dotenv from 'dotenv';
 
@@ -9,6 +10,13 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 async function bootstrap() {
+  // Validate critical environment variables before starting the app
+  EnvValidation.validateCriticalEnvVars();
+
+  // Validate optional configurations
+  EnvValidation.validateEmailConfig();
+  EnvValidation.validateGoogleOAuthConfig();
+
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api'); // Ensure /api prefix
   app.enableVersioning({

@@ -12,10 +12,16 @@ import {
   RefreshTokenDto,
   ForgotPasswordDto,
   SignupSuperAdminDto,
+  LoginDto,
+  ResetPasswordDto,
+  InviteDto,
+  AcceptInviteDto,
 } from './dto/auth.dto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { MailerService } from '@nestjs-modules/mailer';
-import { Role } from '@prisma/client';
+import { Role, Status } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {

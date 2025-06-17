@@ -1,18 +1,53 @@
-import { Controller, Get, UseGuards, Req, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  UseGuards,
+  Req,
+  Res,
+  Version,
+  Post,
+  Body,
+  Request,
+  Query,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { GoogleOAuthGuard } from '../guards/google-oauth.guard';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
-import { Roles, Role } from '../decorators/roles.decorator';
 import { Public } from '../decorators/public.decorator';
-import { GoogleProfileDto, AuthResponseDto } from './dto/auth.dto';
+import { Status, Role } from '@prisma/client';
+import {
+  GoogleProfileDto,
+  AuthResponseDto,
+  SignupSuperAdminDto,
+  LoginDto,
+  RefreshTokenDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  InviteDto,
+  AcceptInviteDto,
+} from './dto/auth.dto';
+import { Roles } from 'src/decorators/roles.decorator';
 
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
   // Start Google OAuth flow
+
   @Public()
+  @Version('1')
+  @Get('/')
+  async getStatus() {
+    return {
+      message: 'Auth service is running',
+      timestamp: new Date().toISOString(),
+      status: 'active',
+    };
+  }
+
+  @Public()
+  @Version('1')
   @Get('google')
   @UseGuards(GoogleOAuthGuard)
   async googleAuth(@Req() req) {
@@ -21,6 +56,7 @@ export class AuthController {
 
   // Google OAuth callback
   @Public()
+  @Version('1')
   @Get('google/callback')
   @UseGuards(GoogleOAuthGuard)
   async googleAuthRedirect(@Req() req, @Res() res: Response) {
@@ -38,7 +74,7 @@ export class AuthController {
   // Protected route to test JWT token
   @Get('profile')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.USER, Role.ADMIN)
+  @Roles(Role.employee, Role.manager, Role.admin, Role.super_admin)
   getProfile(@Req() req) {
     return {
       message: 'This is a protected route',
@@ -49,7 +85,7 @@ export class AuthController {
   // Admin only route example
   @Get('admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.admin, Role.super_admin)
   getAdminData(@Req() req) {
     return {
       message: 'This is an admin-only route',
