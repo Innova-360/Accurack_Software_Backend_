@@ -4,11 +4,12 @@ import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaClientService } from '../prisma-client/prisma-client.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { MailerService } from '@nestjs-modules/mailer';
+import { MailService } from '../mail/mail.service';
 import {
   SignupSuperAdminDto,
   InviteDto,
@@ -26,68 +27,249 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaClientService,
     private readonly jwtService: JwtService,
-    private readonly mailerService: MailerService,
+    private readonly mailService: MailService,
   ) {}
 
-  async signupSuperAdmin(dto: SignupSuperAdminDto) {
+  private getDatabaseUrl(): string {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) {
+      throw new InternalServerErrorException('Database URL is not configured');
+    }
+    return databaseUrl;
+  }
+
+  private generateOtp(): string {
+    // In production, use a more secure random number generator
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  private async validateInput(dto: SignupSuperAdminDto): Promise<void> {
     const { firstName, lastName, email, password } = dto;
 
-    const existingUser = await this.prisma.users.findUnique({
-      where: { email },
-      select: { id: true },
-    });
-    if (existingUser) {
-      throw new BadRequestException('Email already exists');
+    if (!firstName || !lastName || !email || !password) {
+      throw new BadRequestException('All fields are required');
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const client = await this.prisma.clients.create({
-      data: {
-        name: `${firstName} ${lastName}'s Organization`,
-        email,
-      },
-      select: { id: true },
-    });
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new BadRequestException('Invalid email format');
+    }
 
-    const user = await this.prisma.users.create({
-      data: {
-        firstName,
-        lastName,
-        email,
-        passwordHash,
-        role: Role.super_admin,
-        clientId: client.id,
-        status: Status.active,
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        role: true,
-      },
-    });
+    // Validate password strength
+    if (password.length < 8) {
+      throw new BadRequestException(
+        'Password must be at least 8 characters long',
+      );
+    }
 
-    await this.prisma.auditLogs.create({
-      data: {
-        userId: user.id,
-        action: 'user_created',
-        resource: 'auth',
-        details: { role: Role.super_admin, email },
-      },
-    });
-
-    return {
-      message: 'Super Admin created successfully',
-      user: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email,
-        role: user.role,
-      },
-    };
+    if (!/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+      throw new BadRequestException(
+        'Password must contain at least one uppercase letter and one number',
+      );
+    }
   }
+
+  async signupSuperAdmin(dto: SignupSuperAdminDto) {
+    try {
+      // Validate input
+      await this.validateInput(dto);
+
+      const { firstName, lastName, email, password } = dto;
+
+      // Check for existing user
+      const existingUser = await this.prisma.users.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+
+      if (existingUser) {
+        throw new BadRequestException('Email already exists');
+      }
+
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      // Generate OTP
+      const otp = this.generateOtp();
+      const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiration
+
+      // Create transaction for client and user creation
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Create client
+        const client = await tx.clients.create({
+          data: {
+            name: `${firstName} ${lastName}'s Organization`,
+            email,
+            databaseUrl: this.getDatabaseUrl(),
+            tier: 'free',
+          },
+          select: { id: true },
+        });
+
+        // Create user with OTP
+        const user = await tx.users.create({
+          data: {
+            firstName,
+            lastName,
+            email,
+            passwordHash,
+            role: Role.super_admin,
+            clientId: client.id,
+            status: Status.active,
+            otp,
+            otpExpiresAt,
+            isOtpUsed: false,
+          },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+          },
+        });
+
+        return { client, user };
+      });
+
+      const { client, user } = result;
+
+      if (!client || !user) {
+        throw new InternalServerErrorException(
+          'Failed to create client or user',
+        );
+      }
+
+      // Send OTP email
+      await this.mailService.sendMail({
+        to: email,
+        subject: 'Your OTP Code - Accurack',
+        html: `<p>Your OTP code is: <strong>${otp}</strong></p>`,
+      });
+
+      // Create audit log
+      await this.prisma.auditLogs.create({
+        data: {
+          userId: user.id,
+          action: 'user_created',
+          resource: 'auth',
+          details: {
+            role: Role.super_admin,
+            email,
+            timestamp: new Date().toISOString(),
+          },
+        },
+      });
+
+      return {
+        message: 'Super Admin created successfully',
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+        },
+      };
+    } catch (error) {
+      // Handle specific Prisma errors
+      if (error.code === 'P2002') {
+        throw new BadRequestException('Email already exists');
+      }
+
+      // Log error for debugging (in production, use proper logging service)
+      console.error('Super admin signup error:', error);
+
+      // Throw appropriate error
+      throw error instanceof BadRequestException
+        ? error
+        : new InternalServerErrorException('Failed to create Super Admin');
+    }
+  }
+  
+
+  private async validateOtpInput(email: string, otp: string): Promise<void> {
+    // Validate email
+    if (!email) {
+      throw new BadRequestException('Email is required');
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new BadRequestException('Invalid email format');
+    }
+
+    // Validate OTP
+    if (!otp) {
+      throw new BadRequestException('OTP is required');
+    }
+
+    if (!/^\d{6}$/.test(otp)) {
+      throw new BadRequestException('OTP must be a 6-digit number');
+    }
+  }
+
+  async verifyOTP(email: string, otp: string): Promise<{ message: string }> {
+    try {
+      // Validate input
+      await this.validateOtpInput(email, otp);
+
+      // Find user with OTP
+      const user = await this.prisma.users.findFirst({
+        where: {
+          email,
+          otp,
+          otpExpiresAt: { gt: new Date() },
+          isOtpUsed: false,
+        },
+        select: {
+          id: true,
+          otpExpiresAt: true,
+        },
+      });
+
+      // Verify OTP existence and validity
+      if (!user) {
+        throw new UnauthorizedException('Invalid or expired OTP');
+      }
+
+      // Mark OTP as used
+      await this.prisma.users.update({
+        where: { id: user.id },
+        data: { isOtpUsed: true, otp: null, otpExpiresAt: null },
+      });
+
+      // Log OTP verification
+      await this.prisma.auditLogs.create({
+        data: {
+          userId: user.id,
+          action: 'otp_verified',
+          resource: 'auth',
+          details: {
+            email,
+            timestamp: new Date().toISOString(),
+          },
+        },
+      });
+
+      return { message: 'OTP verified successfully' };
+    } catch (error) {
+      // Log error for debugging (in production, use proper logging service)
+      console.error('OTP verification error:', error);
+
+      // Handle specific errors
+      if (
+        error instanceof BadRequestException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+
+      throw new BadRequestException('Failed to verify OTP');
+    }
+  }
+
 
   async login(dto: LoginDto): Promise<{
     accessToken: string;
@@ -124,21 +306,19 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const payload = {
+    }    const payload = {
       id: user.id,
       role: user.role,
       email: user.email,
       clientId: user.clientId,
       stores: user.stores,
     };
-
+    
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
     });
     const refreshToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_REFRESH_SECRET,
+      secret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
       expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
     });
 
@@ -166,11 +346,9 @@ export class AuthService {
   }
 
   async refreshToken(dto: RefreshTokenDto) {
-    const { refreshToken } = dto;
-
-    try {
+    const { refreshToken } = dto;    try {
       const decoded = this.jwtService.verify(refreshToken, {
-        secret: process.env.JWT_REFRESH_SECRET,
+        secret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
       });
 
       const user = await this.prisma.users.findUnique({
@@ -239,7 +417,7 @@ export class AuthService {
     const resetLink = `${process.env.APP_URL}/reset-password?token=${token}`;
     console.log(`Reset link: ${resetLink}`);
     try {
-      await this.mailerService.sendMail({
+      await this.mailService.sendMail({
         to: user.email,
         subject: 'Password Reset Request',
         html: `<p>Hi ${user.firstName},</p>
@@ -369,7 +547,7 @@ export class AuthService {
 
     const inviteLink = `${process.env.APP_URL}/invite?token=${token}`;
     try {
-      await this.mailerService.sendMail({
+      await this.mailService.sendMail({
         to: email,
         subject: `Invitation to join ${store.name} as ${role}`,
         html: `<p>Click <a href="${inviteLink}">here</a> to create your account.</p>`,

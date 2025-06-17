@@ -7,6 +7,7 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from '../guard/jwt.strategy';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -15,24 +16,7 @@ import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handleba
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '15m' },
     }),
-    MailerModule.forRoot({
-      transport: {
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT),
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
-      },
-      defaults: {
-        from: '"Accurack" <no-reply@accurack.com>',
-      },
-      template: {
-        dir: process.cwd() + '/templates/',
-        adapter: new HandlebarsAdapter(),
-        options: { strict: true },
-      },
-    }),
+    MailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, PrismaClientService, JwtStrategy],

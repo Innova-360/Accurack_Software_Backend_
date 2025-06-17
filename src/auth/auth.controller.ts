@@ -24,6 +24,7 @@ import { RolesGuard } from '../guard/roles.guard';
 import { Roles } from '../decorator/roles.decorator';
 import { Role } from '@prisma/client';
 import { Public } from '../decorator/public.decorator';
+import { verify } from 'crypto';
 
 @Controller('auth')
 export class AuthController {
@@ -40,20 +41,33 @@ export class AuthController {
   async signupSuperAdmin(@Body() dto: SignupSuperAdminDto) {
     return this.authService.signupSuperAdmin(dto);
   }
-  
+
   @Version('1')
+  @Post('verify-otp')
+  async verifyOTP(@Body() body: { email: string; otp: string }) {
+    return this.authService.verifyOTP(body.email, body.otp);
+  }
+    @Version('1')
   @Post('login')
   async login(@Body() dto: LoginDto, @Res() res) {
-    const {accessToken, refreshToken, user} = await this.authService.login(dto);
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-      sameSite: 'none', // Adjust as necessary
-    });
-    res.cookie('accessToken', accessToken, {
-      httpOnly: true,
-    });
-    return { user };
+    try {
+      const {accessToken, refreshToken, user} = await this.authService.login(dto);
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+        sameSite: 'none', // Adjust as necessary
+      });
+      res.cookie('accessToken', accessToken, {
+        httpOnly: true,
+      });
+      console.log('Access Token:', accessToken);
+      console.log('Refresh Token:', refreshToken);
+      console.log('User:', user);
+      return res.status(200).json({ data: user, status: 200, message: 'Login successful' });
+    } catch (error) {
+      console.error('Login error:', error);
+      return res.status(500).json({ error: error.message, status: 500, message: 'Login failed' });
+    }
   }
   
   @Version('1')
