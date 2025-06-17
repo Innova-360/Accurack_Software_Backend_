@@ -7,6 +7,7 @@ import {
   Version,
   UseGuards,
   Request,
+  Res,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
@@ -39,32 +40,22 @@ export class AuthController {
   async signupSuperAdmin(@Body() dto: SignupSuperAdminDto) {
     return this.authService.signupSuperAdmin(dto);
   }
-
-  @Version('1')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.super_admin, Role.admin)
-  @Post('invite')
-  async invite(@Body() dto: InviteDto, @Request() req) {
-    return this.authService.invite(
-      dto,
-      req.user.id,
-      req.user.role,
-      req.user.stores,
-    );
-  }
-
-  @Version('1')
-  @Post('accept-invite')
-  async acceptInvite(@Body() dto: AcceptInviteDto) {
-    return this.authService.acceptInvite(dto);
-  }
-
+  
   @Version('1')
   @Post('login')
-  async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(@Body() dto: LoginDto, @Res() res) {
+    const {accessToken, refreshToken, user} = await this.authService.login(dto);
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+      sameSite: 'none', // Adjust as necessary
+    });
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+    });
+    return { user };
   }
-
+  
   @Version('1')
   @Post('refresh')
   async refreshToken(@Body() dto: RefreshTokenDto) {
@@ -84,6 +75,25 @@ export class AuthController {
   @Public()
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
+  }
+
+  @Version('1')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.super_admin, Role.admin)
+  @Post('invite')
+  async invite(@Body() dto: InviteDto, @Request() req) {
+    return this.authService.invite(
+      dto,
+      req.user.id,
+      req.user.role,
+      req.user.stores,
+    );
+  }
+
+  @Version('1')
+  @Post('accept-invite')
+  async acceptInvite(@Body() dto: AcceptInviteDto) {
+    return this.authService.acceptInvite(dto);
   }
 
   @Version('1')
