@@ -5,12 +5,12 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { JwtStrategy } from '../guard/jwt.strategy';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
-import { GoogleOAuthGuard } from '../guards/google-oauth.guard';
-import { RolesGuard } from '../guards/roles.guard';
+
 import { PrismaClientModule } from 'src/prisma-client/prisma-client.module';
-import { MailerModule } from '@nestjs-modules/mailer';
-import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
+import { MailModule } from 'src/mail/mail.module';
+import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
+import { GoogleOAuthGuard } from 'src/guards/google-oauth.guard';
+import { RolesGuard } from 'src/guards/roles.guard';
 
 @Module({
   imports: [
@@ -28,31 +28,7 @@ import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handleba
       })(),
       signOptions: { expiresIn: '24h' },
     }),
-    MailerModule.forRoot({
-      transport: {
-        host:
-          process.env.SMTP_HOST ||
-          (() => {
-            console.warn(
-              'SMTP_HOST not defined, email functionality may not work',
-            );
-            return 'localhost';
-          })(),
-        port: Number(process.env.SMTP_PORT) || 587,
-        auth: {
-          user: process.env.SMTP_USER || '',
-          pass: process.env.SMTP_PASS || '',
-        },
-      },
-      defaults: {
-        from: '"Accurack" <no-reply@accurack.com>',
-      },
-      template: {
-        dir: process.cwd() + '/templates/',
-        adapter: new HandlebarsAdapter(),
-        options: { strict: true },
-      },
-    }),
+    MailModule,
   ],
   controllers: [AuthController],
   providers: [

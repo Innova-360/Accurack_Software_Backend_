@@ -33,12 +33,21 @@ enum TaxMode {
   exclusive
 }
 
+enum Tier {
+  free
+  basic
+  premium
+}
+
 model Clients {
   id        String   @id @default(uuid())
   name      String
   email     String   @unique
   phone     String?
   address   String?
+  databaseUrl String
+  tier      Tier
+  dataSizeMB  String?
   status    Status   @default(active)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -54,6 +63,9 @@ model Users {
   lastName     String
   email        String   @unique
   passwordHash String
+  otp          String?
+  otpExpiresAt DateTime?
+  isOtpUsed    Boolean?  @default(false)
   role         Role
   clientId     String
   status       Status   @default(active)
@@ -99,6 +111,7 @@ model StoreSettings {
   id                String   @id @default(uuid())
   storeId          String   @unique
   currency         String   @default("USD")
+  timezone         String
   taxRate          Float    @default(0)
   taxMode          TaxMode  @default(exclusive)
   lowStockAlert    Int      @default(10)

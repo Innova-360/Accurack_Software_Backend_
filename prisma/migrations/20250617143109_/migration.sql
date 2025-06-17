@@ -10,6 +10,9 @@ CREATE TYPE "Status" AS ENUM ('active', 'inactive', 'pending', 'suspended');
 -- CreateEnum
 CREATE TYPE "TaxMode" AS ENUM ('inclusive', 'exclusive');
 
+-- CreateEnum
+CREATE TYPE "Tier" AS ENUM ('free', 'basic', 'premium');
+
 -- CreateTable
 CREATE TABLE "Clients" (
     "id" TEXT NOT NULL,
@@ -17,6 +20,9 @@ CREATE TABLE "Clients" (
     "email" TEXT NOT NULL,
     "phone" TEXT,
     "address" TEXT,
+    "databaseUrl" TEXT NOT NULL,
+    "tier" "Tier" NOT NULL,
+    "dataSizeMB" TEXT,
     "status" "Status" NOT NULL DEFAULT 'active',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -60,6 +66,7 @@ CREATE TABLE "StoreSettings" (
     "id" TEXT NOT NULL,
     "storeId" TEXT NOT NULL,
     "currency" TEXT NOT NULL DEFAULT 'USD',
+    "timezone" TEXT NOT NULL,
     "taxRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "taxMode" "TaxMode" NOT NULL DEFAULT 'exclusive',
     "lowStockAlert" INTEGER NOT NULL DEFAULT 10,
