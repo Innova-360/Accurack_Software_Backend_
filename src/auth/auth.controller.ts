@@ -60,9 +60,6 @@ export class AuthController {
       res.cookie('accessToken', accessToken, {
         httpOnly: true,
       });
-      console.log('Access Token:', accessToken);
-      console.log('Refresh Token:', refreshToken);
-      console.log('User:', user);
       return res.status(200).json({ data: user, status: 200, message: 'Login successful' });
     } catch (error) {
       console.error('Login error:', error);
