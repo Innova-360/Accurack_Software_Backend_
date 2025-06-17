@@ -109,12 +109,6 @@ export class AuthController {
   }
 
   @Version('1')
-  @Get('test')
-  async test() {
-    return 'testing successful';
-  }
-
-  @Version('1')
   @Post('signup/super-admin')
   async signupSuperAdmin(@Body() dto: SignupSuperAdminDto) {
     return this.authService.signupSuperAdmin(dto);
@@ -122,9 +116,11 @@ export class AuthController {
 
   @Version('1')
   @Post('verify-otp')
-  async verifyOTP(@Body() body: { email: string; otp: string }) {
+  async verifyOTP(@Body() body) {
+    console.log('Verifying OTP for email:', body.email);
     return this.authService.verifyOTP(body.email, body.otp);
   }
+
   @Version('1')
   @Post('login')
   async login(@Body() dto: LoginDto, @Res() res) {
