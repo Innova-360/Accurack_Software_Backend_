@@ -11,6 +11,16 @@ import {
   Query,
 } from '@nestjs/common';
 import { Response } from 'express';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+  ApiQuery,
+  ApiOAuth2,
+  ApiExcludeEndpoint,
+} from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { GoogleOAuthGuard } from '../guards/google-oauth.guard';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -33,11 +43,25 @@ import { Roles } from '../decorator/roles.decorator';
 
 import { verify } from 'crypto';
 
+@ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
   // Start Google OAuth flow
 
+  @ApiOperation({ summary: 'Check authentication service status' })
+  @ApiResponse({
+    status: 200,
+    description: 'Service status information',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Auth service is running' },
+        timestamp: { type: 'string', example: '2025-06-18T10:30:00.000Z' },
+        status: { type: 'string', example: 'active' },
+      },
+    },
+  })
   @Public()
   @Version('1')
   @Get('/')
@@ -49,6 +73,12 @@ export class AuthController {
     };
   }
 
+  @ApiOperation({ summary: 'Initiate Google OAuth authentication' })
+  @ApiResponse({
+    status: 302,
+    description: 'Redirects to Google OAuth consent screen',
+  })
+  @ApiOAuth2(['openid', 'profile', 'email'], 'google-oauth')
   @Public()
   @Version('1')
   @Get('google')
@@ -57,7 +87,13 @@ export class AuthController {
     // This will redirect to Google
   }
 
-  // Google OAuth callback
+  @ApiOperation({ summary: 'Google OAuth callback handler' })
+  @ApiResponse({
+    status: 200,
+    description: 'Successful Google authentication',
+    type: AuthResponseDto,
+  })
+  @ApiExcludeEndpoint()
   @Public()
   @Version('1')
   @Get('google/callback')
@@ -74,6 +110,26 @@ export class AuthController {
       ...authResponse,
     });
   }
+  @ApiOperation({ summary: 'Get user profile information' })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile data',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'This is a protected route' },
+        user: {
+          type: 'object',
+          description: 'User information from JWT token',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiBearerAuth('JWT-auth')
   // Protected route to test JWT token
   @Get('profile')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -85,6 +141,31 @@ export class AuthController {
     };
   }
 
+  @ApiOperation({ summary: 'Get admin-only data' })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin data retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'This is an admin-only route' },
+        user: {
+          type: 'object',
+          description: 'User information from JWT token',
+        },
+        adminData: { type: 'string', example: 'Secret admin information' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Insufficient permissions',
+  })
+  @ApiBearerAuth('JWT-auth')
   // Admin only route example
   @Get('admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -97,6 +178,25 @@ export class AuthController {
     };
   }
 
+  @ApiOperation({ summary: 'Logout user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Logout instructions',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example:
+            'Logged out successfully. Please remove the token from client side.',
+        },
+        instruction: {
+          type: 'string',
+          example: 'Delete the JWT token from your application storage',
+        },
+      },
+    },
+  })
   // Logout (simple token invalidation message)
   @Public()
   @Get('logout')
@@ -108,12 +208,53 @@ export class AuthController {
     };
   }
 
+  @ApiOperation({ summary: 'Register super admin account' })
+  @ApiBody({ type: SignupSuperAdminDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Super admin account created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Super admin account created successfully',
+        },
+        user: { type: 'object', description: 'Created user information' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - Invalid input data' })
+  @ApiResponse({ status: 409, description: 'Conflict - Email already exists' })
   @Version('1')
   @Post('signup/super-admin')
   async signupSuperAdmin(@Body() dto: SignupSuperAdminDto) {
     return this.authService.signupSuperAdmin(dto);
   }
 
+  @ApiOperation({ summary: 'Verify OTP for email confirmation' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', example: 'user@example.com' },
+        otp: { type: 'string', example: '123456' },
+      },
+      required: ['email', 'otp'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'OTP verified successfully' },
+        verified: { type: 'boolean', example: true },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid OTP' })
   @Version('1')
   @Post('verify-otp')
   async verifyOTP(@Body() body) {
@@ -121,6 +262,22 @@ export class AuthController {
     return this.authService.verifyOTP(body.email, body.otp);
   }
 
+  @ApiOperation({ summary: 'User login' })
+  @ApiBody({ type: LoginDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Login successful',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'object', description: 'User information' },
+        status: { type: 'number', example: 200 },
+        message: { type: 'string', example: 'Login successful' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  @ApiResponse({ status: 500, description: 'Login failed' })
   @Version('1')
   @Post('login')
   async login(@Body() dto: LoginDto, @Res() res) {
@@ -146,12 +303,48 @@ export class AuthController {
     }
   }
 
+  @ApiOperation({ summary: 'Refresh JWT token' })
+  @ApiBody({ type: RefreshTokenDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Token refreshed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        accessToken: {
+          type: 'string',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        },
+        refreshToken: {
+          type: 'string',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Invalid refresh token' })
   @Version('1')
   @Post('refresh')
   async refreshToken(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto);
   }
 
+  @ApiOperation({ summary: 'Request password reset' })
+  @ApiBody({ type: ForgotPasswordDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Password reset email sent',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Password reset email sent successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Email not found' })
   @Version('1')
   @Post('forgot-password')
   @Public()
@@ -159,6 +352,19 @@ export class AuthController {
     return this.authService.forgotPassword(dto);
   }
 
+  @ApiOperation({ summary: 'Reset password with token' })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Password reset successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Password reset successfully' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid or expired reset token' })
   @Version('1')
   @Post('reset-password')
   @Public()
@@ -166,6 +372,25 @@ export class AuthController {
     return this.authService.resetPassword(dto);
   }
 
+  @ApiOperation({ summary: 'Invite user to store' })
+  @ApiBody({ type: InviteDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Invitation sent successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Invitation sent successfully' },
+        inviteId: {
+          type: 'string',
+          example: '123e4567-e89b-12d3-a456-426614174000',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiBearerAuth('JWT-auth')
   @Version('1')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.super_admin, Role.admin)
@@ -179,12 +404,57 @@ export class AuthController {
     );
   }
 
+  @ApiOperation({ summary: 'Accept store invitation' })
+  @ApiBody({ type: AcceptInviteDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Invitation accepted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Invitation accepted successfully',
+        },
+        user: { type: 'object', description: 'Created user information' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid or expired invitation token',
+  })
   @Version('1')
   @Post('accept-invite')
   async acceptInvite(@Body() dto: AcceptInviteDto) {
     return this.authService.acceptInvite(dto);
   }
 
+  @ApiOperation({ summary: 'Get user permissions for a store' })
+  @ApiQuery({
+    name: 'storeId',
+    required: true,
+    description: 'Store ID to get permissions for',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User permissions retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        permissions: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['read', 'write', 'delete'],
+        },
+        role: { type: 'string', example: 'manager' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Store not found or no access' })
+  @ApiBearerAuth('JWT-auth')
   @Version('1')
   @UseGuards(JwtAuthGuard)
   @Get('permissions')
