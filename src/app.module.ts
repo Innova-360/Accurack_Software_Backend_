@@ -4,8 +4,8 @@ import { PrismaClientModule } from './prisma-client/prisma-client.module';
 import { JwtModule } from '@nestjs/jwt';
 import { StoreModule } from './store/store.module';
 import { CommonModule } from './common/common.module';
-import { InventoryModule } from './inventory/inventory.module';
 import { SupplierModule } from './supplier/supplier.module';
+import { ProductModule } from './product/product.module';
 
 @Module({
   imports: [
@@ -13,7 +13,7 @@ import { SupplierModule } from './supplier/supplier.module';
     AuthModule,
     PrismaClientModule,
     StoreModule,
-    InventoryModule,
+    ProductModule,
     SupplierModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,

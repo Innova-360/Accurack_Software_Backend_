@@ -288,46 +288,17 @@ model Products {
   quantity    Int      @default(0)
   clientId    String
   storeId     String
-  categoryId  String?
   status      Status   @default(active)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   client      Clients           @relation(fields: [clientId], references: [id])
   store       Stores            @relation(fields: [storeId], references: [id])
-  category    ProductCategories? @relation(fields: [categoryId], references: [id])
-  inventory   InventoryEntries[]
   sales       Sales[]
   purchaseOrders PurchaseOrders[]
 }
 
-model ProductCategories {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  storeId     String
-  status      Status   @default(active)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 
-  store       Stores    @relation(fields: [storeId], references: [id])
-  products    Products[]
-}
-
-model InventoryEntries {
-  id          String   @id @default(uuid())
-  productId   String
-  storeId     String
-  quantity    Int
-  type        String
-  reference   String?
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  product     Products @relation(fields: [productId], references: [id])
-  store       Stores   @relation(fields: [storeId], references: [id])
-}
 
 model Suppliers {
   id          String   @id @default(uuid())
