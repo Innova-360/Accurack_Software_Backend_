@@ -144,7 +144,6 @@ export abstract class BaseAuthController {
         .json(this.responseService.error('Internal server error', 500));
     }
   }
-
   /**
    * Extract user data for response (removes sensitive fields)
    */
@@ -157,7 +156,7 @@ export abstract class BaseAuthController {
       role: user.role,
       clientId: user.clientId,
       status: user.status,
-      googleId: user.googleId,
+      ...(user.googleId && { googleId: user.googleId }), // Only include if exists
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

@@ -63,8 +63,10 @@ export class AuthService {
 
       // If no user exists, create a new one using the configured strategy
       if (!user) {
+        console.log('Creating new user with Google profile:', googleUser); // Debug log
         user = await this.handleGoogleUserCreation(googleUser);
       }
+      console.log('User found or created:', user); // Debug log
 
       // Update refresh token if provided
       if (googleUser.refreshToken) {
@@ -81,6 +83,7 @@ export class AuthService {
         clientId: user.clientId,
         googleId: (user as any).googleId, // Temporary type assertion
       };
+      console.log('JWT Payload:', payload); // Debug log
 
       // Generate access token (15 minutes)
       const accessToken = this.jwtService.sign(payload, {
@@ -963,11 +966,11 @@ export class AuthService {
 
     const defaultClient = await this.getOrCreateDefaultClient();
 
-    return await this.prisma.users.create({
+    const newUser = await this.prisma.users.create({
       data: {
         googleId: googleUser.id,
-        firstName: googleUser.firstName,
-        lastName: googleUser.lastName,
+        firstName: googleUser.firstName || '', // Handle missing first name
+        lastName: googleUser.lastName || '', // Handle missing last name
         email: googleUser.email,
         passwordHash: '', // Empty for Google users
         googleRefreshToken: googleUser.refreshToken || null,
@@ -977,6 +980,8 @@ export class AuthService {
       },
       include: { client: true },
     } as any);
+
+    return newUser;
   }
 
   private async getOrCreateDefaultClient() {
@@ -987,6 +992,7 @@ export class AuthService {
     if (!defaultClient) {
       const databaseUrl = process.env.DATABASE_URL;
       if (!databaseUrl) {
+        console.error('Database URL is not configured');
         throw new InternalServerErrorException(
           'Database URL is not configured',
         );
