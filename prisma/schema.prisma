@@ -332,9 +332,8 @@ model InventoryEntries {
 model Suppliers {
   id          String   @id @default(uuid())
   name        String
-  contactName String?
   email       String?
-  phone       String?
+  phone       String
   address     String?
   storeId     String
   status      Status   @default(active)

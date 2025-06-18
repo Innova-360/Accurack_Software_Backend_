@@ -28,7 +28,8 @@ This is a NestJS backend application for Accurack Software. The project uses Typ
 - Proper HTTP status codes
 - Consistent response formats
 - Input validation using class-validator
-- Swagger documentation for endpoints
+- **MANDATORY: Swagger documentation for ALL endpoints**
+- **Every new endpoint MUST include Swagger decorators (@ApiOperation, @ApiResponse, @ApiTags, etc.)**
 
 ## Database & ORM
 
@@ -66,6 +67,32 @@ This is a NestJS backend application for Accurack Software. The project uses Typ
 - Use environment variables for configuration
 - Implement proper error handling middleware
 - Use pipes for data transformation and validation
+
+## Swagger Documentation Requirements
+
+**CRITICAL**: Every API endpoint MUST include comprehensive Swagger documentation:
+
+- Use `@ApiTags()` to group related endpoints
+- Use `@ApiOperation()` to describe what the endpoint does
+- Use `@ApiResponse()` to document all possible responses (success and error cases)
+- Use `@ApiBody()` for request body documentation
+- Use `@ApiParam()` for path parameters
+- Use `@ApiQuery()` for query parameters
+- Use `@ApiBearerAuth()` for protected endpoints
+- Include example request/response payloads where applicable
+- Document all HTTP status codes that the endpoint can return
+
+### Example:
+```typescript
+@ApiTags('stores')
+@ApiOperation({ summary: 'Create a new store' })
+@ApiResponse({ status: 201, description: 'Store created successfully' })
+@ApiResponse({ status: 400, description: 'Bad request - validation failed' })
+@ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+@ApiBearerAuth()
+@Post('create')
+async createStore(@Body() dto: CreateStoreDto) { ... }
+```
 
 ## Workflow Instructions
 

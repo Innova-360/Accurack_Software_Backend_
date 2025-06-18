@@ -26,6 +26,10 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ResponseService, BaseAuthController, AuthEndpoint } from '../common';
 
+import { Roles } from '../decorators/roles.decorator';
+
+import { verify } from 'crypto';
+
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController extends BaseAuthController {

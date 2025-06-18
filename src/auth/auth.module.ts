@@ -3,8 +3,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { GoogleStrategy } from './strategies/google.strategy';
-import { JwtStrategy } from '../guard/jwt.strategy';
+import { GoogleStrategy } from '../strategies/google.strategy';
+import { JwtStrategy } from '../strategies/jwt.strategy';
 
 import { PrismaClientModule } from 'src/prisma-client/prisma-client.module';
 import { MailModule } from 'src/mail/mail.module';

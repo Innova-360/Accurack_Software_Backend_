@@ -1,6 +1,5 @@
 import {
   Get,
-  Injectable,
   UseGuards,
   Version,
   Request,
@@ -16,9 +15,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { StoreService } from './store.service';
-import { JwtStrategy } from 'src/guard/jwt.strategy';
-import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
-import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { CreateStoreDto } from './dto/dto.store';
 import { ResponseService, StandardResponseDto } from '../common';
 
@@ -75,6 +72,7 @@ export class StoreController {
     return await this.storeService.createStore(user, dto);
   }
 
+  
   @ApiOperation({ summary: 'Get list of user stores' })
   @ApiResponse({
     status: 200,
