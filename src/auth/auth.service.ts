@@ -63,10 +63,8 @@ export class AuthService {
 
       // If no user exists, create a new one using the configured strategy
       if (!user) {
-        console.log('Creating new user with Google profile:', googleUser); // Debug log
         user = await this.handleGoogleUserCreation(googleUser);
       }
-      console.log('User found or created:', user); // Debug log
 
       // Update refresh token if provided
       if (googleUser.refreshToken) {
@@ -83,7 +81,6 @@ export class AuthService {
         clientId: user.clientId,
         googleId: (user as any).googleId, // Temporary type assertion
       };
-      console.log('JWT Payload:', payload); // Debug log
 
       // Generate access token (15 minutes)
       const accessToken = this.jwtService.sign(payload, {
