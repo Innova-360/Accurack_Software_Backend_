@@ -39,7 +39,7 @@ import {
   AcceptInviteDto,
 } from './dto/auth.dto';
 
-import { Roles } from '../decorator/roles.decorator';
+import { Roles } from '../decorators/roles.decorator';
 
 import { verify } from 'crypto';
 
