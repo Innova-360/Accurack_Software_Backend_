@@ -69,6 +69,7 @@ export class StoreController {
   @Post('create')
   async createStore(@Request() req, @Body() dto: CreateStoreDto) {
     const user = req.user; // This contains the user details from JWT
+    console.log('Creating store for user:', user); // Debug log
     return await this.storeService.createStore(user, dto);
   }
 
