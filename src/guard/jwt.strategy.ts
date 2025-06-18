@@ -5,9 +5,11 @@ import { PrismaClientService } from '../prisma-client/prisma-client.service';
 
 // Interface for JWT payload
 interface JwtPayload {
-  id: string;
+  sub: string; // Changed from 'id' to 'sub' (standard JWT claim)
   email: string;
   role?: string;
+  clientId?: string;
+  googleId?: string;
   iat?: number;
   exp?: number;
 }
@@ -20,7 +22,10 @@ interface ValidatedUser {
   role: string;
   email: string;
   clientId: string | null;
-  stores: { storeId: string }[];
+  googleId?: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 @Injectable()
@@ -43,8 +48,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: JwtPayload): Promise<ValidatedUser> {
     try {
+      console.log('JWT Payload received:', payload); // Debug log
+
       const user = await this.prisma.users.findUnique({
-        where: { id: payload.id },
+        where: { id: payload.sub }, // Changed from payload.id to payload.sub
         select: {
           id: true,
           firstName: true,
@@ -52,9 +59,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           role: true,
           email: true,
           clientId: true,
-          stores: { select: { storeId: true } },
+          googleId: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
         },
-      });
+      } as any); // Temporary type assertion for googleId
+
+      console.log('User found:', user ? 'Yes' : 'No'); // Debug log
 
       if (!user) {
         throw new UnauthorizedException(
@@ -62,16 +74,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         );
       }
 
-      return {
+      const validatedUser = {
         id: user.id,
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
         email: user.email,
         clientId: user.clientId,
-        stores: user.stores,
+        googleId: (user as any).googleId,
+        status: user.status,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
       };
+
+      console.log('Returning validated user:', validatedUser); // Debug log
+      return validatedUser;
     } catch (error) {
+      console.error('JWT validation error:', error); // Debug log
       if (error instanceof UnauthorizedException) {
         throw error;
       }

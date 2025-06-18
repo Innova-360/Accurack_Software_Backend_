@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { google } from 'googleapis';
 import { MailService } from '../mail/mail.service';
 import {
   GoogleProfileDto,
@@ -33,27 +34,86 @@ export class AuthService {
     private readonly mailService: MailService,
   ) {}
   async googleLogin(googleUser: GoogleProfileDto): Promise<AuthResponseDto> {
-    const payload = {
-      sub: googleUser.id,
-      email: googleUser.email,
-      name: googleUser.name,
-      picture: googleUser.picture,
-      provider: 'google',
-      role: 'USER', // Default role for Google users
-    };
+    try {
+      // Check if user exists by Google ID
+      let user = await this.prisma.users.findUnique({
+        where: { googleId: googleUser.id },
+        include: { client: true },
+      } as any); // Temporary type assertion
 
-    const token = this.jwtService.sign(payload);
+      // If not found by googleId, check by email
+      if (!user) {
+        user = await this.prisma.users.findUnique({
+          where: { email: googleUser.email },
+          include: { client: true },
+        });
 
-    return {
-      access_token: token,
-      user: {
-        email: googleUser.email,
-        name: googleUser.name,
-        picture: googleUser.picture,
-        provider: 'google',
-      },
-      message: 'Google authentication successful',
-    };
+        // If user exists with same email but no googleId, link the accounts
+        if (user) {
+          user = await this.prisma.users.update({
+            where: { id: user.id },
+            data: {
+              googleId: googleUser.id,
+              googleRefreshToken: googleUser.refreshToken || null,
+            },
+            include: { client: true },
+          } as any); // Temporary type assertion
+        }
+      }
+
+      // If no user exists, create a new one using the configured strategy
+      if (!user) {
+        user = await this.handleGoogleUserCreation(googleUser);
+      }
+
+      // Update refresh token if provided
+      if (googleUser.refreshToken) {
+        await this.prisma.users.update({
+          where: { id: user.id },
+          data: { googleRefreshToken: googleUser.refreshToken },
+        } as any); // Temporary type assertion
+      }
+
+      const payload = {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        clientId: user.clientId,
+        googleId: (user as any).googleId, // Temporary type assertion
+      };
+
+      // Generate access token (15 minutes)
+      const accessToken = this.jwtService.sign(payload, {
+        secret: process.env.JWT_SECRET,
+        expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+      });
+
+      // Generate refresh token (7 days)
+      const refreshToken = this.jwtService.sign(payload, {
+        secret: process.env.JWT_SECRET,
+        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+      });
+
+      return {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          clientId: user.clientId,
+          provider: 'google',
+        },
+        message: 'Google authentication successful',
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Google authentication failed');
+    }
   }
 
   async validateToken(token: string): Promise<any> {
@@ -332,12 +392,12 @@ export class AuthService {
       },
     });
     if (!user || user.status !== Status.active) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('User not found or inactive');
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Password is incorrect');
     }
     const payload = {
       id: user.id,
@@ -448,7 +508,7 @@ export class AuthService {
       },
     });
 
-    const resetLink = `${process.env.APP_URL}/reset-password?token=${token}`;
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
     console.log(`Reset link: ${resetLink}`);
     try {
       await this.mailService.sendMail({
@@ -579,7 +639,7 @@ export class AuthService {
       select: { id: true, token: true },
     });
 
-    const inviteLink = `${process.env.APP_URL}/invite?token=${token}`;
+    const inviteLink = `${process.env.FRONTEND_URL}/invite?token=${token}`;
     try {
       await this.mailService.sendMail({
         to: email,
@@ -793,5 +853,155 @@ export class AuthService {
         permissions: pg.permissionGroup.items,
       })),
     };
+  }
+
+  async getGoogleUserInfo(user: any) {
+    try {
+      // Check if the user has a Google access token stored
+      if (!user.googleAccessToken) {
+        throw new UnauthorizedException(
+          'No Google access token available. Please re-authenticate with Google.',
+        );
+      }
+
+      // Make request to Google's userinfo endpoint with the access token
+      const response = await fetch(
+        'https://www.googleapis.com/oauth2/v1/userinfo?alt=json',
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${user.googleAccessToken}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new UnauthorizedException(
+            'Google access token is invalid or expired. Please re-authenticate.',
+          );
+        }
+        throw new BadRequestException(
+          `Failed to fetch Google user info: ${response.statusText}`,
+        );
+      }
+
+      const googleUserInfo = await response.json();
+
+      return {
+        message: 'Google user information retrieved successfully',
+        data: googleUserInfo,
+        tokenUsed: user.googleAccessToken.substring(0, 10) + '...', // Show first 10 chars for debugging
+      };
+    } catch (error) {
+      console.error('Error fetching Google user info:', error);
+
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to retrieve Google user information',
+      );
+    }
+  }
+
+  async refreshGoogleToken(userId: string): Promise<string | null> {
+    try {
+      const user = await this.prisma.users.findUnique({
+        where: { id: userId },
+        select: { googleRefreshToken: true },
+      } as any); // Temporary type assertion
+
+      if (!(user as any)?.googleRefreshToken) {
+        return null;
+      }
+
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        process.env.GOOGLE_CALLBACK_URL ||
+          'http://localhost:4000/api/v1/auth/google/callback',
+      );
+
+      oauth2Client.setCredentials({
+        refresh_token: (user as any).googleRefreshToken,
+      });
+
+      const { credentials } = await oauth2Client.refreshAccessToken();
+
+      // If a new refresh token is provided, update it in the database
+      if (credentials.refresh_token) {
+        await this.prisma.users.update({
+          where: { id: userId },
+          data: { googleRefreshToken: credentials.refresh_token },
+        } as any); // Temporary type assertion
+      }
+
+      return credentials.access_token || null;
+    } catch (error) {
+      console.error('Error refreshing Google token:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Alternative approach: Handle different Google user scenarios
+   * You can configure this behavior based on your needs
+   */
+  private async handleGoogleUserCreation(googleUser: GoogleProfileDto) {
+    // Strategy 1: Create with default client (current implementation)
+    // Strategy 2: Require invitation (uncomment the line below)
+    // throw new BadRequestException('Google authentication requires an invitation. Please contact your administrator.');
+
+    // Strategy 3: Allow self-registration with limited permissions
+    // Create user with a specific "guest" client
+
+    const defaultClient = await this.getOrCreateDefaultClient();
+
+    return await this.prisma.users.create({
+      data: {
+        googleId: googleUser.id,
+        firstName: googleUser.firstName,
+        lastName: googleUser.lastName,
+        email: googleUser.email,
+        passwordHash: '', // Empty for Google users
+        googleRefreshToken: googleUser.refreshToken || null,
+        role: 'employee', // You can change this to 'guest' or another role
+        clientId: defaultClient.id,
+        status: 'active',
+      },
+      include: { client: true },
+    } as any);
+  }
+
+  private async getOrCreateDefaultClient() {
+    let defaultClient = await this.prisma.clients.findFirst({
+      where: { email: 'default@accurack.com' },
+    });
+
+    if (!defaultClient) {
+      const databaseUrl = process.env.DATABASE_URL;
+      if (!databaseUrl) {
+        throw new InternalServerErrorException(
+          'Database URL is not configured',
+        );
+      }
+
+      defaultClient = await this.prisma.clients.create({
+        data: {
+          name: 'Default Client',
+          email: 'default@accurack.com',
+          tier: 'free',
+          databaseUrl: databaseUrl,
+        },
+      });
+    }
+
+    return defaultClient;
   }
 }

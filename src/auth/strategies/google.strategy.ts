@@ -21,7 +21,6 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         'GOOGLE_CLIENT_SECRET environment variable is required for Google OAuth',
       );
     }
-
     super({
       clientID: clientId,
       clientSecret: clientSecret,
@@ -31,7 +30,6 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       scope: ['email', 'profile'],
     });
   }
-
   async validate(
     accessToken: string,
     refreshToken: string,
@@ -43,8 +41,11 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const user: GoogleProfileDto = {
       id,
       email: emails[0].value,
-      name: `${name.givenName} ${name.familyName}`,
+      firstName: name.givenName,
+      lastName: name.familyName,
       picture: photos[0]?.value,
+      accessToken,
+      refreshToken, // Include refresh token
     };
 
     done(null, user);

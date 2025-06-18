@@ -16,20 +16,32 @@ export class AuthResponseDto {
   })
   access_token: string;
 
+  @ApiPropertyOptional({
+    description: 'JWT refresh token',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
+  refresh_token?: string;
+
   @ApiProperty({
     description: 'User information',
     type: 'object',
     properties: {
+      id: { type: 'string', example: 'uuid-string' },
       email: { type: 'string', example: 'user@example.com' },
-      name: { type: 'string', example: 'John Doe' },
-      picture: { type: 'string', example: 'https://example.com/avatar.jpg' },
+      firstName: { type: 'string', example: 'John' },
+      lastName: { type: 'string', example: 'Doe' },
+      role: { type: 'string', example: 'employee' },
+      clientId: { type: 'string', example: 'uuid-string' },
       provider: { type: 'string', example: 'google' },
     },
   })
   user: {
+    id?: string;
     email: string;
-    name: string;
-    picture?: string;
+    firstName?: string;
+    lastName?: string;
+    role?: string;
+    clientId?: string;
     provider: string;
   };
 
@@ -47,14 +59,23 @@ export class GoogleProfileDto {
   @ApiProperty({ description: 'User email address', example: 'user@gmail.com' })
   email: string;
 
-  @ApiProperty({ description: 'User full name', example: 'John Doe' })
-  name: string;
+  @ApiProperty({ description: 'User first name', example: 'John' })
+  firstName: string;
+
+  @ApiProperty({ description: 'User last name', example: 'Doe' })
+  lastName: string;
 
   @ApiPropertyOptional({
     description: 'User profile picture URL',
     example: 'https://lh3.googleusercontent.com/...',
   })
   picture?: string;
+
+  @ApiPropertyOptional({ description: 'Google access token' })
+  accessToken?: string;
+
+  @ApiPropertyOptional({ description: 'Google refresh token' })
+  refreshToken?: string;
 }
 
 export class SignupSuperAdminDto {
@@ -178,4 +199,54 @@ export class ResetPasswordDto {
   })
   @MinLength(8)
   password: string;
+}
+
+export class UserProfileDto {
+  @ApiProperty({ description: 'User ID', example: 'uuid-string' })
+  id: string;
+
+  @ApiProperty({
+    description: 'User email address',
+    example: 'user@example.com',
+  })
+  email: string;
+
+  @ApiProperty({ description: 'User first name', example: 'John' })
+  firstName: string;
+
+  @ApiProperty({ description: 'User last name', example: 'Doe' })
+  lastName: string;
+
+  @ApiProperty({ description: 'User role', example: 'employee' })
+  role: string;
+
+  @ApiProperty({ description: 'Client ID', example: 'uuid-string' })
+  clientId: string;
+
+  @ApiProperty({ description: 'User status', example: 'active' })
+  status: string;
+
+  @ApiPropertyOptional({
+    description: 'Google ID if linked',
+    example: '1234567890',
+  })
+  googleId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Google access token',
+    example: 'ya29.a0...',
+  })
+  googleAccessToken?: string;
+
+  @ApiProperty({
+    description: 'Account creation date',
+    example: '2025-06-18T10:30:00.000Z',
+  })
+  createdAt: Date;
+
+  @ApiProperty({
+    description: 'Last update date',
+    example: '2025-06-18T10:30:00.000Z',
+  })
+  updatedAt: Date;
 }

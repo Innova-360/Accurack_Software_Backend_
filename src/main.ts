@@ -1,9 +1,11 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { VersioningType } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { EnvValidation } from './utils/env-validation';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import * as cookieParser from 'cookie-parser';
+import { ResponseInterceptor, GlobalExceptionFilter } from './common';
 
 import * as dotenv from 'dotenv';
 
@@ -17,8 +19,14 @@ async function bootstrap() {
   // Validate optional configurations
   EnvValidation.validateEmailConfig();
   EnvValidation.validateGoogleOAuthConfig();
-
   const app = await NestFactory.create(AppModule);
+  // Add cookie parser middleware
+  app.use(cookieParser());
+
+  // Apply global filters and interceptors
+  app.useGlobalFilters(new GlobalExceptionFilter());
+  app.useGlobalInterceptors(new ResponseInterceptor(app.get(Reflector)));
+
   app.setGlobalPrefix('api'); // Ensure /api prefix
   app.enableVersioning({
     type: VersioningType.URI,
@@ -32,7 +40,6 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
   });
-
   // Swagger Configuration
   const config = new DocumentBuilder()
     .setTitle('Accurack Software API')
@@ -45,11 +52,11 @@ async function bootstrap() {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        name: 'JWT',
-        description: 'Enter JWT token',
+        name: 'Authorization',
+        description: 'Enter your JWT token (without "Bearer " prefix)',
         in: 'header',
       },
-      'JWT-auth',
+      'JWT-auth', // This is the key name used in @ApiBearerAuth('JWT-auth')
     )
     .addOAuth2(
       {

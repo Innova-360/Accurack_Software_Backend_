@@ -20,11 +20,15 @@ import { JwtStrategy } from 'src/guard/jwt.strategy';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
 import { CreateStoreDto } from './dto/dto.store';
+import { ResponseService, StandardResponseDto } from '../common';
 
 @ApiTags('Stores')
 @Controller('store')
 export class StoreController {
-  constructor(private readonly storeService: StoreService) {}
+  constructor(
+    private readonly storeService: StoreService,
+    private readonly responseService: ResponseService,
+  ) {}
 
   @ApiOperation({ summary: 'Create a new store' })
   @ApiBody({ type: CreateStoreDto })

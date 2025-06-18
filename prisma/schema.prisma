@@ -59,10 +59,12 @@ model Clients {
 
 model Users {
   id           String   @id @default(uuid())
+  googleId     String?  @unique
   firstName    String
   lastName     String
   email        String   @unique
-  passwordHash String
+  passwordHash String?
+  googleRefreshToken String?
   otp          String?
   otpExpiresAt DateTime?
   isOtpUsed    Boolean?  @default(false)
