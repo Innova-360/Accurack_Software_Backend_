@@ -1,25 +1,45 @@
-import { Controller, Post, Get, Put, Delete, Req, UseGuards, Body, Param, Query, ParseIntPipe, DefaultValuePipe } from "@nestjs/common";
-import { JwtAuthGuard } from "src/guards/jwt-auth.guard";
-import { CreateProductDto, UpdateProductDto } from "./dto/product.dto";
-import { ProductService } from "./product.service";
-import { ProductEndpoint } from "src/common/decorators/auth-endpoint.decorator";
-import { ApiTags } from "@nestjs/swagger";
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Delete,
+  Req,
+  UseGuards,
+  Body,
+  Param,
+  Query,
+  ParseIntPipe,
+  DefaultValuePipe,
+} from '@nestjs/common';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
+import { ProductService } from './product.service';
+import { ProductEndpoint } from '../common/decorators/product-endpoint.decorator';
+import { ApiTags } from '@nestjs/swagger';
+import { BaseProductController } from '../common/controllers/base-product.controller';
+import { ResponseService } from '../common/services/response.service';
 
 @ApiTags('products')
 @Controller('product')
-export class ProductController {
-  constructor(private readonly productService: ProductService) {}
-
+export class ProductController extends BaseProductController {
+  constructor(
+    private readonly productService: ProductService,
+    responseService: ResponseService,
+  ) {
+    super(responseService);
+  }
   @ProductEndpoint.CreateProduct(CreateProductDto)
-  @UseGuards(JwtAuthGuard)
   @Post('create')
   async createProduct(@Req() req, @Body() createProductDto: CreateProductDto) {
     const user = req.user;
-    return await this.productService.createProduct(user, createProductDto);
+    return this.handleProductOperation(
+      () => this.productService.createProduct(user, createProductDto),
+      'Product created successfully',
+      201,
+    );
   }
-
   @ProductEndpoint.GetProducts()
-  @UseGuards(JwtAuthGuard)
   @Get('list')
   async getProducts(
     @Req() req,
@@ -28,19 +48,22 @@ export class ProductController {
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,
   ) {
     const user = req.user;
-    return await this.productService.getProducts(user, storeId, page, limit);
-  }
 
+    return this.handleProductOperation(
+      () => this.productService.getProducts(user, storeId, page, limit),
+      'Products retrieved successfully',
+    );
+  }
   @ProductEndpoint.GetProductById()
-  @UseGuards(JwtAuthGuard)
   @Get(':id')
   async getProductById(@Req() req, @Param('id') productId: string) {
     const user = req.user;
-    return await this.productService.getProductById(user, productId);
+    return this.handleProductOperation(
+      () => this.productService.getProductById(user, productId),
+      'Product retrieved successfully',
+    );
   }
-
   @ProductEndpoint.UpdateProduct(UpdateProductDto)
-  @UseGuards(JwtAuthGuard)
   @Put(':id')
   async updateProduct(
     @Req() req,
@@ -48,14 +71,19 @@ export class ProductController {
     @Body() updateProductDto: UpdateProductDto,
   ) {
     const user = req.user;
-    return await this.productService.updateProduct(user, productId, updateProductDto);
+    return this.handleProductOperation(
+      () =>
+        this.productService.updateProduct(user, productId, updateProductDto),
+      'Product updated successfully',
+    );
   }
-
   @ProductEndpoint.DeleteProduct()
-  @UseGuards(JwtAuthGuard)
   @Delete(':id')
   async deleteProduct(@Req() req, @Param('id') productId: string) {
     const user = req.user;
-    return await this.productService.deleteProduct(user, productId);
+    return this.handleProductOperation(
+      () => this.productService.deleteProduct(user, productId),
+      'Product deleted successfully',
+    );
   }
 }

@@ -100,8 +100,6 @@ model Stores {
   users           UserStoreMap[]
   employees       Employees[]
   products        Products[]
-  categories      ProductCategories[]
-  inventory       InventoryEntries[]
   suppliers       Suppliers[]
   sales           Sales[]
   purchaseOrders  PurchaseOrders[]

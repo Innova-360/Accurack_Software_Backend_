@@ -5,6 +5,7 @@ import { JwtStrategy } from 'src/strategies/jwt.strategy';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { ProductController } from './product.controller';
 import { ProductService } from './product.service';
+import { ResponseService } from '../common/services/response.service';
 
 @Module({
   imports: [
@@ -15,6 +16,6 @@ import { ProductService } from './product.service';
     }),
   ],
   controllers: [ProductController],
-  providers: [ProductService, JwtStrategy, PrismaClientService],
+  providers: [ProductService, JwtStrategy, PrismaClientService, ResponseService],
 })
 export class ProductModule {}

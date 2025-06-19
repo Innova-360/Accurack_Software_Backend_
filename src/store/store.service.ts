@@ -121,7 +121,7 @@ export class StoreService {
 
             return {
                 message: "Stores retrieved successfully",
-                data: stores,
+                stores,
             };
         } catch (error) {
             console.error('Get stores error:', error);
