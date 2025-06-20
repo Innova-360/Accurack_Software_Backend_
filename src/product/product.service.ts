@@ -285,53 +285,53 @@ export class ProductService {
     });
 
     // Create a purchase order record if this is part of inventory management
-    if (
-      createProductDto.supplierId &&
-      createProductDto.itemQuantity > 0 &&
-      updatedProduct
-    ) {
-      try {
-        const employee = await this.prisma.employees.findFirst({
-          where: {
-            email: user.email,
-            storeId: createProductDto.storeId,
-          },
-        });
+    // if (
+    //   createProductDto.supplierId &&
+    //   createProductDto.itemQuantity > 0 &&
+    //   updatedProduct
+    // ) {
+    //   try {
+    //     const employee = await this.prisma.employees.findFirst({
+    //       where: {
+    //         email: user.email,
+    //         storeId: createProductDto.storeId,
+    //       },
+    //     });
 
-        if (employee) {
-          console.log(
-            `Creating purchase order with employee ID: ${employee.id}`,
-          );
-          await this.prisma.purchaseOrders.create({
-            data: {
-              productId: updatedProduct.id,
-              supplierId: createProductDto.supplierId,
-              employeeId: employee.id,
-              storeId: createProductDto.storeId,
-              quantity: createProductDto.itemQuantity,
-              price: createProductDto.singleItemCostPrice,
-              total:
-                createProductDto.singleItemCostPrice *
-                createProductDto.itemQuantity,
-              status: 'active',
-            },
-          });
-          console.log('Purchase order created successfully');
-        } else {
-          console.warn(
-            `No employee record found for user ${user.email} in store ${createProductDto.storeId}. Skipping purchase order creation.`,
-          );
-        }
-      } catch (purchaseOrderError) {
-        console.error('Failed to create purchase order:', purchaseOrderError);
-        if (purchaseOrderError.code === 'P2003') {
-          console.error(
-            'Foreign key constraint failed - one of the referenced records does not exist',
-          );
-          console.error('Constraint:', purchaseOrderError.meta?.constraint);
-        }
-      }
-    }
+    //     if (employee) {
+    //       console.log(
+    //         `Creating purchase order with employee ID: ${employee.id}`,
+    //       );
+    //       await this.prisma.purchaseOrders.create({
+    //         data: {
+    //           productId: updatedProduct.id,
+    //           supplierId: createProductDto.supplierId,
+    //           employeeId: employee.id,
+    //           storeId: createProductDto.storeId,
+    //           quantity: createProductDto.itemQuantity,
+    //           price: createProductDto.singleItemCostPrice,
+    //           total:
+    //             createProductDto.singleItemCostPrice *
+    //             createProductDto.itemQuantity,
+    //           status: 'active',
+    //         },
+    //       });
+    //       console.log('Purchase order created successfully');
+    //     } else {
+    //       console.warn(
+    //         `No employee record found for user ${user.email} in store ${createProductDto.storeId}. Skipping purchase order creation.`,
+    //       );
+    //     }
+    //   } catch (purchaseOrderError) {
+    //     console.error('Failed to create purchase order:', purchaseOrderError);
+    //     if (purchaseOrderError.code === 'P2003') {
+    //       console.error(
+    //         'Foreign key constraint failed - one of the referenced records does not exist',
+    //       );
+    //       console.error('Constraint:', purchaseOrderError.meta?.constraint);
+    //     }
+    //   }
+    // }
 
     if (!updatedProduct) {
       throw new BadRequestException('Failed to create product');
@@ -446,9 +446,7 @@ export class ProductService {
     const product = await this.prisma.products.findUnique({ where: { id } });
     if (!product) {
       throw new NotFoundException('Product not found');
-
     }
-  }
 
     if (updateProductDto.sku && updateProductDto.sku !== product.sku) {
       await this.validateSkuUniqueness(async (sku: string) => {
