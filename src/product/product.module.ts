@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { JwtStrategy } from 'src/strategies/jwt.strategy';
-import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
+import { JwtStrategy } from '../strategies/jwt.strategy';
+import { PrismaClientModule } from '../prisma-client/prisma-client.module';
 import { ProductController } from './product.controller';
 import { ProductService } from './product.service';
 import { ResponseService } from '../common/services/response.service';
@@ -14,8 +14,9 @@ import { ResponseService } from '../common/services/response.service';
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '15m' },
     }),
+    PrismaClientModule,
   ],
   controllers: [ProductController],
-  providers: [ProductService, JwtStrategy, PrismaClientService, ResponseService],
+  providers: [ProductService, JwtStrategy, ResponseService],
 })
 export class ProductModule {}

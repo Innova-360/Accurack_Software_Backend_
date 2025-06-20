@@ -1,27 +1,11 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Put,
-  Delete,
-  Req,
-  UseGuards,
-  Body,
-  Param,
-  Query,
-  ParseIntPipe,
-  DefaultValuePipe,
-} from '@nestjs/common';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
-import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
+import { Controller, Get, Post, Patch, Delete, Query, Body, Req, Param } from '@nestjs/common';
 import { ProductService } from './product.service';
-import { ProductEndpoint } from '../common/decorators/product-endpoint.decorator';
-import { ApiTags } from '@nestjs/swagger';
+import { CreateProductDto, UpdateProductDto, ProductResponseDto } from './dto/product.dto';
 import { BaseProductController } from '../common/controllers/base-product.controller';
+import { ProductEndpoint } from '../common/decorators/product-endpoint.decorator';
 import { ResponseService } from '../common/services/response.service';
 
-@ApiTags('products')
-@Controller('product')
+@Controller('products')
 export class ProductController extends BaseProductController {
   constructor(
     private readonly productService: ProductService,
@@ -29,6 +13,7 @@ export class ProductController extends BaseProductController {
   ) {
     super(responseService);
   }
+
   @ProductEndpoint.CreateProduct(CreateProductDto)
   @Post('create')
   async createProduct(@Req() req, @Body() createProductDto: CreateProductDto) {
@@ -39,50 +24,52 @@ export class ProductController extends BaseProductController {
       201,
     );
   }
+
   @ProductEndpoint.GetProducts()
-  @Get('list')
+  @Get()
   async getProducts(
     @Req() req,
     @Query('storeId') storeId?: string,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
   ) {
     const user = req.user;
-
-    return this.handleProductOperation(
-      () => this.productService.getProducts(user, storeId, page, limit),
+    return this.handleGetProducts(
+      () => this.productService.getProducts(user, storeId || '', page, limit),
       'Products retrieved successfully',
     );
   }
+
   @ProductEndpoint.GetProductById()
   @Get(':id')
-  async getProductById(@Req() req, @Param('id') productId: string) {
+  async getProductById(@Req() req, @Param('id') id: string) {
     const user = req.user;
-    return this.handleProductOperation(
-      () => this.productService.getProductById(user, productId),
+    return this.handleGetProduct(
+      () => this.productService.getProductById(user, id),
       'Product retrieved successfully',
     );
   }
+
   @ProductEndpoint.UpdateProduct(UpdateProductDto)
-  @Put(':id')
+  @Patch(':id')
   async updateProduct(
     @Req() req,
-    @Param('id') productId: string,
+    @Param('id') id: string,
     @Body() updateProductDto: UpdateProductDto,
   ) {
     const user = req.user;
     return this.handleProductOperation(
-      () =>
-        this.productService.updateProduct(user, productId, updateProductDto),
+      () => this.productService.updateProduct(user, id, updateProductDto),
       'Product updated successfully',
     );
   }
+
   @ProductEndpoint.DeleteProduct()
   @Delete(':id')
-  async deleteProduct(@Req() req, @Param('id') productId: string) {
+  async deleteProduct(@Req() req, @Param('id') id: string) {
     const user = req.user;
     return this.handleProductOperation(
-      () => this.productService.deleteProduct(user, productId),
+      () => this.productService.deleteProduct(user, id),
       'Product deleted successfully',
     );
   }

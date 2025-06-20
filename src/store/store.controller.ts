@@ -17,7 +17,7 @@ import {
 import { StoreService } from './store.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { CreateStoreDto } from './dto/dto.store';
-import { ResponseService, StandardResponseDto } from '../common';
+import { ResponseService } from '../common/services/response.service';
 
 @ApiTags('Stores')
 @Controller('store')

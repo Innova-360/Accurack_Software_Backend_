@@ -1,8 +1,7 @@
 import { applyDecorators, UseGuards, Version } from "@nestjs/common";
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse } from "@nestjs/swagger";
 import { JwtAuthGuard } from "src/guards/jwt-auth.guard";
-
-
+import { ProductResponseDto } from "../../product/dto/product.dto";
 
 // Standard response schemas
 const successResponseSchema = (message: string, dataExample?: any) => ({
@@ -14,7 +13,7 @@ const successResponseSchema = (message: string, dataExample?: any) => ({
       ? { type: 'object', example: dataExample }
       : { type: 'object' },
     status: { type: 'number', example: 200 },
-    timestamp: { type: 'string', example: '2025-06-18T10:30:00.000Z' },
+    timestamp: { type: 'string', example: '2025-06-20T22:39:00.000Z' },
   },
 });
 
@@ -27,7 +26,7 @@ const createdResponseSchema = (message: string, dataExample?: any) => ({
       ? { type: 'object', example: dataExample }
       : { type: 'object' },
     status: { type: 'number', example: 201 },
-    timestamp: { type: 'string', example: '2025-06-18T10:30:00.000Z' },
+    timestamp: { type: 'string', example: '2025-06-20T22:39:00.000Z' },
   },
 });
 
@@ -38,7 +37,7 @@ const errorResponseSchema = (status: number, message: string) => ({
     message: { type: 'string', example: message },
     data: { type: 'null' },
     status: { type: 'number', example: status },
-    timestamp: { type: 'string', example: '2025-06-18T10:30:00.000Z' },
+    timestamp: { type: 'string', example: '2025-06-20T22:39:00.000Z' },
   },
 });
 
@@ -65,34 +64,82 @@ const standardErrorResponses = () => [
 export const ProductEndpoint = {
   CreateProduct: (dtoType: any) =>
     applyDecorators(
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Create a new product',
-        description: 'Creates a new product and optionally adds it to purchase orders. Only admins and managers can create products.'
+        description: 'Creates a new product and optionally adds it to purchase orders. Only admins and managers can create products.',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({
         status: 201,
         description: 'Product created successfully',
+        type: ProductResponseDto,
         schema: createdResponseSchema('Product created successfully', {
-          product: {
-            id: 'uuid-product-id',
-            name: 'Premium Coffee Beans',
-            description: 'High-quality Arabica coffee beans',
-            sku: 'COFFEE-001',
-            barcode: '1234567890123',
-            price: 29.99,
-            costPrice: 19.99,
-            quantity: 100,
-            storeId: 'uuid-store-id',
-            status: 'active'
+          id: 'uuid-product-id',
+          name: 'Premium Coffee Beans',
+          category: 'Beverages',
+          ean: '1234567890123',
+          pluUpc: 'UPC123456',
+          supplierId: 'uuid-supplier-id',
+          sku: 'COFFEE-001',
+          singleItemCostPrice: 19.99,
+          itemQuantity: 100,
+          msrpPrice: 29.99,
+          singleItemSellingPrice: 25.99,
+          clientId: 'uuid-client-id',
+          storeId: 'uuid-store-id',
+          hasVariants: false,
+          packIds: ['uuid-pack-id-1', 'uuid-pack-id-2'],
+          packs: [
+            {
+              id: 'uuid-pack-id-1',
+              productId: 'uuid-product-id',
+              minimumSellingQuantity: 10,
+              totalPacksQuantity: 50,
+              orderedPacksPrice: 18.99,
+              percentDiscount: 5,
+              createdAt: '2025-06-20T22:39:00.000Z',
+              updatedAt: '2025-06-20T22:39:00.000Z',
+            },
+            {
+              id: 'uuid-pack-id-2',
+              productId: 'uuid-product-id',
+              minimumSellingQuantity: 20,
+              totalPacksQuantity: 30,
+              orderedPacksPrice: 17.99,
+              percentDiscount: 10,
+              createdAt: '2025-06-20T22:39:00.000Z',
+              updatedAt: '2025-06-20T22:39:00.000Z',
+            },
+          ],
+          variants: [],
+          createdAt: '2025-06-20T22:39:00.000Z',
+          updatedAt: '2025-06-20T22:39:00.000Z',
+          profitAmount: 6.0,
+          profitMargin: 30.02,
+          supplier: {
+            id: 'uuid-supplier-id',
+            name: 'ABC Suppliers Ltd',
+            email: 'contact@abcsuppliers.com',
+            phone: '123-456-7890',
           },
-          purchaseOrder: {
-            id: 'uuid-purchase-order-id',
-            quantity: 50,
-            price: 18.99,
-            total: 949.50,
-            status: 'pending'
-          }
+          store: {
+            id: 'uuid-store-id',
+            name: 'Main Store',
+          },
+          sales: [],
+          purchaseOrders: [
+            {
+              id: 'uuid-purchase-order-id',
+              productId: 'uuid-product-id',
+              supplierId: 'uuid-supplier-id',
+              employeeId: 'uuid-employee-id',
+              storeId: 'uuid-store-id',
+              quantity: 100,
+              price: 19.99,
+              total: 1999.0,
+              status: 'active',
+            },
+          ],
         }),
       }),
       ApiResponse({
@@ -113,9 +160,9 @@ export const ProductEndpoint = {
 
   GetProducts: () =>
     applyDecorators(
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Get all products',
-        description: 'Retrieves all products for the stores accessible to the user with pagination support.'
+        description: 'Retrieves all products for the stores accessible to the user with pagination support.',
       }),
       ApiQuery({ name: 'storeId', required: false, description: 'Filter by specific store ID' }),
       ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number for pagination', example: 1 }),
@@ -124,28 +171,67 @@ export const ProductEndpoint = {
         status: 200,
         description: 'Products retrieved successfully',
         schema: successResponseSchema('Products retrieved successfully', {
-          products: [{
-            id: 'uuid-product-id',
-            name: 'Premium Coffee Beans',
-            description: 'High-quality Arabica coffee beans',
-            sku: 'COFFEE-001',
-            barcode: '1234567890123',
-            price: 29.99,
-            costPrice: 19.99,
-            quantity: 100,
-            storeId: 'uuid-store-id',
-            status: 'active',
-            store: {
-              id: 'uuid-store-id',
-              name: 'Main Store'
-            }
-          }],
+          products: [
+            {
+              id: 'uuid-product-id',
+              name: 'Premium Coffee Beans',
+              category: 'Beverages',
+              ean: '1234567890123',
+              pluUpc: 'UPC123456',
+              supplierId: 'uuid-supplier-id',
+              sku: 'COFFEE-001',
+              singleItemCostPrice: 19.99,
+              itemQuantity: 100,
+              msrpPrice: 29.99,
+              singleItemSellingPrice: 25.99,
+              clientId: 'uuid-client-id',
+              storeId: 'uuid-store-id',
+              hasVariants: true,
+              packIds: [],
+              packs: [
+                {
+                  id: 'uuid-pack-id-1',
+                  productId: 'uuid-product-id',
+                  minimumSellingQuantity: 10,
+                  totalPacksQuantity: 50,
+                  orderedPacksPrice: 18.99,
+                  percentDiscount: 5,
+                  createdAt: '2025-06-20T22:39:00.000Z',
+                  updatedAt: '2025-06-20T22:39:00.000Z',
+                },
+              ],
+              variants: [
+                {
+                  name: 'Dark Roast',
+                  price: 27.99,
+                  sku: 'COFFEE-001-DR',
+                  packIds: ['uuid-pack-id-1'],
+                },
+              ],
+              createdAt: '2025-06-20T22:39:00.000Z',
+              updatedAt: '2025-06-20T22:39:00.000Z',
+              profitAmount: 6.0,
+              profitMargin: 30.02,
+              supplier: {
+                id: 'uuid-supplier-id',
+                name: 'ABC Suppliers Ltd',
+                email: 'contact@abcsuppliers.com',
+                phone: '123-456-7890',
+              },
+              store: {
+                id: 'uuid-store-id',
+                name: 'Main Store',
+              },
+              sales: [],
+              purchaseOrders: [],
+            },
+          ],
           pagination: {
             page: 1,
             limit: 10,
             total: 25,
-            totalPages: 3
-          }
+            totalPages: 3,
+          },
         }),
       }),
       ...standardErrorResponses(),
@@ -156,39 +242,78 @@ export const ProductEndpoint = {
 
   GetProductById: () =>
     applyDecorators(
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Get product by ID',
-        description: 'Retrieves a specific product by its ID with purchase order history.'
+        description: 'Retrieves a specific product by its ID with purchase order history.',
       }),
       ApiResponse({
         status: 200,
         description: 'Product retrieved successfully',
+        type: ProductResponseDto,
         schema: successResponseSchema('Product retrieved successfully', {
           id: 'uuid-product-id',
           name: 'Premium Coffee Beans',
-          description: 'High-quality Arabica coffee beans',
+          category: 'Beverages',
+          ean: '1234567890123',
+          pluUpc: 'UPC123456',
+          supplierId: 'uuid-supplier-id',
           sku: 'COFFEE-001',
-          barcode: '1234567890123',
-          price: 29.99,
-          costPrice: 19.99,
-          quantity: 100,
+          singleItemCostPrice: 19.99,
+          itemQuantity: 100,
+          msrpPrice: 29.99,
+          singleItemSellingPrice: 25.99,
+          clientId: 'uuid-client-id',
           storeId: 'uuid-store-id',
-          status: 'active',
+          hasVariants: true,
+          packIds: [],
+          packs: [
+            {
+              id: 'uuid-pack-id-1',
+              productId: 'uuid-product-id',
+              minimumSellingQuantity: 10,
+              totalPacksQuantity: 50,
+              orderedPacksPrice: 18.99,
+              percentDiscount: 5,
+              createdAt: '2025-06-20T22:39:00.000Z',
+              updatedAt: '2025-06-20T22:39:00.000Z',
+            },
+          ],
+          variants: [
+            {
+              name: 'Dark Roast',
+              price: 27.99,
+              sku: 'COFFEE-001-DR',
+              packIds: ['uuid-pack-id-1'],
+            },
+          ],
+          createdAt: '2025-06-20T22:39:00.000Z',
+          updatedAt: '2025-06-20T22:39:00.000Z',
+          profitAmount: 6.0,
+          profitMargin: 30.02,
+          supplier: {
+            id: 'uuid-supplier-id',
+            name: 'ABC Suppliers Ltd',
+            email: 'contact@abcsuppliers.com',
+            phone: '123-456-7890',
+          },
           store: {
             id: 'uuid-store-id',
-            name: 'Main Store'
+            name: 'Main Store',
           },
-          purchaseOrders: [{
-            id: 'uuid-purchase-order-id',
-            quantity: 50,
-            price: 18.99,
-            total: 949.50,
-            status: 'pending',
-            supplier: {
-              id: 'uuid-supplier-id',
-              name: 'ABC Suppliers Ltd'
-            }
-          }]
+          sales: [],
+          purchaseOrders: [
+            {
+              id: 'uuid-purchase-order-id',
+              productId: 'uuid-product-id',
+              supplierId: 'uuid-supplier-id',
+              employeeId: 'uuid-employee-id',
+              storeId: 'uuid-store-id',
+              quantity: 100,
+              price: 19.99,
+              total: 1999.0,
+              status: 'active',
+            },
+          ],
         }),
       }),
       ApiResponse({
@@ -204,24 +329,60 @@ export const ProductEndpoint = {
 
   UpdateProduct: (dtoType: any) =>
     applyDecorators(
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Update product',
-        description: 'Updates an existing product. Only admins and managers can update products.'
+        description: 'Updates an existing product. Only admins and managers can update products.',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({
         status: 200,
         description: 'Product updated successfully',
+        type: ProductResponseDto,
         schema: successResponseSchema('Product updated successfully', {
           id: 'uuid-product-id',
-          name: 'Updated Product Name',
-          description: 'Updated description',
-          sku: 'UPDATED-001',
-          price: 35.99,
-          costPrice: 22.99,
-          quantity: 150,
+          name: 'Updated Coffee Beans',
+          category: 'Beverages',
+          ean: '1234567890123',
+          pluUpc: 'UPC123456',
+          supplierId: 'uuid-supplier-id',
+          sku: 'COFFEE-001-UPDATED',
+          singleItemCostPrice: 22.99,
+          itemQuantity: 150,
+          msrpPrice: 35.99,
+          singleItemSellingPrice: 30.99,
+          clientId: 'uuid-client-id',
           storeId: 'uuid-store-id',
-          status: 'active'
+          hasVariants: false,
+          packIds: ['uuid-pack-id-1'],
+          packs: [
+            {
+              id: 'uuid-pack-id-1',
+              productId: 'uuid-product-id',
+              minimumSellingQuantity: 10,
+              totalPacksQuantity: 50,
+              orderedPacksPrice: 21.99,
+              percentDiscount: 5,
+              createdAt: '2025-06-20T22:39:00.000Z',
+              updatedAt: '2025-06-20T22:39:00.000Z',
+            },
+          ],
+          variants: [],
+          createdAt: '2025-06-20T22:39:00.000Z',
+          updatedAt: '2025-06-20T22:39:00.000Z',
+          profitAmount: 8.0,
+          profitMargin: 34.84,
+          supplier: {
+            id: 'uuid-supplier-id',
+            name: 'ABC Suppliers Ltd',
+            email: 'contact@abcsuppliers.com',
+            phone: '123-456-7890',
+          },
+          store: {
+            id: 'uuid-store-id',
+            name: 'Main Store',
+          },
+          sales: [],
+          purchaseOrders: [],
         }),
       }),
       ApiResponse({
@@ -247,16 +408,49 @@ export const ProductEndpoint = {
 
   DeleteProduct: () =>
     applyDecorators(
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Delete product',
-        description: 'Soft deletes a product by setting its status to inactive. Only admins can delete products.'
+        description: 'Soft deletes a product by setting its status to inactive. Only admins can delete products.',
       }),
       ApiResponse({
         status: 200,
         description: 'Product deleted successfully',
+        type: ProductResponseDto,
         schema: successResponseSchema('Product deleted successfully', {
           id: 'uuid-product-id',
-          deleted: true
+          name: 'Premium Coffee Beans',
+          category: 'Beverages',
+          ean: '1234567890123',
+          pluUpc: 'UPC123456',
+          supplierId: 'uuid-supplier-id',
+          sku: 'COFFEE-001',
+          singleItemCostPrice: 19.99,
+          itemQuantity: 100,
+          msrpPrice: 29.99,
+          singleItemSellingPrice: 25.99,
+          clientId: 'uuid-client-id',
+          storeId: 'uuid-store-id',
+          hasVariants: false,
+          packIds: [],
+          packs: [],
+          variants: [],
+          createdAt: '2025-06-20T22:39:00.000Z',
+          updatedAt: '2025-06-20T22:39:00.000Z',
+          profitAmount: 6.0,
+          profitMargin: 30.02,
+          supplier: {
+            id: 'uuid-supplier-id',
+            name: 'ABC Suppliers Ltd',
+            email: 'contact@abcsuppliers.com',
+            phone: '123-456-7890',
+          },
+          store: {
+            id: 'uuid-store-id',
+            name: 'Main Store',
+          },
+          sales: [],
+          purchaseOrders: [],
+          status: 'inactive',
         }),
       }),
       ApiResponse({
