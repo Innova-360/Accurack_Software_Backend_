@@ -446,7 +446,9 @@ export class ProductService {
     const product = await this.prisma.products.findUnique({ where: { id } });
     if (!product) {
       throw new NotFoundException('Product not found');
+
     }
+  }
 
     if (updateProductDto.sku && updateProductDto.sku !== product.sku) {
       await this.validateSkuUniqueness(async (sku: string) => {

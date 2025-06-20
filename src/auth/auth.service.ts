@@ -10,6 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { google } from 'googleapis';
 import { MailService } from '../mail/mail.service';
+import { PermissionsService } from '../permissions/permissions.service';
 import {
   GoogleProfileDto,
   AuthResponseDto,
@@ -32,6 +33,7 @@ export class AuthService {
     private readonly prisma: PrismaClientService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
+    private readonly permissionsService: PermissionsService,
   ) {}
   async googleLogin(googleUser: GoogleProfileDto): Promise<AuthResponseDto> {
     try {
@@ -39,7 +41,7 @@ export class AuthService {
       let user = await this.prisma.users.findUnique({
         where: { googleId: googleUser.id },
         include: { client: true },
-      } as any); // Temporary type assertion
+      });
 
       // If not found by googleId, check by email
       if (!user) {
@@ -57,7 +59,7 @@ export class AuthService {
               googleRefreshToken: googleUser.refreshToken || null,
             },
             include: { client: true },
-          } as any); // Temporary type assertion
+          });
         }
       }
 
@@ -67,19 +69,23 @@ export class AuthService {
       }
 
       // Update refresh token if provided
-      if (googleUser.refreshToken) {
+      if (googleUser.refreshToken && user) {
         await this.prisma.users.update({
           where: { id: user.id },
           data: { googleRefreshToken: googleUser.refreshToken },
-        } as any); // Temporary type assertion
+        });
+      }
+
+      if (!user) {
+        throw new BadRequestException('Failed to create or find user');
       }
 
       const payload = {
-        sub: user.id,
+        id: user.id,
         email: user.email,
         role: user.role,
         clientId: user.clientId,
-        googleId: (user as any).googleId, // Temporary type assertion
+        googleId: user.googleId,
       };
 
       // Generate access token (15 minutes)
@@ -241,6 +247,16 @@ export class AuthService {
         subject: 'Your OTP Code - Accurack',
         html: `<p>Your OTP code is: <strong>${otp}</strong></p>`,
       });
+
+      // Assign default permissions for super admin
+      try {
+        await this.permissionsService.assignDefaultPermissions(user.id);
+      } catch (error) {
+        console.error(
+          'Failed to assign default permissions to super admin:',
+          error,
+        );
+      }
 
       // Create audit log
       await this.prisma.auditLogs.create({
@@ -408,13 +424,14 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload, {
+      secret: process.env.JWT_SECRET,
       expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
     });
     const refreshToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      secret: process.env.JWT_SECRET,
       expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
     });
-
+    
     await this.prisma.auditLogs.create({
       data: {
         userId: user.id,
@@ -442,7 +459,7 @@ export class AuthService {
     const { refreshToken } = dto;
     try {
       const decoded = this.jwtService.verify(refreshToken, {
-        secret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+        secret: process.env.JWT_SECRET, // Use same secret as access token
       });
 
       const user = await this.prisma.users.findUnique({
@@ -722,20 +739,22 @@ export class AuthService {
     await this.prisma.userStoreMap.create({
       data: {
         userId: user.id,
-        storeId: invite.userId, // Assuming userId is storeId; adjust if needed
+        storeId: invite.userId, // This should be the actual storeId from the invite
       },
     });
 
-    if (invite.role === Role.employee) {
-      await this.prisma.employees.create({
-        data: {
-          name: `${firstName} ${lastName}`,
-          email: invite.email,
-          storeId: invite.userId, // Adjust if storeId is stored elsewhere
-          status: Status.active,
-        },
-      });
+    // Assign default permissions using the new permission system
+    try {
+      await this.permissionsService.assignDefaultPermissions(
+        user.id,
+        invite.userId, // This should be the actual storeId
+      );
+    } catch (error) {
+      console.error('Failed to assign default permissions:', error);
+      // Continue without throwing error since user is already created
+    }
 
+    if (invite.role === Role.employee) {
       await this.prisma.notifications.create({
         data: {
           userId: invite.userId,
@@ -773,86 +792,79 @@ export class AuthService {
   }
 
   async getPermissions(userId: string, storeId: string) {
-    const user = await this.prisma.users.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        role: true,
-        stores: { select: { storeId: true } },
-      },
-    });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    const storeAccess = user.stores.find((s) => s.storeId === storeId);
-    if (!storeAccess) {
-      throw new ForbiddenException('No access to this store');
-    }
-
-    if (user.role === Role.super_admin || user.role === Role.admin) {
-      const permissions = await this.prisma.permissions.findMany({
-        where: { userId },
-        select: { id: true, action: true, resource: true },
+    try {
+      const user = await this.prisma.users.findUnique({
+        where: { id: userId },
+        include: {
+          stores: { select: { storeId: true } },
+        },
       });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      const storeAccess = user.stores.find((s) => s.storeId === storeId);
+      if (!storeAccess && user.role !== Role.super_admin) {
+        throw new ForbiddenException('No access to this store');
+      }
+
+      // Use the new PermissionsService to get user permissions
+      const userPermissions = await this.permissionsService.getUserPermissions(
+        userId,
+        storeId,
+      );
+
+      // For super_admin and admin, they have broader access
+      if (user.role === Role.super_admin || user.role === Role.admin) {
+        return {
+          role: user.role,
+          permissions: userPermissions.permissions,
+          roleTemplates: userPermissions.roleTemplates,
+          hasFullAccess: true,
+        };
+      }
+
+      // For employees and managers, use user data directly since employee fields are now in User model
+      // Check if user has access to this store
+      const userStoreAccess = await this.prisma.userStoreMap.findFirst({
+        where: {
+          userId: user.id,
+          storeId: storeId,
+        },
+      });
+
+      if (!userStoreAccess) {
+        throw new ForbiddenException('No access to this store');
+      }
+
+      if (user.status !== Status.active) {
+        throw new ForbiddenException('User account is not active');
+      }
+
       return {
         role: user.role,
-        permissions,
-        permissionGroups: [],
+        permissions: userPermissions.permissions,
+        roleTemplates: userPermissions.roleTemplates,
+        userInfo: {
+          id: user.id,
+          name: `${user.firstName} ${user.lastName}`,
+          status: user.status,
+          employeeCode: (user as any).employeeCode,
+          position: (user as any).position,
+          department: (user as any).department,
+        },
+        hasFullAccess: false,
       };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to get user permissions');
     }
-
-    const employee = await this.prisma.employees.findFirst({
-      where: {
-        email: user.email,
-        storeId: storeId,
-      },
-      select: { id: true },
-    });
-    if (!employee) {
-      throw new ForbiddenException('No employee record for this store');
-    }
-
-    const [permissions, permissionGroups] = await Promise.all([
-      this.prisma.employeePermissions.findMany({
-        where: { employeeId: employee.id },
-        select: {
-          id: true,
-          action: true,
-          resource: true,
-        },
-      }),
-      this.prisma.employeePermissionGroups.findMany({
-        where: { employeeId: employee.id },
-        select: {
-          permissionGroup: {
-            select: {
-              id: true,
-              name: true,
-              items: {
-                select: {
-                  id: true,
-                  action: true,
-                  resource: true,
-                },
-              },
-            },
-          },
-        },
-      }),
-    ]);
-
-    return {
-      role: user.role,
-      permissions,
-      permissionGroups: permissionGroups.map((pg) => ({
-        name: pg.permissionGroup.name,
-        permissions: pg.permissionGroup.items,
-      })),
-    };
   }
 
   async getGoogleUserInfo(user: any) {
@@ -915,9 +927,9 @@ export class AuthService {
       const user = await this.prisma.users.findUnique({
         where: { id: userId },
         select: { googleRefreshToken: true },
-      } as any); // Temporary type assertion
+      });
 
-      if (!(user as any)?.googleRefreshToken) {
+      if (!user?.googleRefreshToken) {
         return null;
       }
 
@@ -929,7 +941,7 @@ export class AuthService {
       );
 
       oauth2Client.setCredentials({
-        refresh_token: (user as any).googleRefreshToken,
+        refresh_token: user.googleRefreshToken,
       });
 
       const { credentials } = await oauth2Client.refreshAccessToken();
@@ -939,7 +951,7 @@ export class AuthService {
         await this.prisma.users.update({
           where: { id: userId },
           data: { googleRefreshToken: credentials.refresh_token },
-        } as any); // Temporary type assertion
+        });
       }
 
       return credentials.access_token || null;
@@ -971,12 +983,23 @@ export class AuthService {
         email: googleUser.email,
         passwordHash: '', // Empty for Google users
         googleRefreshToken: googleUser.refreshToken || null,
-        role: 'employee', // You can change this to 'guest' or another role
+        role: Role.employee, // You can change this to 'guest' or another role
         clientId: defaultClient.id,
-        status: 'active',
+        status: Status.active,
       },
       include: { client: true },
-    } as any);
+    });
+
+    // Assign default permissions for new Google user
+    try {
+      await this.permissionsService.assignDefaultPermissions(newUser.id);
+    } catch (error) {
+      console.error(
+        'Failed to assign default permissions to Google user:',
+        error,
+      );
+      // Continue without throwing error since user is created
+    }
 
     return newUser;
   }

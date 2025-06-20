@@ -12,8 +12,6 @@ import { Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import {
-  GoogleProfileDto,
-  AuthResponseDto,
   SignupSuperAdminDto,
   LoginDto,
   RefreshTokenDto,
@@ -21,14 +19,9 @@ import {
   ResetPasswordDto,
   InviteDto,
   AcceptInviteDto,
-  UserProfileDto,
 } from './dto/auth.dto';
 import { JwtService } from '@nestjs/jwt';
-import { ResponseService, BaseAuthController, AuthEndpoint, CookieHelper } from '../common';
-
-import { Roles } from '../decorators/roles.decorator';
-
-import { verify } from 'crypto';
+import { ResponseService, BaseAuthController, AuthEndpoint } from '../common';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -93,50 +86,15 @@ export class AuthController extends BaseAuthController {
     );
   }
 
-  // @AuthEndpoint.LoginEndpoint(LoginDto)
-  // @Post('login')
-  // async login(@Body() dto: LoginDto, @Res() res) {
-  //   return this.handleCookieAuth(
-  //     res,
-  //     () => this.authService.login(dto),
-  //     'Login successful',
-  //     200,
-  //   );
-  // }
-
   @AuthEndpoint.LoginEndpoint(LoginDto)
   @Post('login')
-  async login(@Body() dto: LoginDto, @Res() res: Response) {
-    try {
-      const result = await this.authService.login(dto);
-
-      res.cookie('accessToken', result.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-        sameSite: 'lax', // Prevent CSRF attacks 
-        maxAge:  15 * 60 * 1000, // 15 mins
-      });
-
-      res.cookie('refreshToken', result.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-        sameSite: 'lax', // Prevent CSRF attacks
-        maxAge:  7 * 24 * 60 * 60 * 1000, // 7 days
-      });
-
-      // Return clean response without duplicate tokens
-      return res.status(200).json({
-        success: true,
-        message: 'Login successful',
-        data: {
-          user: result.user,
-          accessToken: result.accessToken, // Only include if frontend needs it
-          refreshToken: result.refreshToken, // Only include if frontend needs it
-        },
-      });
-    } catch (error) {
-      throw error;
-    }
+  async login(@Body() dto: LoginDto, @Res() res) {
+    return this.handleCookieAuth(
+      res,
+      () => this.authService.login(dto),
+      'Login successful',
+      200,
+    );
   }
 
   @AuthEndpoint.RefreshToken(RefreshTokenDto)
