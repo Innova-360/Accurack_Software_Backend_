@@ -12,8 +12,6 @@ import { Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import {
-  GoogleProfileDto,
-  AuthResponseDto,
   SignupSuperAdminDto,
   LoginDto,
   RefreshTokenDto,
@@ -21,14 +19,9 @@ import {
   ResetPasswordDto,
   InviteDto,
   AcceptInviteDto,
-  UserProfileDto,
 } from './dto/auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ResponseService, BaseAuthController, AuthEndpoint, CookieHelper } from '../common';
-
-import { Roles } from '../decorators/roles.decorator';
-
-import { verify } from 'crypto';
 
 @ApiTags('Authentication')
 @Controller('auth')

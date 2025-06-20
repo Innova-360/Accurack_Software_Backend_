@@ -5,16 +5,18 @@ import { JwtModule } from '@nestjs/jwt';
 import { StoreModule } from './store/store.module';
 import { CommonModule } from './common/common.module';
 import { SupplierModule } from './supplier/supplier.module';
+import { PermissionsModule } from './permissions/permissions.module';
 import { ProductModule } from './product/product.module';
 
 @Module({
   imports: [
-    CommonModule, // Global module for response handling
+    CommonModule,
     AuthModule,
     PrismaClientModule,
     StoreModule,
     ProductModule,
     SupplierModule,
+    PermissionsModule, // Add permissions module
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '15m' },
