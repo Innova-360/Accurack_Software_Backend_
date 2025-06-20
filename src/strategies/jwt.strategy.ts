@@ -41,11 +41,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: ExtractJwt.fromExtractors([
         (request: Request) => {
           // Extract JWT from cookies
-          const accessToken = request?.cookies?.['accessToken'] || request?.cookies?.['access_token'];
-          const refreshToken = request?.cookies?.['refreshToken'] || request?.cookies?.['refresh_token'];
-          
+          const accessToken =
+            request?.cookies?.['accessToken'] ||
+            request?.cookies?.['access_token'];
+          const refreshToken =
+            request?.cookies?.['refreshToken'] ||
+            request?.cookies?.['refresh_token'];
+
           // Prefer access token, fallback to refresh token
-          return accessToken || refreshToken || null;
+          const token = accessToken || refreshToken;
+          return token || null;
         },
         ExtractJwt.fromAuthHeaderAsBearerToken(), // Fallback to Bearer token
       ]),
@@ -76,7 +81,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           updatedAt: true,
         },
       });
-      
       if (!user) {
         throw new UnauthorizedException(
           'User not found or has been deactivated',
