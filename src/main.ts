@@ -77,7 +77,6 @@ async function bootstrap() {
     )
     .addTag('Authentication', 'User authentication and authorization endpoints')
     .addTag('Stores', 'Store management endpoints')
-    .addTag('Testing', 'Testing and utility endpoints')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

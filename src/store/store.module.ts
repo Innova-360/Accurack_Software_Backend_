@@ -5,6 +5,7 @@ import { StoreController } from './store.controller';
 import { JwtStrategy } from '../strategies/jwt.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
+import { PermissionsModule } from '../permissions/permissions.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { JwtModule } from '@nestjs/jwt';
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '15m' },
     }),
+    PermissionsModule,
   ],
   controllers: [StoreController],
   providers: [StoreService, PrismaClientService, JwtStrategy],

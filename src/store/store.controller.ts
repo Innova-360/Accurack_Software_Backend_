@@ -6,120 +6,55 @@ import {
   Controller,
   Post,
   Body,
+  Param,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiBody,
-} from '@nestjs/swagger';
 import { StoreService } from './store.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { PermissionsGuard } from '../guards/permissions.guard';
 import { CreateStoreDto } from './dto/dto.store';
-import { ResponseService, StandardResponseDto } from '../common';
+import { BaseAuthController, ResponseService } from '../common';
+import { StoreEndpoint } from '../common/decorators/store-endpoint.decorator';
 
-@ApiTags('Stores')
 @Controller('store')
-export class StoreController {
+export class StoreController extends BaseAuthController {
   constructor(
     private readonly storeService: StoreService,
-    private readonly responseService: ResponseService,
-  ) {}
-
-  @ApiOperation({ summary: 'Create a new store' })
-  @ApiBody({ type: CreateStoreDto })
-  @ApiResponse({
-    status: 201,
-    description: 'Store created successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string', example: 'Store created successfully' },
-        store: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              example: '123e4567-e89b-12d3-a456-426614174000',
-            },
-            name: { type: 'string', example: 'Downtown Store' },
-            email: { type: 'string', example: 'store@example.com' },
-            address: {
-              type: 'string',
-              example: '123 Main St, City, State 12345',
-            },
-            phone: { type: 'string', example: '+1-555-123-4567' },
-            currency: { type: 'string', example: 'USD' },
-            timezone: { type: 'string', example: 'America/New_York' },
-            createdAt: { type: 'string', example: '2025-06-18T10:30:00.000Z' },
-          },
-        },
-      },
-    },
-  })
-  @ApiResponse({ status: 400, description: 'Bad request - Invalid input data' })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing JWT token',
-  })
-  @ApiBearerAuth('JWT-auth')
-  @Version('1')
-  @UseGuards(JwtAuthGuard)
-  @Post('create')
-  async createStore(@Request() req, @Body() dto: CreateStoreDto) {
-    const user = req.user; // This contains the user details from JWT
-    return await this.storeService.createStore(user, dto);
+    responseService: ResponseService,
+  ) {
+    super(responseService);
   }
 
-  
-  @ApiOperation({ summary: 'Get list of user stores' })
-  @ApiResponse({
-    status: 200,
-    description: 'Stores retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        stores: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: {
-                type: 'string',
-                example: '123e4567-e89b-12d3-a456-426614174000',
-              },
-              name: { type: 'string', example: 'Downtown Store' },
-              email: { type: 'string', example: 'store@example.com' },
-              address: {
-                type: 'string',
-                example: '123 Main St, City, State 12345',
-              },
-              phone: { type: 'string', example: '+1-555-123-4567' },
-              currency: { type: 'string', example: 'USD' },
-              timezone: { type: 'string', example: 'America/New_York' },
-              role: { type: 'string', example: 'manager' },
-              createdAt: {
-                type: 'string',
-                example: '2025-06-18T10:30:00.000Z',
-              },
-            },
-          },
-        },
-        total: { type: 'number', example: 3 },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing JWT token',
-  })
-  @ApiBearerAuth('JWT-auth')
+  @StoreEndpoint.CreateStore(CreateStoreDto)
+  @Post('create')
   @Version('1')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  async createStore(@Request() req: any, @Body() dto: CreateStoreDto) {
+    return this.handleServiceOperation(
+      () => this.storeService.createStore(req.user, dto),
+      'Store created successfully',
+      201,
+    );
+  }
+
+  @StoreEndpoint.GetUserStores()
   @Get('list')
-  async getStores(@Request() req) {
-    const user = req.user;
-    return await this.storeService.getStores(user);
+  @Version('1')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  async getStores(@Request() req: any) {
+    return this.handleServiceOperation(
+      () => this.storeService.getStores(req.user),
+      'Stores retrieved successfully',
+    );
+  }
+
+  @StoreEndpoint.GetStoreById()
+  @Get(':id')
+  @Version('1')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  async findStoreById(@Request() req: any, @Param('id') id: string) {
+    return this.handleServiceOperation(
+      () => this.storeService.findStoreById(req.user, id),
+      'Store retrieved successfully',
+    );
   }
 }

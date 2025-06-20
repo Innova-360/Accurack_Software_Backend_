@@ -74,10 +74,28 @@ model Users {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Employee fields (previously in Employee model)
+  employeeCode String?  @unique
+  position     String?
+  department   String?
+  phone        String?
+
   client         Clients           @relation(fields: [clientId], references: [id])
   stores         UserStoreMap[]
   inviteLinks    InviteLinks[]
-  permissions    Permissions[]
+  
+  // New permission system relations
+  permissions        Permission[]   @relation("UserPermissions")
+  grantedPermissions Permission[]   @relation("PermissionGrantedBy")
+  createdRoleTemplates RoleTemplate[] @relation("CreatedRoleTemplates")
+  userRoles          UserRole[]
+  assignedUserRoles  UserRole[]     @relation("AssignedUserRoles")
+  
+  // Business operations (previously linked to Employee model)
+  sales          Sales[]
+  purchaseOrders PurchaseOrders[]
+  expenses       Expenses[]
+  
   notifications  Notifications[]
   auditLogs      AuditLogs[]
   apiTokens      ApiTokens[]
@@ -98,7 +116,7 @@ model Stores {
   client          Clients           @relation(fields: [clientId], references: [id])
   settings        StoreSettings?
   users           UserStoreMap[]
-  employees       Employees[]
+  permissions     Permission[]
   products        Products[]
   categories      ProductCategories[]
   inventory       InventoryEntries[]
@@ -150,86 +168,75 @@ model InviteLinks {
   user      Users    @relation(fields: [userId], references: [id])
 }
 
-model Permissions {
-  id        String   @id @default(uuid())
-  userId    String
-  action    Action
-  resource  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  user      Users    @relation(fields: [userId], references: [id])
+model Permission {
+  id            String   @id @default(cuid())
+  userId        String
+  storeId       String?  // null = global permission
+  resource      String   // 'inventory', 'product', 'store', etc.
+  actions       String[] // Array of action strings (e.g., ['create', 'read', 'update'])
+  resourceId    String?  // Specific resource ID (optional)
+  granted       Boolean  @default(true)
+  grantedBy     String
+  grantedAt     DateTime @default(now())
+  expiresAt     DateTime? // Optional permission expiration
+  conditions    Json?    // Additional conditions
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  @@unique([userId, action, resource])
+  // Relations
+  user          Users    @relation("UserPermissions", fields: [userId], references: [id], onDelete: Cascade)
+  store         Stores?  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  grantedByUser Users    @relation("PermissionGrantedBy", fields: [grantedBy], references: [id])
+
+  @@unique([userId, storeId, resource, resourceId])
+  @@index([userId, storeId])
+  @@index([resource])
+  @@map("permissions")
 }
 
-model EmployeePermissions {
-  id        String   @id @default(uuid())
-  employeeId String
-  action    Action
-  resource  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  employee  Employees @relation(fields: [employeeId], references: [id])
-
-  @@unique([employeeId, action, resource])
-}
-
-model PermissionGroups {
-  id          String   @id @default(uuid())
-  name        String
+model RoleTemplate {
+  id          String   @id @default(cuid())
+  name        String   @unique
   description String?
+  permissions Json     // Array of permission objects
+  inheritsFrom String? // Parent role template ID
+  isDefault   Boolean  @default(false) // Default role for new users
+  isActive    Boolean  @default(true)
+  priority    Int      @default(0) // For permission conflict resolution
+  createdBy   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  items       PermissionGroupItems[]
-  employees   EmployeePermissionGroups[]
+  // Relations
+  creator     Users        @relation("CreatedRoleTemplates", fields: [createdBy], references: [id])
+  parent      RoleTemplate? @relation("RoleInheritance", fields: [inheritsFrom], references: [id])
+  children    RoleTemplate[] @relation("RoleInheritance")
+  userRoles   UserRole[]
+
+  @@map("role_templates")
 }
 
-model PermissionGroupItems {
-  id                String   @id @default(uuid())
-  permissionGroupId String
-  action           Action
-  resource         String
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+model UserRole {
+  id             String       @id @default(cuid())
+  userId         String
+  roleTemplateId String
+  storeId        String?      // Store-specific role assignment
+  assignedBy     String
+  assignedAt     DateTime     @default(now())
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
 
-  permissionGroup   PermissionGroups @relation(fields: [permissionGroupId], references: [id])
+  // Relations
+  user         Users        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleTemplate RoleTemplate @relation(fields: [roleTemplateId], references: [id], onDelete: Cascade)
+  assignedByUser Users      @relation("AssignedUserRoles", fields: [assignedBy], references: [id])
 
-  @@unique([permissionGroupId, action, resource])
+  @@unique([userId, roleTemplateId, storeId])
+  @@map("user_roles")
 }
 
-model EmployeePermissionGroups {
-  id                String   @id @default(uuid())
-  employeeId       String
-  permissionGroupId String
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
 
-  employee         Employees      @relation(fields: [employeeId], references: [id])
-  permissionGroup  PermissionGroups @relation(fields: [permissionGroupId], references: [id])
-
-  @@unique([employeeId, permissionGroupId])
-}
-
-model Employees {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  phone     String?
-  storeId   String
-  status    Status   @default(active)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  store               Stores                @relation(fields: [storeId], references: [id])
-  permissions         EmployeePermissions[]
-  permissionGroups    EmployeePermissionGroups[]
-  sales               Sales[]
-  purchaseOrders      PurchaseOrders[]
-  expenses           Expenses[]
-}
 
 model Notifications {
   id        String   @id @default(uuid())
@@ -347,7 +354,7 @@ model Suppliers {
 model Sales {
   id          String   @id @default(uuid())
   productId   String
-  employeeId  String
+  userId      String
   storeId     String
   quantity    Int
   price       Float
@@ -356,7 +363,7 @@ model Sales {
   updatedAt   DateTime @updatedAt
 
   product     Products  @relation(fields: [productId], references: [id])
-  employee    Employees @relation(fields: [employeeId], references: [id])
+  user        Users     @relation(fields: [userId], references: [id])
   store       Stores    @relation(fields: [storeId], references: [id])
 }
 
@@ -364,7 +371,7 @@ model PurchaseOrders {
   id          String   @id @default(uuid())
   productId   String
   supplierId  String
-  employeeId  String
+  userId      String
   storeId     String
   quantity    Int
   price       Float
@@ -375,13 +382,13 @@ model PurchaseOrders {
 
   product     Products  @relation(fields: [productId], references: [id])
   supplier    Suppliers @relation(fields: [supplierId], references: [id])
-  employee    Employees @relation(fields: [employeeId], references: [id])
+  user        Users     @relation(fields: [userId], references: [id])
   store       Stores    @relation(fields: [storeId], references: [id])
 }
 
 model Expenses {
   id          String   @id @default(uuid())
-  employeeId  String
+  userId      String
   storeId     String
   amount      Float
   description String
@@ -389,7 +396,7 @@ model Expenses {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  employee    Employees @relation(fields: [employeeId], references: [id])
+  user        Users     @relation(fields: [userId], references: [id])
   store       Stores    @relation(fields: [storeId], references: [id])
 }
 

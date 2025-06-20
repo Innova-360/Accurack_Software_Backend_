@@ -11,6 +11,8 @@ export * from './interceptors/response.interceptor';
 export * from './decorators/skip-response-transform.decorator';
 export * from './decorators/api-responses.decorator';
 export * from './decorators/auth-endpoint.decorator';
+export * from './decorators/permission-endpoint.decorator';
+export * from './decorators/store-endpoint.decorator';
 
 // Filters
 export * from './filters/global-exception.filter';
@@ -20,6 +22,14 @@ export * from './utils/cookie.helper';
 
 // Controllers
 export * from './controllers/base-auth.controller';
+
+// Guards
+export * from '../guards/permissions.guard';
+
+// Permissions
+export * from '../permissions/permissions.service';
+export * from '../permissions/enums/permission.enum';
+export * from '../decorators/permissions.decorator';
 
 // Module
 export * from './common.module';

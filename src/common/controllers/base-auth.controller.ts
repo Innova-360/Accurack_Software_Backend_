@@ -146,8 +146,7 @@ export abstract class BaseAuthController {
   }
   /**
    * Extract user data for response (removes sensitive fields)
-   */
-  protected extractUserData(user: any): any {
+   */ protected extractUserData(user: any): any {
     return {
       id: user.id,
       email: user.email,
@@ -156,7 +155,8 @@ export abstract class BaseAuthController {
       role: user.role,
       clientId: user.clientId,
       status: user.status,
-      ...(user.googleId && { googleId: user.googleId }), // Only include if exists
+      ...(user.googleId && { googleId: user.googleId }),
+      stores: user.stores || [],
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

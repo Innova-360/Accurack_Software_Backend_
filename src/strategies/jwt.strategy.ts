@@ -1,4 +1,3 @@
-
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -6,7 +5,7 @@ import { PrismaClientService } from '../prisma-client/prisma-client.service';
 
 // Interface for JWT payload
 interface JwtPayload {
-  sub: string; // Changed from 'id' to 'sub' (standard JWT claim)
+  id: string;
   email: string;
   role?: string;
   clientId?: string;
@@ -22,9 +21,10 @@ interface ValidatedUser {
   lastName: string;
   role: string;
   email: string;
-  clientId: string | null;
-  googleId?: string;
+  clientId: string;
+  googleId: string | null;
   status: string;
+  stores: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -49,10 +49,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: JwtPayload): Promise<ValidatedUser> {
     try {
-      console.log('JWT Payload received:', payload); // Debug log
-
       const user = await this.prisma.users.findUnique({
-        where: { id: payload.sub }, // Changed from payload.id to payload.sub
+        where: { id: payload.id },
         select: {
           id: true,
           firstName: true,
@@ -62,18 +60,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           clientId: true,
           googleId: true,
           status: true,
+          stores: {
+            select: {
+              storeId: true,
+            },
+          },
           createdAt: true,
           updatedAt: true,
         },
-      } as any); // Temporary type assertion for googleId
-
-      console.log('User found:', user ? 'Yes' : 'No'); // Debug log
+      });
 
       if (!user) {
         throw new UnauthorizedException(
           'User not found or has been deactivated',
         );
       }
+
+      const mappedStores = user.stores.map(
+        (store: { storeId: string }) => store.storeId,
+      );
 
       const validatedUser = {
         id: user.id,
@@ -82,13 +87,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         role: user.role,
         email: user.email,
         clientId: user.clientId,
-        googleId: (user as any).googleId,
+        googleId: user.googleId,
         status: user.status,
+        stores: mappedStores,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       };
 
-      console.log('Returning validated user:', validatedUser); // Debug log
       return validatedUser;
     } catch (error) {
       console.error('JWT validation error:', error); // Debug log
