@@ -280,7 +280,7 @@ model Products {
   name                  String
   category              String
   ean                   String?
-  pluUpc               String    @unique
+  pluUpc                String    @unique
   supplierId            String
   sku                   String    @unique
   singleItemCostPrice   Float
@@ -289,6 +289,8 @@ model Products {
   singleItemSellingPrice Float
   clientId              String
   storeId               String
+  discountAmount        Float
+  percentDiscount       Float
   hasVariants           Boolean   @default(false)
   packIds               String[]  @default([]) // Stores pack IDs when hasVariants is false
   packs                 Pack[]
@@ -309,6 +311,7 @@ model Pack {
   minimumSellingQuantity Int
   totalPacksQuantity    Int
   orderedPacksPrice     Float
+  discountAmount        Float
   percentDiscount       Float
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt

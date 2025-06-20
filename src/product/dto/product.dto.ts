@@ -16,6 +16,10 @@ class PackDto {
   @IsNumber()
   orderedPacksPrice: number;
 
+  @ApiProperty({ example: 2.50, description: 'Discount amount applied to the pack' })
+  @IsNumber()
+  discountAmount: number;
+
   @ApiProperty({ example: 5, description: 'Percentage discount applied to the pack' })
   @IsNumber()
   percentDiscount: number;
@@ -96,10 +100,17 @@ export class CreateProductDto {
   @ApiProperty({ example: 29.99, description: 'Manufacturer suggested retail price' })
   @IsNumber()
   msrpPrice: number;
-
   @ApiProperty({ example: 25.99, description: 'Selling price per single item' })
   @IsNumber()
   singleItemSellingPrice: number;
+
+  @ApiProperty({ example: 2.00, description: 'Discount amount applied to the product' })
+  @IsNumber()
+  discountAmount: number;
+
+  @ApiProperty({ example: 10, description: 'Percentage discount applied to the product' })
+  @IsNumber()
+  percentDiscount: number;
 
   @ApiProperty({ example: 'uuid-client-id', description: 'ID of the client' })
   @IsString()
@@ -112,10 +123,9 @@ export class CreateProductDto {
   @ApiProperty({ example: false, description: 'Whether the product has variants' })
   @IsBoolean()
   hasVariants: boolean;
-
   @ApiProperty({
     type: [PackDto],
-    example: [{ minimumSellingQuantity: 10, totalPacksQuantity: 50, orderedPacksPrice: 18.99, percentDiscount: 5 }],
+    example: [{ minimumSellingQuantity: 10, totalPacksQuantity: 50, orderedPacksPrice: 18.99, discountAmount: 2.50, percentDiscount: 5 }],
     description: 'Array of packs for the product when hasVariants is false',
     required: false,
   })
@@ -183,11 +193,20 @@ export class UpdateProductDto {
   @IsNumber()
   @IsOptional()
   msrpPrice?: number;
-
   @ApiProperty({ example: 30.99, description: 'Selling price per single item', required: false })
   @IsNumber()
   @IsOptional()
   singleItemSellingPrice?: number;
+
+  @ApiProperty({ example: 3.00, description: 'Discount amount applied to the product', required: false })
+  @IsNumber()
+  @IsOptional()
+  discountAmount?: number;
+
+  @ApiProperty({ example: 15, description: 'Percentage discount applied to the product', required: false })
+  @IsNumber()
+  @IsOptional()
+  percentDiscount?: number;
 
   @ApiProperty({ example: 'uuid-client-id', description: 'ID of the client', required: false })
   @IsString()
@@ -259,9 +278,14 @@ export class ProductResponseDto {
 
   @ApiProperty({ example: 29.99, description: 'Manufacturer suggested retail price' })
   msrpPrice: number;
-
   @ApiProperty({ example: 25.99, description: 'Selling price per single item' })
   singleItemSellingPrice: number;
+
+  @ApiProperty({ example: 2.00, description: 'Discount amount applied to the product' })
+  discountAmount: number;
+
+  @ApiProperty({ example: 10, description: 'Percentage discount applied to the product' })
+  percentDiscount: number;
 
   @ApiProperty({ example: 'uuid-client-id', description: 'ID of the client' })
   clientId: string;

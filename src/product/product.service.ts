@@ -1,5 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { CreateProductDto, UpdateProductDto, ProductResponseDto } from './dto/product.dto';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import {
+  CreateProductDto,
+  UpdateProductDto,
+  ProductResponseDto,
+} from './dto/product.dto';
 import { ResponseService } from '../common/services/response.service';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 
@@ -67,7 +75,6 @@ export class ProductService {
       product.singleItemCostPrice > 0
         ? (profitAmount / product.singleItemCostPrice) * 100
         : 0;
-
     return {
       id: product.id,
       name: product.name,
@@ -80,6 +87,8 @@ export class ProductService {
       itemQuantity: product.itemQuantity,
       msrpPrice: product.msrpPrice,
       singleItemSellingPrice: product.singleItemSellingPrice,
+      discountAmount: product.discountAmount,
+      percentDiscount: product.percentDiscount,
       clientId: product.clientId,
       storeId: product.storeId,
       hasVariants: product.hasVariants,
@@ -119,16 +128,26 @@ export class ProductService {
     }
 
     // Validate that variants are empty if hasVariants is false
-    if (!createProductDto.hasVariants && createProductDto.variants && createProductDto.variants.length > 0) {
-      throw new BadRequestException('Variants must be empty when hasVariants is false');
+    if (
+      !createProductDto.hasVariants &&
+      createProductDto.variants &&
+      createProductDto.variants.length > 0
+    ) {
+      throw new BadRequestException(
+        'Variants must be empty when hasVariants is false',
+      );
     }
 
     // Validate that packs are not provided at product level if hasVariants is true
-    if (createProductDto.hasVariants && createProductDto.packs && createProductDto.packs?.length > 0) {
-      throw new BadRequestException('Packs cannot be provided at product level when hasVariants is true');
-    }
-
-    // Create the product first with empty packIds and variants
+    if (
+      createProductDto.hasVariants &&
+      createProductDto.packs &&
+      createProductDto.packs?.length > 0
+    ) {
+      throw new BadRequestException(
+        'Packs cannot be provided at product level when hasVariants is true',
+      );
+    } // Create the product first with empty packIds and variants
     const product = await this.prisma.products.create({
       data: {
         name: createProductDto.name,
@@ -141,6 +160,8 @@ export class ProductService {
         itemQuantity: createProductDto.itemQuantity,
         msrpPrice: createProductDto.msrpPrice,
         singleItemSellingPrice: createProductDto.singleItemSellingPrice,
+        discountAmount: createProductDto.discountAmount,
+        percentDiscount: createProductDto.percentDiscount,
         clientId: createProductDto.clientId,
         storeId: createProductDto.storeId,
         hasVariants: createProductDto.hasVariants || false,
@@ -179,20 +200,21 @@ export class ProductService {
           let variantPackIds: string[] = [];
           if (variant.packs && variant.packs.length > 0) {
             const createdPacks = await Promise.all(
-              variant.packs.map(pack =>
+              variant.packs.map((pack) =>
                 this.prisma.pack.create({
                   data: {
                     productId: product.id, // Use valid productId
                     minimumSellingQuantity: pack.minimumSellingQuantity,
                     totalPacksQuantity: pack.totalPacksQuantity,
                     orderedPacksPrice: pack.orderedPacksPrice,
+                    discountAmount: pack.discountAmount,
                     percentDiscount: pack.percentDiscount,
                   },
                   select: { id: true },
-                })
-              )
+                }),
+              ),
             );
-            variantPackIds = createdPacks.map(pack => pack.id);
+            variantPackIds = createdPacks.map((pack) => pack.id);
           }
           return {
             name: variant.name,
@@ -200,7 +222,7 @@ export class ProductService {
             sku: variant.plu,
             packIds: variantPackIds,
           };
-        })
+        }),
       );
 
       // Update product with variants
@@ -213,20 +235,21 @@ export class ProductService {
     } else if (createProductDto.packs && createProductDto.packs.length > 0) {
       // Create packs for non-variant products and store packIds in product
       const createdPacks = await Promise.all(
-        createProductDto.packs.map(pack =>
+        createProductDto.packs.map((pack) =>
           this.prisma.pack.create({
             data: {
               productId: product.id, // Use valid productId
               minimumSellingQuantity: pack.minimumSellingQuantity,
               totalPacksQuantity: pack.totalPacksQuantity,
               orderedPacksPrice: pack.orderedPacksPrice,
+              discountAmount: pack.discountAmount,
               percentDiscount: pack.percentDiscount,
             },
             select: { id: true },
-          })
-        )
+          }),
+        ),
       );
-      packIds = createdPacks.map(pack => pack.id);
+      packIds = createdPacks.map((pack) => pack.id);
 
       // Update product with packIds
       await this.prisma.products.update({
@@ -262,7 +285,11 @@ export class ProductService {
     });
 
     // Create a purchase order record if this is part of inventory management
-    if (createProductDto.supplierId && createProductDto.itemQuantity > 0 && updatedProduct) {
+    if (
+      createProductDto.supplierId &&
+      createProductDto.itemQuantity > 0 &&
+      updatedProduct
+    ) {
       try {
         const employee = await this.prisma.employees.findFirst({
           where: {
@@ -272,7 +299,9 @@ export class ProductService {
         });
 
         if (employee) {
-          console.log(`Creating purchase order with employee ID: ${employee.id}`);
+          console.log(
+            `Creating purchase order with employee ID: ${employee.id}`,
+          );
           await this.prisma.purchaseOrders.create({
             data: {
               productId: updatedProduct.id,
@@ -281,18 +310,24 @@ export class ProductService {
               storeId: createProductDto.storeId,
               quantity: createProductDto.itemQuantity,
               price: createProductDto.singleItemCostPrice,
-              total: createProductDto.singleItemCostPrice * createProductDto.itemQuantity,
+              total:
+                createProductDto.singleItemCostPrice *
+                createProductDto.itemQuantity,
               status: 'active',
             },
           });
           console.log('Purchase order created successfully');
         } else {
-          console.warn(`No employee record found for user ${user.email} in store ${createProductDto.storeId}. Skipping purchase order creation.`);
+          console.warn(
+            `No employee record found for user ${user.email} in store ${createProductDto.storeId}. Skipping purchase order creation.`,
+          );
         }
       } catch (purchaseOrderError) {
         console.error('Failed to create purchase order:', purchaseOrderError);
         if (purchaseOrderError.code === 'P2003') {
-          console.error('Foreign key constraint failed - one of the referenced records does not exist');
+          console.error(
+            'Foreign key constraint failed - one of the referenced records does not exist',
+          );
           console.error('Constraint:', purchaseOrderError.meta?.constraint);
         }
       }
@@ -305,13 +340,18 @@ export class ProductService {
     return this.formatProductResponse(updatedProduct);
   }
 
-  async getProducts(user: any, storeId?: string, page: number = 1, limit: number = 10) {
+  async getProducts(
+    user: any,
+    storeId?: string,
+    page: number = 1,
+    limit: number = 10,
+  ) {
     this.validateProductAccess(user, storeId);
 
     const skip = (page - 1) * limit;
-    
+
     let where: any = {};
-    
+
     if (user.role !== 'super_admin') {
       if (storeId) {
         where.storeId = storeId;
@@ -353,7 +393,7 @@ export class ProductService {
     ]);
 
     return {
-      products: products.map(product => this.formatProductResponse(product)),
+      products: products.map((product) => this.formatProductResponse(product)),
       pagination: {
         page,
         limit,
@@ -396,7 +436,11 @@ export class ProductService {
     return this.formatProductResponse(product);
   }
 
-  async updateProduct(user: any, id: string, updateProductDto: UpdateProductDto): Promise<ProductResponseDto> {
+  async updateProduct(
+    user: any,
+    id: string,
+    updateProductDto: UpdateProductDto,
+  ): Promise<ProductResponseDto> {
     this.validateProductOperationPermissions(user, 'update');
 
     const product = await this.prisma.products.findUnique({ where: { id } });
@@ -405,29 +449,38 @@ export class ProductService {
     }
 
     if (updateProductDto.sku && updateProductDto.sku !== product.sku) {
-      await this.validateSkuUniqueness(
-        async (sku: string) => {
-          const existing = await this.prisma.products.findFirst({
-            where: {
-              sku,
-              NOT: { id },
-            },
-          });
-          return !!existing;
-        },
-        updateProductDto.sku
-      );
+      await this.validateSkuUniqueness(async (sku: string) => {
+        const existing = await this.prisma.products.findFirst({
+          where: {
+            sku,
+            NOT: { id },
+          },
+        });
+        return !!existing;
+      }, updateProductDto.sku);
     }
 
     let packIds: string[] = [];
     let variantsWithPacks: any[] = [];
 
     // Validate pack and variant constraints
-    if (updateProductDto.hasVariants === true && updateProductDto.packs && updateProductDto.packs?.length > 0) {
-      throw new BadRequestException('Packs cannot be provided at product level when hasVariants is true');
+    if (
+      updateProductDto.hasVariants === true &&
+      updateProductDto.packs &&
+      updateProductDto.packs?.length > 0
+    ) {
+      throw new BadRequestException(
+        'Packs cannot be provided at product level when hasVariants is true',
+      );
     }
-    if (updateProductDto.hasVariants === false && updateProductDto.variants && updateProductDto.variants?.length > 0) {
-      throw new BadRequestException('Variants must be empty when hasVariants is false');
+    if (
+      updateProductDto.hasVariants === false &&
+      updateProductDto.variants &&
+      updateProductDto.variants?.length > 0
+    ) {
+      throw new BadRequestException(
+        'Variants must be empty when hasVariants is false',
+      );
     }
 
     // Delete existing packs to avoid duplicates
@@ -440,20 +493,21 @@ export class ProductService {
           let variantPackIds: string[] = [];
           if (variant.packs && variant.packs.length > 0) {
             const createdPacks = await Promise.all(
-              variant.packs.map(pack =>
+              variant.packs.map((pack) =>
                 this.prisma.pack.create({
                   data: {
                     productId: id,
                     minimumSellingQuantity: pack.minimumSellingQuantity,
                     totalPacksQuantity: pack.totalPacksQuantity,
                     orderedPacksPrice: pack.orderedPacksPrice,
+                    discountAmount: pack.discountAmount,
                     percentDiscount: pack.percentDiscount,
                   },
                   select: { id: true },
-                })
-              )
+                }),
+              ),
             );
-            variantPackIds = createdPacks.map(pack => pack.id);
+            variantPackIds = createdPacks.map((pack) => pack.id);
           }
           return {
             name: variant.name,
@@ -461,26 +515,26 @@ export class ProductService {
             sku: variant.plu,
             packIds: variantPackIds,
           };
-        })
+        }),
       );
     } else if (updateProductDto.packs && updateProductDto.packs.length > 0) {
       const createdPacks = await Promise.all(
-        updateProductDto.packs.map(pack =>
+        updateProductDto.packs.map((pack) =>
           this.prisma.pack.create({
             data: {
               productId: id,
               minimumSellingQuantity: pack.minimumSellingQuantity,
               totalPacksQuantity: pack.totalPacksQuantity,
               orderedPacksPrice: pack.orderedPacksPrice,
+              discountAmount: pack.discountAmount,
               percentDiscount: pack.percentDiscount,
             },
             select: { id: true },
-          })
-        )
+          }),
+        ),
       );
-      packIds = createdPacks.map(pack => pack.id);
+      packIds = createdPacks.map((pack) => pack.id);
     }
-
     const updatedProduct = await this.prisma.products.update({
       where: { id },
       data: {
@@ -494,6 +548,8 @@ export class ProductService {
         itemQuantity: updateProductDto.itemQuantity,
         msrpPrice: updateProductDto.msrpPrice,
         singleItemSellingPrice: updateProductDto.singleItemSellingPrice,
+        discountAmount: updateProductDto.discountAmount,
+        percentDiscount: updateProductDto.percentDiscount,
         clientId: updateProductDto.clientId,
         storeId: updateProductDto.storeId,
         hasVariants: updateProductDto.hasVariants,
@@ -524,7 +580,7 @@ export class ProductService {
     return this.formatProductResponse(updatedProduct);
   }
 
-  async deleteProduct(user: any, id: string): Promise<ProductResponseDto> {
+  async deleteProduct(user: any, id: string): Promise<void> {
     this.validateProductOperationPermissions(user, 'delete');
 
     const product = await this.prisma.products.findUnique({ where: { id } });
@@ -535,33 +591,38 @@ export class ProductService {
     // Delete associated packs
     await this.prisma.pack.deleteMany({ where: { productId: id } });
 
-    // Soft delete by updating updatedAt (remove status field as it doesn't exist in schema)
-    const deletedProduct = await this.prisma.products.update({
+    await this.prisma.products.delete({
       where: { id },
-      data: {
-        updatedAt: new Date(),
-      },
-      include: {
-        packs: true,
-        supplier: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-        store: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        sales: true,
-        purchaseOrders: true,
-      },
     });
 
-    return this.formatProductResponse(deletedProduct);
+    // Soft delete by updating updatedAt (remove status field as it doesn't exist in schema)
+    // const deletedProduct = await this.prisma.products.update({
+    //   where: { id },
+    //   data: {
+    //     updatedAt: new Date(),
+    //   },
+    //   include: {
+    //     packs: true,
+    //     supplier: {
+    //       select: {
+    //         id: true,
+    //         name: true,
+    //         email: true,
+    //         phone: true,
+    //       },
+    //     },
+    //     store: {
+    //       select: {
+    //         id: true,
+    //         name: true,
+    //       },
+    //     },
+    //     sales: true,
+    //     purchaseOrders: true,
+    //   },
+    // });
+
+    // Return void as the global response interceptor will handle the response format
+    return;
   }
 }

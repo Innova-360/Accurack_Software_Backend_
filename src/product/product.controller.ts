@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Query, Body, Req, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Query, Body, Req, Param } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { CreateProductDto, UpdateProductDto, ProductResponseDto } from './dto/product.dto';
 import { BaseProductController } from '../common/controllers/base-product.controller';
@@ -26,7 +26,7 @@ export class ProductController extends BaseProductController {
   }
 
   @ProductEndpoint.GetProducts()
-  @Get()
+  @Get('list')
   async getProducts(
     @Req() req,
     @Query('storeId') storeId?: string,
@@ -51,7 +51,7 @@ export class ProductController extends BaseProductController {
   }
 
   @ProductEndpoint.UpdateProduct(UpdateProductDto)
-  @Patch(':id')
+  @Put(':id')
   async updateProduct(
     @Req() req,
     @Param('id') id: string,
