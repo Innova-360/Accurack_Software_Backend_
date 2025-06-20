@@ -31,7 +31,6 @@ interface ValidatedUser {
   updatedAt: Date;
 }
 
-
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private prisma: PrismaClientService) {
@@ -39,7 +38,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: ExtractJwt.fromExtractors([
         (request: Request) => {
           // Extract JWT from cookies (e.g., cookie named 'jwt')
-          const token = request?.cookies?.['accessToken'] || request?.cookies?.['refreshToken'];
+          const token =
+            request?.cookies?.['accessToken'] ||
+            request?.cookies?.['refreshToken'];
           return token || null; // Return token or null if not found
         },
         ExtractJwt.fromAuthHeaderAsBearerToken(), // Fallback to Bearer token
@@ -49,7 +50,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  
   async validate(payload: JwtPayload): Promise<ValidatedUser> {
     try {
       const user = await this.prisma.users.findUnique({
@@ -106,8 +106,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException(
         'Invalid token or user validation failed',
       );
-      
     }
-    return { id: user.id, role: user.role, email: user.email, clientId: user.clientId, stores: user.stores };
   }
 }
