@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { InventoryController } from './inventory.controller';
-import { InventoryService } from './inventory.service';
 import { JwtStrategy } from 'src/strategies/jwt.strategy';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
+import { ProductController } from './product.controller';
+import { ProductService } from './product.service';
 
 @Module({
   imports: [
@@ -14,7 +14,7 @@ import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
       signOptions: { expiresIn: '15m' },
     }),
   ],
-  controllers: [InventoryController],
-  providers: [InventoryService, JwtStrategy, PrismaClientService],
+  controllers: [ProductController],
+  providers: [ProductService, JwtStrategy, PrismaClientService],
 })
-export class InventoryModule {}
+export class ProductModule {}

@@ -3,6 +3,8 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaClientService } from '../prisma-client/prisma-client.service';
 
+import { Request } from 'express';
+
 // Interface for JWT payload
 interface JwtPayload {
   id: string;
@@ -29,24 +31,25 @@ interface ValidatedUser {
   updatedAt: Date;
 }
 
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private prisma: PrismaClientService) {
-    // Validate JWT_SECRET environment variable
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error(
-        'JWT_SECRET environment variable is required but not defined',
-      );
-    }
-
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        (request: Request) => {
+          // Extract JWT from cookies (e.g., cookie named 'jwt')
+          const token = request?.cookies?.['accessToken'] || request?.cookies?.['refreshToken'];
+          return token || null; // Return token or null if not found
+        },
+        ExtractJwt.fromAuthHeaderAsBearerToken(), // Fallback to Bearer token
+      ]),
       ignoreExpiration: false,
-      secretOrKey: jwtSecret,
+      secretOrKey: process.env.JWT_SECRET || 'fallback-secret',
     });
   }
 
+  
   async validate(payload: JwtPayload): Promise<ValidatedUser> {
     try {
       const user = await this.prisma.users.findUnique({
@@ -103,6 +106,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException(
         'Invalid token or user validation failed',
       );
+      
     }
+    return { id: user.id, role: user.role, email: user.email, clientId: user.clientId, stores: user.stores };
   }
 }

@@ -22,19 +22,14 @@ export abstract class BaseAuthController {
   ): Promise<Response> {
     try {
       const result = await operation();
+      const { accessToken, refreshToken, ...responseData } = result;
+
+      console.log('Auth operation result:', result);
 
       // Set authentication cookies
-      CookieHelper.setAuthCookies(res, result);
+      CookieHelper.setAuthCookies(res, { accessToken, refreshToken });
 
-      // Return success response (exclude tokens from response body for security)
-      const {
-        accessToken,
-        refreshToken,
-        access_token,
-        refresh_token,
-        ...responseData
-      } = result;
-
+      // Return success response
       return res
         .status(successStatus)
         .json(
