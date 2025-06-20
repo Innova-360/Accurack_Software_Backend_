@@ -5,19 +5,14 @@ import { Role, Status } from "@prisma/client";
 
 @Injectable()
 export class SupplierService {
-    constructor(private readonly prisma: PrismaClientService) {}
-
-    async createSupplier(user: any, createSupplierDto: CreateSupplierDto) {
+    constructor(private readonly prisma: PrismaClientService) {}    async createSupplier(user: any, createSupplierDto: CreateSupplierDto) {
         // Check permissions - only super_admin, admin, and manager can create suppliers
         if (![Role.super_admin, Role.admin, Role.manager].includes(user.role)) {
             throw new ForbiddenException('Only admins and managers can create suppliers');
         }
 
-        // Verify user has access to the store
-        const storeAccess = user.stores?.find(store => store.storeId === createSupplierDto.storeId);
-        if (!storeAccess && user.role !== Role.super_admin) {
-            throw new ForbiddenException('No access to this store');
-        }
+        // Validate store access
+        await this.validateStoreAccess(user, createSupplierDto.storeId);
 
         try {
             const supplier = await this.prisma.suppliers.create({
@@ -51,10 +46,24 @@ export class SupplierService {
             return {
                 message: "Supplier created successfully",
                 data: supplier,
-            };
-        } catch (error) {
+            };        } catch (error) {
             console.error('Create supplier error:', error);
-            throw new BadRequestException('Failed to create supplier: ' + error.message);
+            
+            // Handle specific Prisma errors
+            if (error.code === 'P2003') {
+                // Foreign key constraint violation
+                if (error.meta?.field_name === 'storeId') {
+                    throw new BadRequestException('Invalid store ID provided - store does not exist');
+                }
+                throw new BadRequestException('Foreign key constraint violation');
+            }
+            if (error.code === 'P2002') {
+                // Unique constraint violation
+                const field = error.meta?.target?.[0] || 'field';
+                throw new BadRequestException(`Supplier with this ${field} already exists`);
+            }
+            
+            throw new BadRequestException('Failed to create supplier: ' + (error.message || 'Unknown error'));
         }
     }
 
@@ -211,14 +220,9 @@ export class SupplierService {
 
             if (!existingSupplier) {
                 throw new NotFoundException('Supplier not found');
-            }
-
-            // If storeId is being updated, verify user has access to the new store
+            }            // If storeId is being updated, validate the new store
             if (updateSupplierDto.storeId && updateSupplierDto.storeId !== existingSupplier.storeId) {
-                const storeAccess = user.stores?.find(store => store.storeId === updateSupplierDto.storeId);
-                if (!storeAccess && user.role !== Role.super_admin) {
-                    throw new ForbiddenException('No access to the target store');
-                }
+                await this.validateStoreAccess(user, updateSupplierDto.storeId);
             }
 
             const updatedSupplier = await this.prisma.suppliers.update({
@@ -252,11 +256,26 @@ export class SupplierService {
             return {
                 message: "Supplier updated successfully",
                 data: updatedSupplier,
-            };
-        } catch (error) {
-            if (error instanceof NotFoundException || error instanceof ForbiddenException) throw error;
+            };        } catch (error) {
+            if (error instanceof NotFoundException || error instanceof ForbiddenException || error instanceof BadRequestException) throw error;
+            
             console.error('Update supplier error:', error);
-            throw new BadRequestException('Failed to update supplier: ' + error.message);
+            
+            // Handle specific Prisma errors
+            if (error.code === 'P2003') {
+                // Foreign key constraint violation
+                if (error.meta?.field_name === 'storeId') {
+                    throw new BadRequestException('Invalid store ID provided - store does not exist');
+                }
+                throw new BadRequestException('Foreign key constraint violation');
+            }
+            if (error.code === 'P2002') {
+                // Unique constraint violation
+                const field = error.meta?.target?.[0] || 'field';
+                throw new BadRequestException(`Supplier with this ${field} already exists`);
+            }
+            
+            throw new BadRequestException('Failed to update supplier: ' + (error.message || 'Unknown error'));
         }
     }
 
@@ -303,8 +322,35 @@ export class SupplierService {
             };
         } catch (error) {
             if (error instanceof NotFoundException || error instanceof ForbiddenException) throw error;
-            console.error('Delete supplier error:', error);
-            throw new BadRequestException('Failed to delete supplier: ' + error.message);
+            console.error('Delete supplier error:', error);            throw new BadRequestException('Failed to delete supplier: ' + (error.message || 'Unknown error'));
         }
+    }    private async validateStoreAccess(user: any, storeId: string): Promise<any> {
+        if (!storeId) {
+            throw new BadRequestException('Store ID is required');
+        }
+
+        // Check if store exists
+        const store = await this.prisma.stores.findUnique({
+            where: { id: storeId },
+            select: { id: true, name: true, clientId: true, status: true },
+        });
+
+        if (!store) {
+            throw new NotFoundException(`Store with ID '${storeId}' not found`);
+        }
+
+        if (store.status !== Status.active) {
+            throw new BadRequestException('Store is not active');
+        }
+
+        // Check user access to store (only for non-super-admin users)
+        if (user.role !== Role.super_admin) {
+            const storeAccess = user.stores?.find(s => s.storeId === storeId);
+            if (!storeAccess) {
+                throw new ForbiddenException('You do not have access to this store');
+            }
+        }
+
+        return store;
     }
 }

@@ -1,26 +1,50 @@
-import { Controller, Post, Get, Put, Delete, Req, UseGuards, Body, Param, Query, ParseIntPipe, DefaultValuePipe } from "@nestjs/common";
-import { JwtAuthGuard } from "../guards/jwt-auth.guard";
-import { CreateSupplierDto, UpdateSupplierDto } from "./dto/dto.supplier";
-import { SupplierService } from "./supplier.service";
-import { SupplierEndpoint } from "src/common/decorators/auth-endpoint.decorator";
-import { ApiTags } from "@nestjs/swagger";
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Delete,
+  Req,
+  UseGuards,
+  Body,
+  Param,
+  Query,
+  ParseIntPipe,
+  DefaultValuePipe,
+} from '@nestjs/common';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { CreateSupplierDto, UpdateSupplierDto } from './dto/dto.supplier';
+import { SupplierService } from './supplier.service';
+import { SupplierEndpoint } from '../common/decorators/supplier-endpoint.decorator';
+import { ApiTags } from '@nestjs/swagger';
+import { BaseSupplierController } from '../common/controllers/base-supplier.controller';
+import { ResponseService } from '../common/services/response.service';
 
 @ApiTags('suppliers')
 @Controller('supplier')
-export class SupplierController {
-  constructor(private readonly supplierService: SupplierService) {}
-
+export class SupplierController extends BaseSupplierController {
+  constructor(
+    private readonly supplierService: SupplierService,
+    responseService: ResponseService,
+  ) {
+    super(responseService);
+  }
   @SupplierEndpoint.CreateSupplier(CreateSupplierDto)
-  @UseGuards(JwtAuthGuard)
   @Post('create')
-  async createSupplier(@Req() req, @Body() createSupplierDto: CreateSupplierDto) {
+  async createSupplier(
+    @Req() req,
+    @Body() createSupplierDto: CreateSupplierDto,
+  ) {
     const user = req.user;
-    console.log("user",user);
-    return await this.supplierService.createSupplier(user, createSupplierDto);
+    console.log('user', user);
+    return this.handleSupplierOperation(
+      () => this.supplierService.createSupplier(user, createSupplierDto),
+      'Supplier created successfully',
+      201,
+    );
   }
 
   @SupplierEndpoint.GetSuppliers()
-  @UseGuards(JwtAuthGuard)
   @Get('list')
   async getSuppliers(
     @Req() req,
@@ -29,19 +53,22 @@ export class SupplierController {
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,
   ) {
     const user = req.user;
-    return await this.supplierService.getSuppliers(user, storeId, page, limit);
-  }
 
+    return this.handleSupplierOperation(
+      () => this.supplierService.getSuppliers(user, storeId, page, limit),
+      'Suppliers retrieved successfully',
+    );
+  }
   @SupplierEndpoint.GetSupplierById()
-  @UseGuards(JwtAuthGuard)
   @Get(':id')
   async getSupplierById(@Req() req, @Param('id') supplierId: string) {
     const user = req.user;
-    return await this.supplierService.getSupplierById(user, supplierId);
+    return this.handleSupplierOperation(
+      () => this.supplierService.getSupplierById(user, supplierId),
+      'Supplier retrieved successfully',
+    );
   }
-
   @SupplierEndpoint.UpdateSupplier(UpdateSupplierDto)
-  @UseGuards(JwtAuthGuard)
   @Put(':id')
   async updateSupplier(
     @Req() req,
@@ -49,14 +76,23 @@ export class SupplierController {
     @Body() updateSupplierDto: UpdateSupplierDto,
   ) {
     const user = req.user;
-    return await this.supplierService.updateSupplier(user, supplierId, updateSupplierDto);
+    return this.handleSupplierOperation(
+      () =>
+        this.supplierService.updateSupplier(
+          user,
+          supplierId,
+          updateSupplierDto,
+        ),
+      'Supplier updated successfully',
+    );
   }
-
   @SupplierEndpoint.DeleteSupplier()
-  @UseGuards(JwtAuthGuard)
   @Delete(':id')
   async deleteSupplier(@Req() req, @Param('id') supplierId: string) {
     const user = req.user;
-    return await this.supplierService.deleteSupplier(user, supplierId);
+    return this.handleSupplierOperation(
+      () => this.supplierService.deleteSupplier(user, supplierId),
+      'Supplier deleted successfully',
+    );
   }
 }

@@ -1,160 +1,343 @@
 import {
   Injectable,
-  BadRequestException,
   NotFoundException,
-  ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
+import {
+  CreateProductDto,
+  UpdateProductDto,
+  ProductResponseDto,
+} from './dto/product.dto';
+import { ResponseService } from '../common/services/response.service';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
-import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
-import { Role, Status } from '@prisma/client';
 
 @Injectable()
 export class ProductService {
-  constructor(private readonly prisma: PrismaClientService) {}
+  constructor(
+    private readonly prisma: PrismaClientService,
+    private readonly responseService: ResponseService,
+  ) {}
 
-  async createProduct(user: any, createProductDto: CreateProductDto) {
-    // Check permissions - only super_admin, admin, and manager can create products
+  private validateProductOperationPermissions(
+    user: any,
+    operation: 'create' | 'update' | 'delete',
+  ): void {
+    if (!user) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    const allowedRoles = {
+      create: ['super_admin', 'admin', 'manager'],
+      update: ['super_admin', 'admin', 'manager'],
+      delete: ['super_admin', 'admin'],
+    };
+
+    if (!allowedRoles[operation].includes(user.role)) {
+      throw new BadRequestException(
+        `Only ${allowedRoles[operation].join(', ')} can ${operation} products`,
+      );
+    }
+  }
+
+  private validateProductAccess(user: any, storeId?: string): void {
+    if (!user) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    if (user.role === 'super_admin') {
+      return;
+    }
+
+    if (storeId) {
+      const hasStoreAccess = user.stores?.some(
+        (store: any) => store.storeId === storeId,
+      );
+      if (!hasStoreAccess && user.storeId !== storeId) {
+        throw new BadRequestException('No access to this store');
+      }
+    }
+  }
+
+  private async validateSkuUniqueness(
+    checkSkuExists: (sku: string) => Promise<boolean>,
+    sku: string,
+  ): Promise<void> {
+    const exists = await checkSkuExists(sku);
+    if (exists) {
+      throw new BadRequestException('SKU already exists');
+    }
+  }
+
+  private formatProductResponse(product: any): ProductResponseDto {
+    const profitAmount =
+      product.singleItemSellingPrice - product.singleItemCostPrice;
+    const profitMargin =
+      product.singleItemCostPrice > 0
+        ? (profitAmount / product.singleItemCostPrice) * 100
+        : 0;
+    return {
+      id: product.id,
+      name: product.name,
+      category: product.category,
+      ean: product.ean,
+      pluUpc: product.pluUpc,
+      sku: product.sku,
+      supplierId: product.supplierId,
+      singleItemCostPrice: product.singleItemCostPrice,
+      itemQuantity: product.itemQuantity,
+      msrpPrice: product.msrpPrice,
+      singleItemSellingPrice: product.singleItemSellingPrice,
+      discountAmount: product.discountAmount,
+      percentDiscount: product.percentDiscount,
+      clientId: product.clientId,
+      storeId: product.storeId,
+      hasVariants: product.hasVariants,
+      packIds: product.packIds,
+      packs: product.packs || [],
+      variants: product.variants || [],
+      supplier: product.supplier,
+      store: product.store,
+      sales: product.sales,
+      purchaseOrders: product.purchaseOrders,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+      profitAmount: parseFloat(profitAmount.toFixed(2)),
+      profitMargin: parseFloat(profitMargin.toFixed(2)),
+    };
+  }
+
+  async createProduct(
+    user: any,
+    createProductDto: CreateProductDto,
+  ): Promise<ProductResponseDto> {
+    this.validateProductOperationPermissions(user, 'create');
+
+    // Validate SKU uniqueness if provided
+    if (createProductDto.sku) {
+      await this.validateSkuUniqueness(async (sku: string) => {
+        const existing = await this.prisma.products.findFirst({
+          where: { sku },
+        });
+        return !!existing;
+      }, createProductDto.sku);
+    }
+
+    // Validate clientId and storeId
+    if (!createProductDto.clientId || !createProductDto.storeId) {
+      throw new BadRequestException('clientId and storeId are required');
+    }
+
+    // Validate that variants are empty if hasVariants is false
     if (
-      ![Role.super_admin, Role.admin, Role.manager, Role.employee].includes(
-        user.role,
-      )
+      !createProductDto.hasVariants &&
+      createProductDto.variants &&
+      createProductDto.variants.length > 0
     ) {
-      throw new ForbiddenException(
-        'Only admins, managers and emplyees can create products',
+      throw new BadRequestException(
+        'Variants must be empty when hasVariants is false',
       );
     }
 
-    // Verify user has access to the store
-    const storeAccess = user.stores?.find(
-      (store) => store.storeId === createProductDto.storeId,
-    );
-    if (!storeAccess && user.role !== Role.super_admin) {
-      throw new ForbiddenException('No access to this store');
-    }
-
-    // Check if SKU already exists
-    const existingSku = await this.prisma.products.findUnique({
-      where: { sku: createProductDto.sku },
-    });
-    if (existingSku) {
-      throw new BadRequestException('SKU already exists');
-    }
-
-    // console.log('Creating product with data:', createProductDto);
-
-    // Verify supplier exists and belongs to the same store
-    const supplier = await this.prisma.suppliers.findFirst({
-      where: {
-        id: createProductDto.supplierId,
+    // Validate that packs are not provided at product level if hasVariants is true
+    if (
+      createProductDto.hasVariants &&
+      createProductDto.packs &&
+      createProductDto.packs?.length > 0
+    ) {
+      throw new BadRequestException(
+        'Packs cannot be provided at product level when hasVariants is true',
+      );
+    } // Create the product first with empty packIds and variants
+    const product = await this.prisma.products.create({
+      data: {
+        name: createProductDto.name,
+        category: createProductDto.category,
+        ean: createProductDto.ean,
+        pluUpc: createProductDto.pluUpc,
+        supplierId: createProductDto.supplierId,
+        sku: createProductDto.sku,
+        singleItemCostPrice: createProductDto.singleItemCostPrice,
+        itemQuantity: createProductDto.itemQuantity,
+        msrpPrice: createProductDto.msrpPrice,
+        singleItemSellingPrice: createProductDto.singleItemSellingPrice,
+        discountAmount: createProductDto.discountAmount,
+        percentDiscount: createProductDto.percentDiscount,
+        clientId: createProductDto.clientId,
         storeId: createProductDto.storeId,
-        status: Status.active,
+        hasVariants: createProductDto.hasVariants || false,
+        packIds: [], // Initialize empty, will update later if needed
+        variants: [], // Initialize empty, will update later if needed
       },
-    });
-
-    // console.log('Supplier found:', supplier);
-    if (!supplier) {
-      throw new BadRequestException('Supplier not found or not accessible');
-    }
-
-    try {
-      // Create product and purchase order in a transaction
-      const result = await this.prisma.$transaction(async (prisma) => {
-        // Create the product
-        const product = await prisma.products.create({
-          data: {
-            name: createProductDto.name,
-            description: createProductDto.description,
-            sku: createProductDto.sku,
-            barcode: createProductDto.barcode,
-            price: createProductDto.price,
-            costPrice: createProductDto.costPrice,
-            quantity: createProductDto.quantity,
-            clientId: user.clientId,
-            storeId: createProductDto.storeId,
-            status: Status.active,
-          },
+      include: {
+        packs: true,
+        supplier: {
           select: {
             id: true,
             name: true,
-            description: true,
-            sku: true,
-            barcode: true,
-            price: true,
-            costPrice: true,
-            quantity: true,
-            clientId: true,
-            storeId: true,
-            status: true,
-            createdAt: true,
-            updatedAt: true,
-            store: {
-              select: {
-                id: true,
-                name: true,
-              },
+            email: true,
+            phone: true,
+          },
+        },
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        sales: true,
+        purchaseOrders: true,
+      },
+    });
+
+    let packIds: string[] = [];
+    let variantsWithPacks: any[] = [];
+
+    // Handle pack creation based on hasVariants
+    if (createProductDto.hasVariants && createProductDto.variants) {
+      // Create packs for variants and store packIds in variants
+      variantsWithPacks = await Promise.all(
+        createProductDto.variants.map(async (variant) => {
+          let variantPackIds: string[] = [];
+          if (variant.packs && variant.packs.length > 0) {
+            const createdPacks = await Promise.all(
+              variant.packs.map((pack) =>
+                this.prisma.pack.create({
+                  data: {
+                    productId: product.id, // Use valid productId
+                    minimumSellingQuantity: pack.minimumSellingQuantity,
+                    totalPacksQuantity: pack.totalPacksQuantity,
+                    orderedPacksPrice: pack.orderedPacksPrice,
+                    discountAmount: pack.discountAmount,
+                    percentDiscount: pack.percentDiscount,
+                  },
+                  select: { id: true },
+                }),
+              ),
+            );
+            variantPackIds = createdPacks.map((pack) => pack.id);
+          }
+          return {
+            name: variant.name,
+            price: variant.price,
+            sku: variant.plu,
+            packIds: variantPackIds,
+          };
+        }),
+      );
+
+      // Update product with variants
+      await this.prisma.products.update({
+        where: { id: product.id },
+        data: {
+          variants: variantsWithPacks,
+        },
+      });
+    } else if (createProductDto.packs && createProductDto.packs.length > 0) {
+      // Create packs for non-variant products and store packIds in product
+      const createdPacks = await Promise.all(
+        createProductDto.packs.map((pack) =>
+          this.prisma.pack.create({
+            data: {
+              productId: product.id, // Use valid productId
+              minimumSellingQuantity: pack.minimumSellingQuantity,
+              totalPacksQuantity: pack.totalPacksQuantity,
+              orderedPacksPrice: pack.orderedPacksPrice,
+              discountAmount: pack.discountAmount,
+              percentDiscount: pack.percentDiscount,
             },
+            select: { id: true },
+          }),
+        ),
+      );
+      packIds = createdPacks.map((pack) => pack.id);
+
+      // Update product with packIds
+      await this.prisma.products.update({
+        where: { id: product.id },
+        data: {
+          packIds,
+        },
+      });
+    }
+
+    // Fetch the updated product with all relations
+    const updatedProduct = await this.prisma.products.findUnique({
+      where: { id: product.id },
+      include: {
+        packs: true,
+        supplier: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        sales: true,
+        purchaseOrders: true,
+      },
+    });
+
+    // Create a purchase order record if this is part of inventory management
+    if (
+      createProductDto.supplierId &&
+      createProductDto.itemQuantity > 0 &&
+      updatedProduct
+    ) {
+      try {
+        const employee = await this.prisma.employees.findFirst({
+          where: {
+            email: user.email,
+            storeId: createProductDto.storeId,
           },
         });
 
-        // // Create initial purchase order if purchase details provided
-        // let purchaseOrder: any = null;
-        // if (
-        //   createProductDto.purchaseQuantity &&
-        //   createProductDto.purchasePrice
-        // ) {
-        //   // Find an employee to assign the purchase order (preferably the current user if they're an employee)
-        //   const user = await prisma.users.findFirst({
-        //     where: {
-        //       storeId: createProductDto.storeId,
-        //       status: Status.active,
-        //     },
-        //     orderBy: {
-        //       createdAt: 'asc',
-        //     },
-        //   });
-
-        //   if (user.role === Role.employee) {
-        //     purchaseOrder = await prisma.purchaseOrders.create({
-        //       data: {
-        //         productId: product.id,
-        //         supplierId: createProductDto.supplierId,
-        //         employeeId: employee.id,
-        //         storeId: createProductDto.storeId,
-        //         quantity: createProductDto.purchaseQuantity,
-        //         price: createProductDto.purchasePrice,
-        //         total:
-        //           createProductDto.purchaseQuantity *
-        //           createProductDto.purchasePrice,
-        //         status: Status.pending,
-        //       },
-        //       select: {
-        //         id: true,
-        //         quantity: true,
-        //         price: true,
-        //         total: true,
-        //         status: true,
-        //         createdAt: true,
-        //       },
-        //     });
-        //   }
-        // }
-
-        return { product };
-      });
-
-      return {
-        message: 'Product created successfully',
-        data: {
-          product: result.product,
-          //   purchaseOrder: result.purchaseOrder,
-        },
-      };
-    } catch (error) {
-      console.error('Create product error:', error);
-      throw new BadRequestException(
-        'Failed to create product: ' + error.message,
-      );
+        if (employee) {
+          console.log(
+            `Creating purchase order with employee ID: ${employee.id}`,
+          );
+          await this.prisma.purchaseOrders.create({
+            data: {
+              productId: updatedProduct.id,
+              supplierId: createProductDto.supplierId,
+              employeeId: employee.id,
+              storeId: createProductDto.storeId,
+              quantity: createProductDto.itemQuantity,
+              price: createProductDto.singleItemCostPrice,
+              total:
+                createProductDto.singleItemCostPrice *
+                createProductDto.itemQuantity,
+              status: 'active',
+            },
+          });
+          console.log('Purchase order created successfully');
+        } else {
+          console.warn(
+            `No employee record found for user ${user.email} in store ${createProductDto.storeId}. Skipping purchase order creation.`,
+          );
+        }
+      } catch (purchaseOrderError) {
+        console.error('Failed to create purchase order:', purchaseOrderError);
+        if (purchaseOrderError.code === 'P2003') {
+          console.error(
+            'Foreign key constraint failed - one of the referenced records does not exist',
+          );
+          console.error('Constraint:', purchaseOrderError.meta?.constraint);
+        }
+      }
     }
+
+    if (!updatedProduct) {
+      throw new BadRequestException('Failed to create product');
+    }
+
+    return this.formatProductResponse(updatedProduct);
   }
 
   async getProducts(
@@ -163,361 +346,285 @@ export class ProductService {
     page: number = 1,
     limit: number = 10,
   ) {
-    try {
-      // Build where clause based on user role and store access
-      let whereClause: any = {
-        status: Status.active,
-      };
+    this.validateProductAccess(user, storeId);
 
-      if (user.role === Role.super_admin) {
-        // Super admin can see all products
-        if (storeId) {
-          whereClause.storeId = storeId;
-        }
-        if (user.clientId) {
-          whereClause.clientId = user.clientId;
-        }
-      } else {
-        // Other users can only see products from their accessible stores
-        const accessibleStoreIds =
-          user.stores?.map((store) => store.storeId) || [];
-        if (storeId) {
-          // Check if user has access to the specific store
-          if (!accessibleStoreIds.includes(storeId)) {
-            throw new ForbiddenException('No access to this store');
-          }
-          whereClause.storeId = storeId;
-        } else {
-          whereClause.storeId = { in: accessibleStoreIds };
-        }
-        whereClause.clientId = user.clientId;
+    const skip = (page - 1) * limit;
+
+    let where: any = {};
+
+    if (user.role !== 'super_admin') {
+      if (storeId) {
+        where.storeId = storeId;
+      } else if (user.storeId) {
+        where.storeId = user.storeId;
       }
+      where.clientId = user.clientId;
+    } else if (storeId) {
+      where.storeId = storeId;
+    }
 
-      const skip = (page - 1) * limit;
-
-      const [products, total] = await Promise.all([
-        this.prisma.products.findMany({
-          where: whereClause,
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            sku: true,
-            barcode: true,
-            price: true,
-            costPrice: true,
-            quantity: true,
-            clientId: true,
-            storeId: true,
-            status: true,
-            createdAt: true,
-            updatedAt: true,
-            store: {
-              select: {
-                id: true,
-                name: true,
-              },
+    const [products, total] = await Promise.all([
+      this.prisma.products.findMany({
+        where,
+        include: {
+          packs: true,
+          supplier: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
             },
           },
-          orderBy: {
-            createdAt: 'desc',
-          },
-          skip,
-          take: limit,
-        }),
-        this.prisma.products.count({
-          where: whereClause,
-        }),
-      ]);
-
-      const totalPages = Math.ceil(total / limit);
-
-      return {
-        message: 'Products retrieved successfully',
-        data: {
-          products,
-          pagination: {
-            page,
-            limit,
-            total,
-            totalPages,
-          },
-        },
-      };
-    } catch (error) {
-      if (error instanceof ForbiddenException) throw error;
-      console.error('Get products error:', error);
-      throw new BadRequestException(
-        'Failed to retrieve products: ' + error.message,
-      );
-    }
-  }
-
-  async getProductById(user: any, productId: string) {
-    try {
-      let whereClause: any = {
-        id: productId,
-        status: Status.active,
-      };
-
-      // Add store access check for non-super-admin users
-      if (user.role !== Role.super_admin) {
-        const accessibleStoreIds =
-          user.stores?.map((store) => store.storeId) || [];
-        whereClause.storeId = { in: accessibleStoreIds };
-        whereClause.clientId = user.clientId;
-      } else if (user.clientId) {
-        whereClause.clientId = user.clientId;
-      }
-
-      const product = await this.prisma.products.findFirst({
-        where: whereClause,
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          sku: true,
-          barcode: true,
-          price: true,
-          costPrice: true,
-          quantity: true,
-          clientId: true,
-          storeId: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
           store: {
             select: {
               id: true,
               name: true,
             },
           },
-          purchaseOrders: {
-            select: {
-              id: true,
-              quantity: true,
-              price: true,
-              total: true,
-              status: true,
-              createdAt: true,
-              supplier: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-            orderBy: {
-              createdAt: 'desc',
-            },
-            take: 5,
+          sales: true,
+          purchaseOrders: true,
+        },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.products.count({ where }),
+    ]);
+
+    return {
+      products: products.map((product) => this.formatProductResponse(product)),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getProductById(user: any, id: string): Promise<ProductResponseDto> {
+    this.validateProductAccess(user);
+
+    const product = await this.prisma.products.findUnique({
+      where: { id },
+      include: {
+        packs: true,
+        supplier: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
           },
         },
-      });
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        sales: true,
+        purchaseOrders: true,
+      },
+    });
 
-      if (!product) {
-        throw new NotFoundException('Product not found');
-      }
-
-      return {
-        message: 'Product retrieved successfully',
-        data: product,
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      console.error('Get product error:', error);
-      throw new BadRequestException(
-        'Failed to retrieve product: ' + error.message,
-      );
+    if (!product) {
+      throw new NotFoundException('Product not found');
     }
+
+    return this.formatProductResponse(product);
   }
 
   async updateProduct(
     user: any,
-    productId: string,
+    id: string,
     updateProductDto: UpdateProductDto,
-  ) {
-    // Check permissions
-    if (
-      ![Role.super_admin, Role.admin, Role.manager, Role.employee].includes(
-        user.role,
-      )
-    ) {
-      throw new ForbiddenException(
-        'Only admins and managers can update products',
-      );
-    }
+  ): Promise<ProductResponseDto> {
+    this.validateProductOperationPermissions(user, 'update');
 
-    try {
-      // First, check if product exists and user has access
-      let whereClause: any = {
-        id: productId,
-        status: Status.active,
-      };
+    const product = await this.prisma.products.findUnique({ where: { id } });
+    if (!product) {
+      throw new NotFoundException('Product not found');
 
-      if (user.role !== Role.super_admin) {
-        const accessibleStoreIds =
-          user.stores?.map((store) => store.storeId) || [];
-        whereClause.storeId = { in: accessibleStoreIds };
-        whereClause.clientId = user.clientId;
-      } else if (user.clientId) {
-        whereClause.clientId = user.clientId;
-      }
-
-      const existingProduct = await this.prisma.products.findFirst({
-        where: whereClause,
-      });
-
-      if (!existingProduct) {
-        throw new NotFoundException('Product not found');
-      }
-
-      // Check SKU uniqueness if being updated
-      if (
-        updateProductDto.sku &&
-        updateProductDto.sku !== existingProduct.sku
-      ) {
-        const existingSku = await this.prisma.products.findUnique({
-          where: { sku: updateProductDto.sku },
-        });
-        if (existingSku) {
-          throw new BadRequestException('SKU already exists');
-        }
-      }
-
-      // If storeId is being updated, verify user has access to the new store
-      if (
-        updateProductDto.storeId &&
-        updateProductDto.storeId !== existingProduct.storeId
-      ) {
-        const storeAccess = user.stores?.find(
-          (store) => store.storeId === updateProductDto.storeId,
-        );
-        if (!storeAccess && user.role !== Role.super_admin) {
-          throw new ForbiddenException('No access to the target store');
-        }
-      }
-
-      const updatedProduct = await this.prisma.products.update({
-        where: { id: productId },
-        data: {
-          ...(updateProductDto.name && { name: updateProductDto.name }),
-          ...(updateProductDto.description !== undefined && {
-            description: updateProductDto.description,
-          }),
-          ...(updateProductDto.sku && { sku: updateProductDto.sku }),
-          ...(updateProductDto.barcode !== undefined && {
-            barcode: updateProductDto.barcode,
-          }),
-          ...(updateProductDto.price !== undefined && {
-            price: updateProductDto.price,
-          }),
-          ...(updateProductDto.costPrice !== undefined && {
-            costPrice: updateProductDto.costPrice,
-          }),
-          ...(updateProductDto.quantity !== undefined && {
-            quantity: updateProductDto.quantity,
-          }),
-          ...(updateProductDto.storeId && {
-            storeId: updateProductDto.storeId,
-          }),
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          sku: true,
-          barcode: true,
-          price: true,
-          costPrice: true,
-          quantity: true,
-          clientId: true,
-          storeId: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-          store: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      });
-
-      return {
-        message: 'Product updated successfully',
-        data: updatedProduct,
-      };
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ForbiddenException ||
-        error instanceof BadRequestException
-      )
-        throw error;
-      console.error('Update product error:', error);
-      throw new BadRequestException(
-        'Failed to update product: ' + error.message,
-      );
     }
   }
 
-  async deleteProduct(user: any, productId: string) {
-    // Check permissions - only super_admin and admin can delete products
-    if (![Role.super_admin, Role.admin].includes(user.role)) {
-      throw new ForbiddenException('Only admins can delete products');
+    if (updateProductDto.sku && updateProductDto.sku !== product.sku) {
+      await this.validateSkuUniqueness(async (sku: string) => {
+        const existing = await this.prisma.products.findFirst({
+          where: {
+            sku,
+            NOT: { id },
+          },
+        });
+        return !!existing;
+      }, updateProductDto.sku);
     }
 
-    try {
-      // First, check if product exists and user has access
-      let whereClause: any = {
-        id: productId,
-        status: Status.active,
-      };
+    let packIds: string[] = [];
+    let variantsWithPacks: any[] = [];
 
-      if (user.role !== Role.super_admin) {
-        const accessibleStoreIds =
-          user.stores?.map((store) => store.storeId) || [];
-        whereClause.storeId = { in: accessibleStoreIds };
-        whereClause.clientId = user.clientId;
-      } else if (user.clientId) {
-        whereClause.clientId = user.clientId;
-      }
-
-      const existingProduct = await this.prisma.products.findFirst({
-        where: whereClause,
-      });
-
-      if (!existingProduct) {
-        throw new NotFoundException('Product not found');
-      }
-
-      // Soft delete by updating status to inactive
-      await this.prisma.products.update({
-        where: { id: productId },
-        data: {
-          status: Status.inactive,
-        },
-      });
-
-      return {
-        message: 'Product deleted successfully',
-        data: {
-          id: productId,
-          deleted: true,
-        },
-      };
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ForbiddenException
-      )
-        throw error;
-      console.error('Delete product error:', error);
+    // Validate pack and variant constraints
+    if (
+      updateProductDto.hasVariants === true &&
+      updateProductDto.packs &&
+      updateProductDto.packs?.length > 0
+    ) {
       throw new BadRequestException(
-        'Failed to delete product: ' + error.message,
+        'Packs cannot be provided at product level when hasVariants is true',
       );
     }
+    if (
+      updateProductDto.hasVariants === false &&
+      updateProductDto.variants &&
+      updateProductDto.variants?.length > 0
+    ) {
+      throw new BadRequestException(
+        'Variants must be empty when hasVariants is false',
+      );
+    }
+
+    // Delete existing packs to avoid duplicates
+    await this.prisma.pack.deleteMany({ where: { productId: id } });
+
+    // Handle pack updates based on hasVariants
+    if (updateProductDto.hasVariants && updateProductDto.variants) {
+      variantsWithPacks = await Promise.all(
+        updateProductDto.variants.map(async (variant) => {
+          let variantPackIds: string[] = [];
+          if (variant.packs && variant.packs.length > 0) {
+            const createdPacks = await Promise.all(
+              variant.packs.map((pack) =>
+                this.prisma.pack.create({
+                  data: {
+                    productId: id,
+                    minimumSellingQuantity: pack.minimumSellingQuantity,
+                    totalPacksQuantity: pack.totalPacksQuantity,
+                    orderedPacksPrice: pack.orderedPacksPrice,
+                    discountAmount: pack.discountAmount,
+                    percentDiscount: pack.percentDiscount,
+                  },
+                  select: { id: true },
+                }),
+              ),
+            );
+            variantPackIds = createdPacks.map((pack) => pack.id);
+          }
+          return {
+            name: variant.name,
+            price: variant.price,
+            sku: variant.plu,
+            packIds: variantPackIds,
+          };
+        }),
+      );
+    } else if (updateProductDto.packs && updateProductDto.packs.length > 0) {
+      const createdPacks = await Promise.all(
+        updateProductDto.packs.map((pack) =>
+          this.prisma.pack.create({
+            data: {
+              productId: id,
+              minimumSellingQuantity: pack.minimumSellingQuantity,
+              totalPacksQuantity: pack.totalPacksQuantity,
+              orderedPacksPrice: pack.orderedPacksPrice,
+              discountAmount: pack.discountAmount,
+              percentDiscount: pack.percentDiscount,
+            },
+            select: { id: true },
+          }),
+        ),
+      );
+      packIds = createdPacks.map((pack) => pack.id);
+    }
+    const updatedProduct = await this.prisma.products.update({
+      where: { id },
+      data: {
+        name: updateProductDto.name,
+        category: updateProductDto.category,
+        ean: updateProductDto.ean,
+        pluUpc: updateProductDto.pluUpc,
+        supplierId: updateProductDto.supplierId,
+        sku: updateProductDto.sku,
+        singleItemCostPrice: updateProductDto.singleItemCostPrice,
+        itemQuantity: updateProductDto.itemQuantity,
+        msrpPrice: updateProductDto.msrpPrice,
+        singleItemSellingPrice: updateProductDto.singleItemSellingPrice,
+        discountAmount: updateProductDto.discountAmount,
+        percentDiscount: updateProductDto.percentDiscount,
+        clientId: updateProductDto.clientId,
+        storeId: updateProductDto.storeId,
+        hasVariants: updateProductDto.hasVariants,
+        packIds: updateProductDto.hasVariants ? [] : packIds,
+        variants: updateProductDto.hasVariants ? variantsWithPacks : [],
+      },
+      include: {
+        packs: true,
+        supplier: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        sales: true,
+        purchaseOrders: true,
+      },
+    });
+
+    return this.formatProductResponse(updatedProduct);
+  }
+
+  async deleteProduct(user: any, id: string): Promise<void> {
+    this.validateProductOperationPermissions(user, 'delete');
+
+    const product = await this.prisma.products.findUnique({ where: { id } });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    // Delete associated packs
+    await this.prisma.pack.deleteMany({ where: { productId: id } });
+
+    await this.prisma.products.delete({
+      where: { id },
+    });
+
+    // Soft delete by updating updatedAt (remove status field as it doesn't exist in schema)
+    // const deletedProduct = await this.prisma.products.update({
+    //   where: { id },
+    //   data: {
+    //     updatedAt: new Date(),
+    //   },
+    //   include: {
+    //     packs: true,
+    //     supplier: {
+    //       select: {
+    //         id: true,
+    //         name: true,
+    //         email: true,
+    //         phone: true,
+    //       },
+    //     },
+    //     store: {
+    //       select: {
+    //         id: true,
+    //         name: true,
+    //       },
+    //     },
+    //     sales: true,
+    //     purchaseOrders: true,
+    //   },
+    // });
+
+    // Return void as the global response interceptor will handle the response format
+    return;
   }
 }

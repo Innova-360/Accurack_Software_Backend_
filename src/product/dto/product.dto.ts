@@ -1,187 +1,391 @@
-import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsUUID, Min, IsInt } from "class-validator";
+import { IsArray, IsBoolean, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
 
-export class CreateProductDto {
-  @ApiProperty({ 
-    description: 'Product name', 
-    example: 'Premium Coffee Beans' 
-  })
-  @IsString()
-  @IsNotEmpty()
-  name: string;
 
-  @ApiPropertyOptional({ 
-    description: 'Product description', 
-    example: 'High-quality Arabica coffee beans from Colombia' 
-  })
-  @IsString()
-  @IsOptional()
-  description?: string;
+class PackDto {
+  @ApiProperty({ example: 10, description: 'Minimum quantity that can be sold per pack' })
+  @IsNumber()
+  minimumSellingQuantity: number;
 
-  @ApiProperty({ 
-    description: 'Stock keeping unit (SKU)', 
-    example: 'COFFEE-001' 
-  })
-  @IsString()
-  @IsNotEmpty()
-  sku: string;
+  @ApiProperty({ example: 50, description: 'Total quantity of packs available' })
+  @IsNumber()
+  totalPacksQuantity: number;
 
-  @ApiPropertyOptional({ 
-    description: 'Product barcode', 
-    example: '1234567890123' 
-  })
-  @IsString()
-  @IsOptional()
-  barcode?: string;
+  @ApiProperty({ example: 18.99, description: 'Price per pack when ordered' })
+  @IsNumber()
+  orderedPacksPrice: number;
 
-  @ApiProperty({ 
-    description: 'Selling price of the product', 
-    example: 29.99 
-  })
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  price: number;
+  @ApiProperty({ example: 2.50, description: 'Discount amount applied to the pack' })
+  @IsNumber()
+  discountAmount: number;
 
-  @ApiProperty({ 
-    description: 'Cost price of the product', 
-    example: 19.99 
-  })
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  costPrice: number;
-
-  @ApiProperty({ 
-    description: 'Initial quantity in stock', 
-    example: 100 
-  })
-  @IsInt()
-  @Min(0)
-  quantity: number;
-
-  @ApiProperty({ 
-    description: 'Store ID where the product belongs', 
-    example: 'uuid-store-id' 
-  })
-  @IsString()
-  @IsUUID()
-  @IsNotEmpty()
-  storeId: string;
-
-  // Purchase Order related fields
-  @ApiProperty({ 
-    description: 'Supplier ID for initial purchase order', 
-    example: 'uuid-supplier-id' 
-  })
-  @IsString()
-  @IsUUID()
-  @IsNotEmpty()
-  supplierId: string;
-
-  @ApiPropertyOptional({ 
-    description: 'Purchase quantity for initial order', 
-    example: 50 
-  })
-  @IsInt()
-  @Min(1)
-  @IsOptional()
-  purchaseQuantity?: number;
-
-  @ApiPropertyOptional({ 
-    description: 'Purchase price per unit', 
-    example: 18.99 
-  })
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  @IsOptional()
-  purchasePrice?: number;
+  @ApiProperty({ example: 5, description: 'Percentage discount applied to the pack' })
+  @IsNumber()
+  percentDiscount: number;
 }
 
-export class UpdateProductDto extends PartialType(CreateProductDto) {
-  @ApiPropertyOptional({ 
-    description: 'Supplier ID for purchase order (optional for updates)', 
+class VariantDto {
+  @ApiProperty({ example: 'Dark Roast', description: 'Name of the variant' })
+  @IsString()
+  name: string;
+
+  @ApiProperty({ example: 27.99, description: 'Price of the variant' })
+  @IsNumber()
+  price: number;
+
+  @ApiProperty({ example: 'COFFEE-001-DR', description: 'SKU of the variant', required: false })
+  @IsString()
+  @IsOptional()
+  plu?: string;
+
+  @ApiProperty({
+    type: [PackDto],
+    example: [{ minimumSellingQuantity: 10, totalPacksQuantity: 50, orderedPacksPrice: 18.99, percentDiscount: 5 }],
+    description: 'Array of packs for this variant when hasVariants is true',
+    required: false,
   })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PackDto)
+  @IsOptional()
+  packs?: PackDto[];
+
+  @ApiProperty({
+    example: ['uuid-pack-id-1'],
+    description: 'Array of pack IDs associated with this variant',
+    required: false,
+  })
+  @IsArray()
+  @IsOptional()
+  packIds?: string[];
+}
+
+
+
+export class CreateProductDto {
+  @ApiProperty({ example: 'Premium Coffee Beans', description: 'Name of the product' })
+  @IsString()
+  name: string;
+
+  @ApiProperty({ example: 'Beverages', description: 'Category of the product' })
+  @IsString()
+  category: string;
+
+  @ApiProperty({ example: '1234567890123', description: 'EAN code of the product', required: false })
+  @IsString()
+  @IsOptional()
+  ean?: string;
+
+  @ApiProperty({ example: 'UPC123456', description: 'PLU/UPC code of the product' })
+  @IsString()
+  pluUpc: string;
+
+  @ApiProperty({ example: 'uuid-supplier-id', description: 'ID of the supplier' })
+  @IsString()
+  supplierId: string;
+
+  @ApiProperty({ example: 'COFFEE-001', description: 'SKU of the product' })
+  @IsString()
+  sku: string;
+
+  @ApiProperty({ example: 19.99, description: 'Cost price per single item' })
+  @IsNumber()
+  singleItemCostPrice: number;
+
+  @ApiProperty({ example: 100, description: 'Quantity of items in stock' })
+  @IsNumber()
+  itemQuantity: number;
+
+  @ApiProperty({ example: 29.99, description: 'Manufacturer suggested retail price' })
+  @IsNumber()
+  msrpPrice: number;
+  @ApiProperty({ example: 25.99, description: 'Selling price per single item' })
+  @IsNumber()
+  singleItemSellingPrice: number;
+
+  @ApiProperty({ example: 2.00, description: 'Discount amount applied to the product' })
+  @IsNumber()
+  discountAmount: number;
+
+  @ApiProperty({ example: 10, description: 'Percentage discount applied to the product' })
+  @IsNumber()
+  percentDiscount: number;
+
+  @ApiProperty({ example: 'uuid-client-id', description: 'ID of the client' })
+  @IsString()
+  clientId: string;
+
+  @ApiProperty({ example: 'uuid-store-id', description: 'ID of the store' })
+  @IsString()
+  storeId: string;
+
+  @ApiProperty({ example: false, description: 'Whether the product has variants' })
+  @IsBoolean()
+  hasVariants: boolean;
+  @ApiProperty({
+    type: [PackDto],
+    example: [{ minimumSellingQuantity: 10, totalPacksQuantity: 50, orderedPacksPrice: 18.99, discountAmount: 2.50, percentDiscount: 5 }],
+    description: 'Array of packs for the product when hasVariants is false',
+    required: false,
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PackDto)
+  @IsOptional()
+  packs?: PackDto[];
+
+  @ApiProperty({
+    type: [VariantDto],
+    example: [{ name: 'Dark Roast', price: 27.99, sku: 'COFFEE-001-DR', packs: [{ minimumSellingQuantity: 10, totalPacksQuantity: 50, orderedPacksPrice: 18.99, percentDiscount: 5 }] }],
+    description: 'Array of variants for the product when hasVariants is true',
+    required: false,
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => VariantDto)
+  @IsOptional()
+  variants?: VariantDto[];
+}
+
+export class UpdateProductDto {
+  @ApiProperty({ example: 'Updated Coffee Beans', description: 'Name of the product', required: false })
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @ApiProperty({ example: 'Beverages', description: 'Category of the product', required: false })
+  @IsString()
+  @IsOptional()
+  category?: string;
+
+  @ApiProperty({ example: '1234567890123', description: 'EAN code of the product', required: false })
+  @IsString()
+  @IsOptional()
+  ean?: string;
+
+  @ApiProperty({ example: 'UPC123456', description: 'PLU/UPC code of the product', required: false })
+  @IsString()
+  @IsOptional()
+  pluUpc?: string;
+
+  @ApiProperty({ example: 'uuid-supplier-id', description: 'ID of the supplier', required: false })
+  @IsString()
   @IsOptional()
   supplierId?: string;
 
-  @ApiPropertyOptional({ 
-    description: 'Purchase quantity (optional for updates)', 
-  })
+  @ApiProperty({ example: 'COFFEE-001-UPDATED', description: 'SKU of the product', required: false })
+  @IsString()
   @IsOptional()
-  purchaseQuantity?: number;
+  sku?: string;
 
-  @ApiPropertyOptional({ 
-    description: 'Purchase price (optional for updates)', 
-  })
+  @ApiProperty({ example: 22.99, description: 'Cost price per single item', required: false })
+  @IsNumber()
   @IsOptional()
-  purchasePrice?: number;
+  singleItemCostPrice?: number;
+
+  @ApiProperty({ example: 150, description: 'Quantity of items in stock', required: false })
+  @IsNumber()
+  @IsOptional()
+  itemQuantity?: number;
+
+  @ApiProperty({ example: 35.99, description: 'Manufacturer suggested retail price', required: false })
+  @IsNumber()
+  @IsOptional()
+  msrpPrice?: number;
+  @ApiProperty({ example: 30.99, description: 'Selling price per single item', required: false })
+  @IsNumber()
+  @IsOptional()
+  singleItemSellingPrice?: number;
+
+  @ApiProperty({ example: 3.00, description: 'Discount amount applied to the product', required: false })
+  @IsNumber()
+  @IsOptional()
+  discountAmount?: number;
+
+  @ApiProperty({ example: 15, description: 'Percentage discount applied to the product', required: false })
+  @IsNumber()
+  @IsOptional()
+  percentDiscount?: number;
+
+  @ApiProperty({ example: 'uuid-client-id', description: 'ID of the client', required: false })
+  @IsString()
+  @IsOptional()
+  clientId?: string;
+
+  @ApiProperty({ example: 'uuid-store-id', description: 'ID of the store', required: false })
+  @IsString()
+  @IsOptional()
+  storeId?: string;
+
+  @ApiProperty({ example: false, description: 'Whether the product has variants', required: false })
+  @IsBoolean()
+  @IsOptional()
+  hasVariants?: boolean;
+
+  @ApiProperty({
+    type: [PackDto],
+    example: [{ minimumSellingQuantity: 10, totalPacksQuantity: 50, orderedPacksPrice: 21.99, percentDiscount: 5 }],
+    description: 'Array of packs for the product when hasVariants is false',
+    required: false,
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PackDto)
+  @IsOptional()
+  packs?: PackDto[];
+
+  @ApiProperty({
+    type: [VariantDto],
+    example: [{ name: 'Dark Roast', price: 27.99, sku: 'COFFEE-001-DR', packs: [{ minimumSellingQuantity: 10, totalPacksQuantity: 50, orderedPacksPrice: 18.99, percentDiscount: 5 }] }],
+    description: 'Array of variants for the product when hasVariants is true',
+    required: false,
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => VariantDto)
+  @IsOptional()
+  variants?: VariantDto[];
 }
 
 export class ProductResponseDto {
-  @ApiProperty({ description: 'Product ID', example: 'uuid-product-id' })
+  @ApiProperty({ example: 'uuid-product-id', description: 'Unique identifier of the product' })
   id: string;
 
-  @ApiProperty({ description: 'Product name', example: 'Premium Coffee Beans' })
+  @ApiProperty({ example: 'Premium Coffee Beans', description: 'Name of the product' })
   name: string;
 
-  @ApiPropertyOptional({ description: 'Product description' })
-  description?: string;
+  @ApiProperty({ example: 'Beverages', description: 'Category of the product' })
+  category: string;
 
-  @ApiProperty({ description: 'Product SKU', example: 'COFFEE-001' })
+  @ApiProperty({ example: '1234567890123', description: 'EAN code of the product', required: false })
+  ean?: string;
+
+  @ApiProperty({ example: 'UPC123456', description: 'PLU/UPC code of the product' })
+  pluUpc: string;
+
+  @ApiProperty({ example: 'uuid-supplier-id', description: 'ID of the supplier' })
+  supplierId: string;
+
+  @ApiProperty({ example: 'COFFEE-001', description: 'SKU of the product' })
   sku: string;
 
-  @ApiPropertyOptional({ description: 'Product barcode' })
-  barcode?: string;
+  @ApiProperty({ example: 19.99, description: 'Cost price per single item' })
+  singleItemCostPrice: number;
 
-  @ApiProperty({ description: 'Selling price', example: 29.99 })
-  price: number;
+  @ApiProperty({ example: 100, description: 'Quantity of items in stock' })
+  itemQuantity: number;
 
-  @ApiProperty({ description: 'Cost price', example: 19.99 })
-  costPrice: number;
+  @ApiProperty({ example: 29.99, description: 'Manufacturer suggested retail price' })
+  msrpPrice: number;
+  @ApiProperty({ example: 25.99, description: 'Selling price per single item' })
+  singleItemSellingPrice: number;
 
-  @ApiProperty({ description: 'Current quantity', example: 100 })
-  quantity: number;
+  @ApiProperty({ example: 2.00, description: 'Discount amount applied to the product' })
+  discountAmount: number;
 
-  @ApiProperty({ description: 'Client ID', example: 'uuid-client-id' })
+  @ApiProperty({ example: 10, description: 'Percentage discount applied to the product' })
+  percentDiscount: number;
+
+  @ApiProperty({ example: 'uuid-client-id', description: 'ID of the client' })
   clientId: string;
 
-  @ApiProperty({ description: 'Store ID', example: 'uuid-store-id' })
+  @ApiProperty({ example: 'uuid-store-id', description: 'ID of the store' })
   storeId: string;
 
-  @ApiProperty({ description: 'Product status', example: 'active' })
-  status: string;
+  @ApiProperty({ example: false, description: 'Whether the product has variants' })
+  hasVariants: boolean;
 
-  @ApiProperty({ description: 'Creation date', example: '2025-06-18T10:30:00.000Z' })
+  @ApiProperty({ example: ['uuid-pack-id-1', 'uuid-pack-id-2'], description: 'Array of pack IDs when hasVariants is false', required: false })
+  packIds?: string[];
+
+  @ApiProperty({
+    type: [PackDto],
+    example: [
+      {
+        minimumSellingQuantity: 10,
+        totalPacksQuantity: 50,
+        orderedPacksPrice: 18.99,
+        percentDiscount: 5,
+      },
+    ],
+    description: 'Array of packs associated with the product',
+    required: false,
+  })
+  packs?: PackDto[];
+
+  @ApiProperty({
+    type: [VariantDto],
+    example: [
+      {
+        name: 'Dark Roast',
+        price: 27.99,
+        sku: 'COFFEE-001-DR',
+        packIds: ['uuid-pack-id-1'],
+      },
+    ],
+    description: 'Array of variants for the product',
+    required: false,
+  })
+  variants?: VariantDto[];
+
+  @ApiProperty({ example: '2025-06-20T21:12:00.000Z', description: 'Creation timestamp' })
   createdAt: Date;
 
-  @ApiProperty({ description: 'Last update date', example: '2025-06-18T10:30:00.000Z' })
+  @ApiProperty({ example: '2025-06-20T21:12:00.000Z', description: 'Last update timestamp' })
   updatedAt: Date;
-}
 
-// Inventory related DTOs
-export class InventoryEntryDto {
-  @ApiProperty({ description: 'Product ID', example: 'uuid-product-id' })
-  @IsString()
-  @IsUUID()
-  @IsNotEmpty()
-  productId: string;
+  @ApiProperty({ example: 6.0, description: 'Profit amount (selling price - cost price)', required: false })
+  profitAmount?: number;
 
-  @ApiProperty({ description: 'Store ID', example: 'uuid-store-id' })
-  @IsString()
-  @IsUUID()
-  @IsNotEmpty()
-  storeId: string;
+  @ApiProperty({ example: 30.02, description: 'Profit margin percentage', required: false })
+  profitMargin?: number;
 
-  @ApiProperty({ description: 'Quantity change', example: 10 })
-  @IsInt()
-  quantity: number;
+  @ApiProperty({
+    example: {
+      id: 'uuid-supplier-id',
+      name: 'ABC Suppliers Ltd',
+      email: 'contact@abcsuppliers.com',
+      phone: '123-456-7890',
+    },
+    description: 'Supplier details',
+    required: false,
+  })
+  supplier?: any;
 
-  @ApiProperty({ description: 'Entry type', example: 'purchase' })
-  @IsString()
-  @IsNotEmpty()
-  type: string;
+  @ApiProperty({
+    example: {
+      id: 'uuid-store-id',
+      name: 'Main Store',
+    },
+    description: 'Store details',
+    required: false,
+  })
+  store?: any;
 
-  @ApiPropertyOptional({ description: 'Notes about the entry', example: 'Initial stock' })
-  @IsString()
-  @IsOptional()
-  notes?: string;
+  @ApiProperty({
+    example: [],
+    description: 'Array of sales records associated with the product',
+    required: false,
+  })
+  sales?: any[];
+
+  @ApiProperty({
+    example: [
+      {
+        id: 'uuid-purchase-order-id',
+        productId: 'uuid-product-id',
+        supplierId: 'uuid-supplier-id',
+        employeeId: 'uuid-employee-id',
+        storeId: 'uuid-store-id',
+        quantity: 100,
+        price: 19.99,
+        total: 1999.0,
+        status: 'active',
+      },
+    ],
+    description: 'Array of purchase orders associated with the product',
+    required: false,
+  })
+  purchaseOrders?: any[];
 }

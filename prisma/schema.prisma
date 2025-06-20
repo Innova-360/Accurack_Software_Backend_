@@ -118,8 +118,6 @@ model Stores {
   users           UserStoreMap[]
   permissions     Permission[]
   products        Products[]
-  categories      ProductCategories[]
-  inventory       InventoryEntries[]
   suppliers       Suppliers[]
   sales           Sales[]
   purchaseOrders  PurchaseOrders[]
@@ -285,24 +283,46 @@ model PasswordResetTokens {
 }
 
 model Products {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  sku         String   @unique
-  barcode     String?
-  price       Float
-  costPrice   Float
-  quantity    Int      @default(0)
-  clientId    String
-  storeId     String
-  status      Status   @default(active)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                    String    @id @default(uuid())
+  name                  String
+  category              String
+  ean                   String?
+  pluUpc                String    @unique
+  supplierId            String
+  sku                   String    @unique
+  singleItemCostPrice   Float
+  itemQuantity          Int
+  msrpPrice             Float
+  singleItemSellingPrice Float
+  clientId              String
+  storeId               String
+  discountAmount        Float
+  percentDiscount       Float
+  hasVariants           Boolean   @default(false)
+  packIds               String[]  @default([]) // Stores pack IDs when hasVariants is false
+  packs                 Pack[]
+  variants              Json[]    // Variants store their own packIds when hasVariants is true
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  client                Clients     @relation(fields: [clientId], references: [id])
+  store                 Stores      @relation(fields: [storeId], references: [id])
+  supplier              Suppliers?  @relation(fields: [supplierId], references: [id])
+  sales                 Sales[]
+  purchaseOrders        PurchaseOrders[]
+}
 
-  client      Clients           @relation(fields: [clientId], references: [id])
-  store       Stores            @relation(fields: [storeId], references: [id])
-  sales       Sales[]
-  purchaseOrders PurchaseOrders[]
+model Pack {
+  id                    String    @id @default(uuid())
+  productId             String
+  minimumSellingQuantity Int
+  totalPacksQuantity    Int
+  orderedPacksPrice     Float
+  discountAmount        Float
+  percentDiscount       Float
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  product               Products   @relation(fields: [productId], references: [id])
 }
 
 
@@ -319,6 +339,7 @@ model Suppliers {
   updatedAt   DateTime @updatedAt
 
   store       Stores           @relation(fields: [storeId], references: [id])
+  products    Products[]
   purchaseOrders PurchaseOrders[]
 }
 

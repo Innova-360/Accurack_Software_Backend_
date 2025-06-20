@@ -33,10 +33,15 @@ CREATE TABLE "Clients" (
 -- CreateTable
 CREATE TABLE "Users" (
     "id" TEXT NOT NULL,
+    "googleId" TEXT,
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
     "email" TEXT NOT NULL,
-    "passwordHash" TEXT NOT NULL,
+    "passwordHash" TEXT,
+    "googleRefreshToken" TEXT,
+    "otp" TEXT,
+    "otpExpiresAt" TIMESTAMP(3),
+    "isOtpUsed" BOOLEAN DEFAULT false,
     "role" "Role" NOT NULL,
     "clientId" TEXT NOT NULL,
     "status" "Status" NOT NULL DEFAULT 'active',
@@ -228,16 +233,19 @@ CREATE TABLE "PasswordResetTokens" (
 CREATE TABLE "Products" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "description" TEXT,
-    "sku" TEXT NOT NULL,
-    "barcode" TEXT,
-    "price" DOUBLE PRECISION NOT NULL,
-    "costPrice" DOUBLE PRECISION NOT NULL,
-    "quantity" INTEGER NOT NULL DEFAULT 0,
+    "category" TEXT NOT NULL,
+    "ean" TEXT,
+    "pluUpc" TEXT NOT NULL,
+    "supplierId" TEXT,
+    "sku" TEXT,
+    "singleItemCostPrice" DOUBLE PRECISION NOT NULL,
+    "itemQuantity" INTEGER NOT NULL,
+    "msrpPrice" DOUBLE PRECISION NOT NULL,
+    "singleItemSellingPrice" DOUBLE PRECISION NOT NULL,
+    "hasVariants" BOOLEAN NOT NULL DEFAULT false,
     "clientId" TEXT NOT NULL,
     "storeId" TEXT NOT NULL,
-    "categoryId" TEXT,
-    "status" "Status" NOT NULL DEFAULT 'active',
+    "variants" JSONB[],
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -245,40 +253,25 @@ CREATE TABLE "Products" (
 );
 
 -- CreateTable
-CREATE TABLE "ProductCategories" (
-    "id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "description" TEXT,
-    "storeId" TEXT NOT NULL,
-    "status" "Status" NOT NULL DEFAULT 'active',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "ProductCategories_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "InventoryEntries" (
+CREATE TABLE "Pack" (
     "id" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
-    "storeId" TEXT NOT NULL,
-    "quantity" INTEGER NOT NULL,
-    "type" TEXT NOT NULL,
-    "reference" TEXT,
-    "notes" TEXT,
+    "minimumSellingQuantity" INTEGER NOT NULL,
+    "totalPacksQuantity" INTEGER NOT NULL,
+    "orderedPacksPrice" DOUBLE PRECISION NOT NULL,
+    "percentDiscount" DOUBLE PRECISION NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "InventoryEntries_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Pack_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Suppliers" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "contactName" TEXT,
     "email" TEXT,
-    "phone" TEXT,
+    "phone" TEXT NOT NULL,
     "address" TEXT,
     "storeId" TEXT NOT NULL,
     "status" "Status" NOT NULL DEFAULT 'active',
@@ -350,6 +343,9 @@ CREATE TABLE "Reports" (
 CREATE UNIQUE INDEX "Clients_email_key" ON "Clients"("email");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Users_googleId_key" ON "Users"("googleId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Users_email_key" ON "Users"("email");
 
 -- CreateIndex
@@ -383,7 +379,7 @@ CREATE UNIQUE INDEX "ApiTokens_token_key" ON "ApiTokens"("token");
 CREATE UNIQUE INDEX "PasswordResetTokens_token_key" ON "PasswordResetTokens"("token");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Products_sku_key" ON "Products"("sku");
+CREATE UNIQUE INDEX "Products_pluUpc_key" ON "Products"("pluUpc");
 
 -- AddForeignKey
 ALTER TABLE "Users" ADD CONSTRAINT "Users_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -440,16 +436,10 @@ ALTER TABLE "Products" ADD CONSTRAINT "Products_clientId_fkey" FOREIGN KEY ("cli
 ALTER TABLE "Products" ADD CONSTRAINT "Products_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Products" ADD CONSTRAINT "Products_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "ProductCategories"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Products" ADD CONSTRAINT "Products_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Suppliers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ProductCategories" ADD CONSTRAINT "ProductCategories_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "InventoryEntries" ADD CONSTRAINT "InventoryEntries_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "InventoryEntries" ADD CONSTRAINT "InventoryEntries_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Pack" ADD CONSTRAINT "Pack_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Suppliers" ADD CONSTRAINT "Suppliers_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
