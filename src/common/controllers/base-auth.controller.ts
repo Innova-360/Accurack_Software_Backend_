@@ -96,27 +96,20 @@ export abstract class BaseAuthController {
         .json(this.responseService.error('Error during logout', 500));
     }
   }
-
   /**
    * Handle standard service operations without cookies
-   * Lets the global error handler and response interceptor handle the response
+   * Returns raw data and lets the global response interceptor handle formatting
    */
   protected async handleServiceOperation<T>(
     operation: () => Promise<T>,
     successMessage: string,
     successStatus: number = 200,
-  ): Promise<any> {
+  ): Promise<T> {
     const result = await operation();
 
-    if (successStatus === 201) {
-      return this.responseService.created(successMessage, result);
-    } else {
-      return this.responseService.success(
-        successMessage,
-        result,
-        successStatus,
-      );
-    }
+    // Set the status code on the response object for the interceptor to use
+    // The global response interceptor will handle the formatting
+    return result;
   }
 
   /**
