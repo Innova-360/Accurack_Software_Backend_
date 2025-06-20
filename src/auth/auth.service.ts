@@ -424,13 +424,14 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload, {
+      secret: process.env.JWT_SECRET,
       expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
     });
     const refreshToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      secret: process.env.JWT_SECRET,
       expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
     });
-    console.log('accestoke', accessToken);
+    
     await this.prisma.auditLogs.create({
       data: {
         userId: user.id,
@@ -458,7 +459,7 @@ export class AuthService {
     const { refreshToken } = dto;
     try {
       const decoded = this.jwtService.verify(refreshToken, {
-        secret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+        secret: process.env.JWT_SECRET, // Use same secret as access token
       });
 
       const user = await this.prisma.users.findUnique({

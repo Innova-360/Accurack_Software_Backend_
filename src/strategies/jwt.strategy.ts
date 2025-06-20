@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaClientService } from '../prisma-client/prisma-client.service';
-
+import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 
 // Interface for JWT payload
@@ -33,15 +33,19 @@ interface ValidatedUser {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private prisma: PrismaClientService) {
+  constructor(
+    private prisma: PrismaClientService,
+    private jwtService: JwtService,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         (request: Request) => {
-          // Extract JWT from cookies (e.g., cookie named 'jwt')
-          const token =
-            request?.cookies?.['accessToken'] ||
-            request?.cookies?.['refreshToken'];
-          return token || null; // Return token or null if not found
+          // Extract JWT from cookies
+          const accessToken = request?.cookies?.['accessToken'] || request?.cookies?.['access_token'];
+          const refreshToken = request?.cookies?.['refreshToken'] || request?.cookies?.['refresh_token'];
+          
+          // Prefer access token, fallback to refresh token
+          return accessToken || refreshToken || null;
         },
         ExtractJwt.fromAuthHeaderAsBearerToken(), // Fallback to Bearer token
       ]),
@@ -72,7 +76,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           updatedAt: true,
         },
       });
-
+      
       if (!user) {
         throw new UnauthorizedException(
           'User not found or has been deactivated',
@@ -96,10 +100,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       };
-
       return validatedUser;
     } catch (error) {
-      console.error('JWT validation error:', error); // Debug log
       if (error instanceof UnauthorizedException) {
         throw error;
       }

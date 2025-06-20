@@ -17,10 +17,6 @@ import { ProductModule } from './product/product.module';
     ProductModule,
     SupplierModule,
     PermissionsModule, // Add permissions module
-    JwtModule.register({
-      secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '15m' },
-    }),
   ],
 })
 export class AppModule {}

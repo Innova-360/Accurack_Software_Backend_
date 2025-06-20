@@ -27,7 +27,7 @@ import { RolesGuard } from 'src/guards/roles.guard';
         }
         return jwtSecret;
       })(),
-      signOptions: { expiresIn: '24h' },
+      signOptions: { expiresIn: '15m' }, // Match the cookie expiration
     }),
     MailModule,
     PermissionsModule,
