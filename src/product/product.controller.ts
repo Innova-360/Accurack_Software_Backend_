@@ -10,6 +10,7 @@ import {
   Param,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { ProductService } from './product.service';
 import {
   CreateProductDto,
@@ -22,6 +23,7 @@ import { ResponseService } from '../common/services/response.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 
+@ApiTags('Products')
 @Controller({ path: 'products', version: '1' })
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ProductController extends BaseProductController {

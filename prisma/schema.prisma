@@ -329,6 +329,7 @@ model Pack {
 
 model Suppliers {
   id          String   @id @default(uuid())
+  supplier_id String   @unique
   name        String
   email       String?
   phone       String

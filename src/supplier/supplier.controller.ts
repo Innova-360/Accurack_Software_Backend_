@@ -22,7 +22,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { BaseSupplierController } from '../common/controllers/base-supplier.controller';
 import { ResponseService } from '../common/services/response.service';
 
-@ApiTags('suppliers')
+@ApiTags('Suppliers')
 @Controller({ path: 'supplier', version: '1' })
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class SupplierController extends BaseSupplierController {
@@ -68,6 +68,18 @@ export class SupplierController extends BaseSupplierController {
     const user = req.user;
     return this.handleSupplierOperation(
       () => this.supplierService.getSupplierById(user, supplierId),
+      'Supplier retrieved successfully',
+    );
+  }
+  @SupplierEndpoint.GetSupplierBySupplierId()
+  @Get('by-supplier-id/:supplierId')
+  async getSupplierBySupplierId(
+    @Req() req,
+    @Param('supplierId') supplierId: string,
+  ) {
+    const user = req.user;
+    return this.handleSupplierOperation(
+      () => this.supplierService.getSupplierBySupplierId(user, supplierId),
       'Supplier retrieved successfully',
     );
   }

@@ -31,12 +31,10 @@ const standardErrorResponses = () => [
 export const PermissionEndpoint = {
   // Permission Management Endpoints
   GetUserPermissions: () =>
-    applyDecorators(
-      RequireGlobalPermission(
+    applyDecorators(      RequireGlobalPermission(
         PermissionResource.PERMISSION,
         PermissionAction.READ,
       ),
-      ApiTags('permissions'),
       ApiOperation({ summary: 'Get user permissions' }),
       ApiParam({ name: 'userId', description: 'User ID' }),
       ApiResponse({

@@ -8,6 +8,7 @@ import {
   Body,
   Param,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { StoreService } from './store.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
@@ -15,6 +16,7 @@ import { CreateStoreDto } from './dto/dto.store';
 import { BaseAuthController, ResponseService } from '../common';
 import { StoreEndpoint } from '../common/decorators/store-endpoint.decorator';
 
+@ApiTags('Stores')
 @Controller({ path: 'store', version: '1' })
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class StoreController extends BaseAuthController {

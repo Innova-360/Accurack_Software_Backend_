@@ -3,9 +3,9 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiResponse,
-  ApiTags,
 } from '@nestjs/swagger';
 import { RequirePermissions } from '../../decorators/permissions.decorator';
 import {
@@ -80,7 +80,6 @@ export const SupplierEndpoint = {
         PermissionAction.CREATE,
         PermissionScope.STORE,
       ),
-      ApiTags('Suppliers'),
       ApiOperation({
         summary: 'Create a new supplier',
         description:
@@ -92,12 +91,19 @@ export const SupplierEndpoint = {
         description: 'Supplier created successfully',
         schema: createdResponseSchema('Supplier created successfully', {
           id: 'uuid-supplier-id',
+          supplier_id: 'SUP-001',
           name: 'ABC Suppliers Ltd',
           email: 'supplier@example.com',
           phone: '+1-555-123-4567',
-          address: '123 Main St',
+          address: '123 Main St, City, State 12345',
           storeId: 'uuid-store-id',
           status: 'active',
+          createdAt: '2025-06-21T10:30:00.000Z',
+          updatedAt: '2025-06-21T10:30:00.000Z',
+          store: {
+            id: 'uuid-store-id',
+            name: 'Main Store',
+          },
         }),
       }),
       ApiResponse({
@@ -106,6 +112,15 @@ export const SupplierEndpoint = {
         schema: errorResponseSchema(
           403,
           'Insufficient permissions to create suppliers',
+        ),
+      }),
+      ApiResponse({
+        status: 400,
+        description:
+          'Bad Request - Validation failed or supplier_id already exists',
+        schema: errorResponseSchema(
+          400,
+          'Supplier with this supplier_id already exists',
         ),
       }),
       ...standardErrorResponses(),
@@ -119,7 +134,6 @@ export const SupplierEndpoint = {
         PermissionAction.READ,
         PermissionScope.STORE,
       ),
-      ApiTags('Suppliers'),
       ApiOperation({
         summary: 'Get all suppliers',
         description:
@@ -128,19 +142,23 @@ export const SupplierEndpoint = {
       ApiQuery({
         name: 'storeId',
         required: false,
+        type: 'string',
         description: 'Filter by specific store ID',
+        example: 'uuid-store-id',
       }),
       ApiQuery({
         name: 'page',
         required: false,
         type: Number,
-        description: 'Page number for pagination',
+        description: 'Page number for pagination (default: 1)',
+        example: 1,
       }),
       ApiQuery({
         name: 'limit',
         required: false,
         type: Number,
-        description: 'Number of items per page',
+        description: 'Number of items per page (default: 10)',
+        example: 10,
       }),
       ApiResponse({
         status: 200,
@@ -148,13 +166,36 @@ export const SupplierEndpoint = {
         schema: successResponseSchema('Suppliers retrieved successfully', {
           suppliers: [
             {
-              id: 'uuid-supplier-id',
+              id: 'uuid-supplier-id-1',
+              supplier_id: 'SUP-001',
               name: 'ABC Suppliers Ltd',
               email: 'supplier@example.com',
               phone: '+1-555-123-4567',
-              address: '123 Main St',
+              address: '123 Main St, City, State 12345',
               storeId: 'uuid-store-id',
               status: 'active',
+              createdAt: '2025-06-21T10:30:00.000Z',
+              updatedAt: '2025-06-21T10:30:00.000Z',
+              store: {
+                id: 'uuid-store-id',
+                name: 'Main Store',
+              },
+            },
+            {
+              id: 'uuid-supplier-id-2',
+              supplier_id: 'SUP-002',
+              name: 'XYZ Trading Co',
+              email: 'contact@xyz-trading.com',
+              phone: '+1-555-987-6543',
+              address: '456 Oak Ave, City, State 67890',
+              storeId: 'uuid-store-id',
+              status: 'active',
+              createdAt: '2025-06-20T15:45:00.000Z',
+              updatedAt: '2025-06-20T15:45:00.000Z',
+              store: {
+                id: 'uuid-store-id',
+                name: 'Main Store',
+              },
             },
           ],
           pagination: {
@@ -176,23 +217,90 @@ export const SupplierEndpoint = {
         PermissionAction.READ,
         PermissionScope.STORE,
       ),
-      ApiTags('Suppliers'),
       ApiOperation({
         summary: 'Get supplier by ID',
         description: 'Retrieves a specific supplier by its ID.',
+      }),
+      ApiParam({
+        name: 'id',
+        type: 'string',
+        description: 'The UUID of the supplier to retrieve',
+        example: 'uuid-supplier-id',
       }),
       ApiResponse({
         status: 200,
         description: 'Supplier retrieved successfully',
         schema: successResponseSchema('Supplier retrieved successfully', {
           id: 'uuid-supplier-id',
+          supplier_id: 'SUP-001',
           name: 'ABC Suppliers Ltd',
           email: 'supplier@example.com',
           phone: '+1-555-123-4567',
-          address: '123 Main St',
+          address: '123 Main St, City, State 12345',
           storeId: 'uuid-store-id',
           status: 'active',
+          createdAt: '2025-06-21T10:30:00.000Z',
+          updatedAt: '2025-06-21T10:30:00.000Z',
+          store: {
+            id: 'uuid-store-id',
+            name: 'Main Store',
+          },
         }),
+      }),
+      ApiResponse({
+        status: 404,
+        description: 'Supplier not found',
+        schema: errorResponseSchema(404, 'Supplier not found'),
+      }),
+      ...standardErrorResponses(),
+      ApiBearerAuth('JWT-auth'),
+    ),
+
+  GetSupplierBySupplierId: () =>
+    applyDecorators(
+      RequirePermissions(
+        PermissionResource.SUPPLIER,
+        PermissionAction.READ,
+        PermissionScope.STORE,
+      ),
+      ApiOperation({
+        summary: 'Get supplier by supplier ID',
+        description:
+          'Retrieves a supplier by their unique supplier_id. Requires supplier read permissions.',
+      }),
+      ApiParam({
+        name: 'supplierId',
+        type: 'string',
+        description: 'The unique supplier_id to search for',
+        example: 'SUP-001',
+      }),
+      ApiResponse({
+        status: 200,
+        description: 'Supplier retrieved successfully',
+        schema: successResponseSchema('Supplier retrieved successfully', {
+          id: 'uuid-supplier-id',
+          supplier_id: 'SUP-001',
+          name: 'ABC Suppliers Ltd',
+          email: 'supplier@example.com',
+          phone: '+1-555-123-4567',
+          address: '123 Main St, City, State 12345',
+          storeId: 'uuid-store-id',
+          status: 'active',
+          createdAt: '2025-06-21T10:30:00.000Z',
+          updatedAt: '2025-06-21T10:30:00.000Z',
+          store: {
+            id: 'uuid-store-id',
+            name: 'Main Store',
+          },
+        }),
+      }),
+      ApiResponse({
+        status: 403,
+        description: 'Forbidden - insufficient permissions',
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to view suppliers',
+        ),
       }),
       ApiResponse({
         status: 404,
@@ -210,11 +318,16 @@ export const SupplierEndpoint = {
         PermissionAction.UPDATE,
         PermissionScope.STORE,
       ),
-      ApiTags('Suppliers'),
       ApiOperation({
         summary: 'Update supplier',
         description:
           'Updates an existing supplier. Requires supplier update permissions.',
+      }),
+      ApiParam({
+        name: 'id',
+        type: 'string',
+        description: 'The UUID of the supplier to update',
+        example: 'uuid-supplier-id',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({
@@ -222,12 +335,19 @@ export const SupplierEndpoint = {
         description: 'Supplier updated successfully',
         schema: successResponseSchema('Supplier updated successfully', {
           id: 'uuid-supplier-id',
-          name: 'Updated Supplier Name',
+          supplier_id: 'SUP-001-UPDATED',
+          name: 'Updated Supplier Name Ltd',
           email: 'updated@example.com',
           phone: '+1-555-987-6543',
-          address: '456 Updated St',
+          address: '456 Updated St, City, State 67890',
           storeId: 'uuid-store-id',
           status: 'active',
+          createdAt: '2025-06-21T10:30:00.000Z',
+          updatedAt: '2025-06-21T12:45:00.000Z',
+          store: {
+            id: 'uuid-store-id',
+            name: 'Main Store',
+          },
         }),
       }),
       ApiResponse({
@@ -243,6 +363,15 @@ export const SupplierEndpoint = {
         description: 'Supplier not found',
         schema: errorResponseSchema(404, 'Supplier not found'),
       }),
+      ApiResponse({
+        status: 400,
+        description:
+          'Bad Request - Validation failed or supplier_id already exists',
+        schema: errorResponseSchema(
+          400,
+          'Supplier with this supplier_id already exists',
+        ),
+      }),
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
     ),
@@ -254,11 +383,16 @@ export const SupplierEndpoint = {
         PermissionAction.DELETE,
         PermissionScope.STORE,
       ),
-      ApiTags('Suppliers'),
       ApiOperation({
         summary: 'Delete supplier',
         description:
           'Deletes a supplier. Requires supplier deletion permissions.',
+      }),
+      ApiParam({
+        name: 'id',
+        type: 'string',
+        description: 'The UUID of the supplier to delete',
+        example: 'uuid-supplier-id',
       }),
       ApiResponse({
         status: 200,

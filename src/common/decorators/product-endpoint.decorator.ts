@@ -81,7 +81,6 @@ export const ProductEndpoint = {
         PermissionAction.CREATE,
         PermissionScope.STORE,
       ),
-      ApiTags('Products'),
       ApiOperation({
         summary: 'Create a new product',
         description:
@@ -185,7 +184,6 @@ export const ProductEndpoint = {
         PermissionAction.READ,
         PermissionScope.STORE,
       ),
-      ApiTags('Products'),
       ApiOperation({
         summary: 'Get all products',
         description:
@@ -288,7 +286,6 @@ export const ProductEndpoint = {
         PermissionAction.READ,
         PermissionScope.STORE,
       ),
-      ApiTags('Products'),
       ApiOperation({
         summary: 'Get product by ID',
         description:
@@ -380,7 +377,6 @@ export const ProductEndpoint = {
         PermissionAction.UPDATE,
         PermissionScope.STORE,
       ),
-      ApiTags('Products'),
       ApiOperation({
         summary: 'Update product',
         description:
@@ -467,7 +463,6 @@ export const ProductEndpoint = {
         PermissionAction.DELETE,
         PermissionScope.STORE,
       ),
-      ApiTags('Products'),
       ApiOperation({
         summary: 'Delete product',
         description:

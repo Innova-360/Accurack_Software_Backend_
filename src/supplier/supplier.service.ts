@@ -17,6 +17,7 @@ export class SupplierService {
         try {
             const supplier = await this.prisma.suppliers.create({
                 data: {
+                    supplier_id: createSupplierDto.supplier_id,
                     name: createSupplierDto.name,
                     email: createSupplierDto.email,
                     phone: createSupplierDto.phone,
@@ -26,6 +27,7 @@ export class SupplierService {
                 },
                 select: {
                     id: true,
+                    supplier_id: true,
                     name: true,
                     email: true,
                     phone: true,
@@ -100,6 +102,7 @@ export class SupplierService {
                     where: whereClause,
                     select: {
                         id: true,
+                        supplier_id: true,
                         name: true,
                         email: true,
                         phone: true,
@@ -164,6 +167,7 @@ export class SupplierService {
                 where: whereClause,
                 select: {
                     id: true,
+                    supplier_id: true,
                     name: true,
                     email: true,
                     phone: true,
@@ -192,6 +196,56 @@ export class SupplierService {
         } catch (error) {
             if (error instanceof NotFoundException) throw error;
             console.error('Get supplier error:', error);
+            throw new BadRequestException('Failed to retrieve supplier: ' + error.message);
+        }
+    }
+
+    async getSupplierBySupplierId(user: any, supplierId: string) {
+        try {
+            let whereClause: any = {
+                supplier_id: supplierId,
+                status: Status.active,
+            };
+
+            // Add store access check for non-super-admin users
+            if (user.role !== Role.super_admin) {
+                const accessibleStoreIds = user.stores?.map(store => store.storeId) || [];
+                whereClause.storeId = { in: accessibleStoreIds };
+            }
+
+            const supplier = await this.prisma.suppliers.findFirst({
+                where: whereClause,
+                select: {
+                    id: true,
+                    supplier_id: true,
+                    name: true,
+                    email: true,
+                    phone: true,
+                    address: true,
+                    storeId: true,
+                    status: true,
+                    createdAt: true,
+                    updatedAt: true,
+                    store: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
+                    },
+                },
+            });
+
+            if (!supplier) {
+                throw new NotFoundException('Supplier not found');
+            }
+
+            return {
+                message: "Supplier retrieved successfully",
+                data: supplier,
+            };
+        } catch (error) {
+            if (error instanceof NotFoundException) throw error;
+            console.error('Get supplier by supplier_id error:', error);
             throw new BadRequestException('Failed to retrieve supplier: ' + error.message);
         }
     }
@@ -228,6 +282,7 @@ export class SupplierService {
             const updatedSupplier = await this.prisma.suppliers.update({
                 where: { id: supplierId },
                 data: {
+                    ...(updateSupplierDto.supplier_id && { supplier_id: updateSupplierDto.supplier_id }),
                     ...(updateSupplierDto.name && { name: updateSupplierDto.name }),
                     ...(updateSupplierDto.email !== undefined && { email: updateSupplierDto.email }),
                     ...(updateSupplierDto.phone && { phone: updateSupplierDto.phone }),
@@ -236,6 +291,7 @@ export class SupplierService {
                 },
                 select: {
                     id: true,
+                    supplier_id: true,
                     name: true,
                     email: true,
                     phone: true,
