@@ -11,8 +11,10 @@ import {
   Query,
   ParseIntPipe,
   DefaultValuePipe,
+  Version,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { PermissionsGuard } from '../guards/permissions.guard';
 import { CreateSupplierDto, UpdateSupplierDto } from './dto/dto.supplier';
 import { SupplierService } from './supplier.service';
 import { SupplierEndpoint } from '../common/decorators/supplier-endpoint.decorator';
@@ -21,7 +23,8 @@ import { BaseSupplierController } from '../common/controllers/base-supplier.cont
 import { ResponseService } from '../common/services/response.service';
 
 @ApiTags('suppliers')
-@Controller('supplier')
+@Controller({ path: 'supplier', version: '1' })
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class SupplierController extends BaseSupplierController {
   constructor(
     private readonly supplierService: SupplierService,

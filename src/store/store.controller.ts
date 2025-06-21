@@ -15,7 +15,8 @@ import { CreateStoreDto } from './dto/dto.store';
 import { BaseAuthController, ResponseService } from '../common';
 import { StoreEndpoint } from '../common/decorators/store-endpoint.decorator';
 
-@Controller('store')
+@Controller({ path: 'store', version: '1' })
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class StoreController extends BaseAuthController {
   constructor(
     private readonly storeService: StoreService,
@@ -26,8 +27,6 @@ export class StoreController extends BaseAuthController {
 
   @StoreEndpoint.CreateStore(CreateStoreDto)
   @Post('create')
-  @Version('1')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
   async createStore(@Request() req: any, @Body() dto: CreateStoreDto) {
     return this.handleServiceOperation(
       () => this.storeService.createStore(req.user, dto),
@@ -38,8 +37,6 @@ export class StoreController extends BaseAuthController {
 
   @StoreEndpoint.GetUserStores()
   @Get('list')
-  @Version('1')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
   async getStores(@Request() req: any) {
     return this.handleServiceOperation(
       () => this.storeService.getStores(req.user),
@@ -49,8 +46,6 @@ export class StoreController extends BaseAuthController {
 
   @StoreEndpoint.GetStoreById()
   @Get(':id')
-  @Version('1')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
   async findStoreById(@Request() req: any, @Param('id') id: string) {
     return this.handleServiceOperation(
       () => this.storeService.findStoreById(req.user, id),

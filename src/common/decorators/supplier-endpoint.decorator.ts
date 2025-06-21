@@ -1,8 +1,18 @@
-import { applyDecorators, UseGuards, Version } from "@nestjs/common";
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse } from "@nestjs/swagger";
-import { JwtAuthGuard } from "src/guards/jwt-auth.guard";
-
-
+import { applyDecorators } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { RequirePermissions } from '../../decorators/permissions.decorator';
+import {
+  PermissionResource,
+  PermissionAction,
+  PermissionScope,
+} from '../../permissions/enums/permission.enum';
 
 // Standard response schemas
 const successResponseSchema = (message: string, dataExample?: any) => ({
@@ -65,9 +75,16 @@ const standardErrorResponses = () => [
 export const SupplierEndpoint = {
   CreateSupplier: (dtoType: any) =>
     applyDecorators(
-      ApiOperation({ 
+      RequirePermissions(
+        PermissionResource.SUPPLIER,
+        PermissionAction.CREATE,
+        PermissionScope.STORE,
+      ),
+      ApiTags('Suppliers'),
+      ApiOperation({
         summary: 'Create a new supplier',
-        description: 'Creates a new supplier for the specified store. Only admins and managers can create suppliers.'
+        description:
+          'Creates a new supplier for the specified store. Only users with supplier creation permissions can create suppliers.',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({
@@ -80,61 +97,89 @@ export const SupplierEndpoint = {
           phone: '+1-555-123-4567',
           address: '123 Main St',
           storeId: 'uuid-store-id',
-          status: 'active'
+          status: 'active',
         }),
       }),
       ApiResponse({
         status: 403,
         description: 'Forbidden - insufficient permissions',
-        schema: errorResponseSchema(403, 'Only admins and managers can create suppliers'),
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to create suppliers',
+        ),
       }),
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
-      Version('1'),
-      UseGuards(JwtAuthGuard),
     ),
 
   GetSuppliers: () =>
     applyDecorators(
-      ApiOperation({ 
+      RequirePermissions(
+        PermissionResource.SUPPLIER,
+        PermissionAction.READ,
+        PermissionScope.STORE,
+      ),
+      ApiTags('Suppliers'),
+      ApiOperation({
         summary: 'Get all suppliers',
-        description: 'Retrieves all suppliers for the stores accessible to the user.'
+        description:
+          'Retrieves all suppliers for the stores accessible to the user.',
       }),
-      ApiQuery({ name: 'storeId', required: false, description: 'Filter by specific store ID' }),
-      ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number for pagination' }),
-      ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of items per page' }),
+      ApiQuery({
+        name: 'storeId',
+        required: false,
+        description: 'Filter by specific store ID',
+      }),
+      ApiQuery({
+        name: 'page',
+        required: false,
+        type: Number,
+        description: 'Page number for pagination',
+      }),
+      ApiQuery({
+        name: 'limit',
+        required: false,
+        type: Number,
+        description: 'Number of items per page',
+      }),
       ApiResponse({
         status: 200,
         description: 'Suppliers retrieved successfully',
         schema: successResponseSchema('Suppliers retrieved successfully', {
-          suppliers: [{
-            id: 'uuid-supplier-id',
-            name: 'ABC Suppliers Ltd',
-            email: 'supplier@example.com',
-            phone: '+1-555-123-4567',
-            address: '123 Main St',
-            storeId: 'uuid-store-id',
-            status: 'active'
-          }],
+          suppliers: [
+            {
+              id: 'uuid-supplier-id',
+              name: 'ABC Suppliers Ltd',
+              email: 'supplier@example.com',
+              phone: '+1-555-123-4567',
+              address: '123 Main St',
+              storeId: 'uuid-store-id',
+              status: 'active',
+            },
+          ],
           pagination: {
             page: 1,
             limit: 10,
             total: 25,
-            totalPages: 3
-          }
+            totalPages: 3,
+          },
         }),
       }),
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
-      Version('1'),
-      UseGuards(JwtAuthGuard),
     ),
 
   GetSupplierById: () =>
     applyDecorators(
-      ApiOperation({ 
+      RequirePermissions(
+        PermissionResource.SUPPLIER,
+        PermissionAction.READ,
+        PermissionScope.STORE,
+      ),
+      ApiTags('Suppliers'),
+      ApiOperation({
         summary: 'Get supplier by ID',
-        description: 'Retrieves a specific supplier by its ID.'
+        description: 'Retrieves a specific supplier by its ID.',
       }),
       ApiResponse({
         status: 200,
@@ -146,7 +191,7 @@ export const SupplierEndpoint = {
           phone: '+1-555-123-4567',
           address: '123 Main St',
           storeId: 'uuid-store-id',
-          status: 'active'
+          status: 'active',
         }),
       }),
       ApiResponse({
@@ -156,15 +201,20 @@ export const SupplierEndpoint = {
       }),
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
-      Version('1'),
-      UseGuards(JwtAuthGuard),
     ),
 
   UpdateSupplier: (dtoType: any) =>
     applyDecorators(
-      ApiOperation({ 
+      RequirePermissions(
+        PermissionResource.SUPPLIER,
+        PermissionAction.UPDATE,
+        PermissionScope.STORE,
+      ),
+      ApiTags('Suppliers'),
+      ApiOperation({
         summary: 'Update supplier',
-        description: 'Updates an existing supplier. Only admins and managers can update suppliers.'
+        description:
+          'Updates an existing supplier. Requires supplier update permissions.',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({
@@ -177,13 +227,16 @@ export const SupplierEndpoint = {
           phone: '+1-555-987-6543',
           address: '456 Updated St',
           storeId: 'uuid-store-id',
-          status: 'active'
+          status: 'active',
         }),
       }),
       ApiResponse({
         status: 403,
         description: 'Forbidden - insufficient permissions',
-        schema: errorResponseSchema(403, 'Only admins and managers can update suppliers'),
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to update suppliers',
+        ),
       }),
       ApiResponse({
         status: 404,
@@ -192,28 +245,36 @@ export const SupplierEndpoint = {
       }),
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
-      Version('1'),
-      UseGuards(JwtAuthGuard),
     ),
 
   DeleteSupplier: () =>
     applyDecorators(
-      ApiOperation({ 
+      RequirePermissions(
+        PermissionResource.SUPPLIER,
+        PermissionAction.DELETE,
+        PermissionScope.STORE,
+      ),
+      ApiTags('Suppliers'),
+      ApiOperation({
         summary: 'Delete supplier',
-        description: 'Deletes a supplier. Only admins can delete suppliers.'
+        description:
+          'Deletes a supplier. Requires supplier deletion permissions.',
       }),
       ApiResponse({
         status: 200,
         description: 'Supplier deleted successfully',
         schema: successResponseSchema('Supplier deleted successfully', {
           id: 'uuid-supplier-id',
-          deleted: true
+          deleted: true,
         }),
       }),
       ApiResponse({
         status: 403,
         description: 'Forbidden - insufficient permissions',
-        schema: errorResponseSchema(403, 'Only admins can delete suppliers'),
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to delete suppliers',
+        ),
       }),
       ApiResponse({
         status: 404,
@@ -222,7 +283,5 @@ export const SupplierEndpoint = {
       }),
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
-      Version('1'),
-      UseGuards(JwtAuthGuard),
     ),
 };

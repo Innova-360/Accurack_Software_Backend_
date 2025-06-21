@@ -1,7 +1,19 @@
-import { applyDecorators, UseGuards, Version } from "@nestjs/common";
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse } from "@nestjs/swagger";
-import { JwtAuthGuard } from "src/guards/jwt-auth.guard";
-import { ProductResponseDto } from "../../product/dto/product.dto";
+import { applyDecorators } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { ProductResponseDto } from '../../product/dto/product.dto';
+import { RequirePermissions } from '../../decorators/permissions.decorator';
+import {
+  PermissionResource,
+  PermissionAction,
+  PermissionScope,
+} from '../../permissions/enums/permission.enum';
 
 // Standard response schemas
 const successResponseSchema = (message: string, dataExample?: any) => ({
@@ -64,9 +76,16 @@ const standardErrorResponses = () => [
 export const ProductEndpoint = {
   CreateProduct: (dtoType: any) =>
     applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.CREATE,
+        PermissionScope.STORE,
+      ),
+      ApiTags('Products'),
       ApiOperation({
         summary: 'Create a new product',
-        description: 'Creates a new product and optionally adds it to purchase orders. Only admins and managers can create products.',
+        description:
+          'Creates a new product and optionally adds it to purchase orders. Requires product creation permissions.',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({
@@ -150,23 +169,47 @@ export const ProductEndpoint = {
       ApiResponse({
         status: 403,
         description: 'Forbidden - insufficient permissions',
-        schema: errorResponseSchema(403, 'Only admins and managers can create products'),
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to create products',
+        ),
       }),
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
-      Version('1'),
-      UseGuards(JwtAuthGuard),
     ),
 
   GetProducts: () =>
     applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.READ,
+        PermissionScope.STORE,
+      ),
+      ApiTags('Products'),
       ApiOperation({
         summary: 'Get all products',
-        description: 'Retrieves all products for the stores accessible to the user with pagination support.',
+        description:
+          'Retrieves all products for the stores accessible to the user with pagination support.',
       }),
-      ApiQuery({ name: 'storeId', required: false, description: 'Filter by specific store ID' }),
-      ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number for pagination', example: 1 }),
-      ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of items per page', example: 10 }),
+      ApiQuery({
+        name: 'storeId',
+        required: false,
+        description: 'Filter by specific store ID',
+      }),
+      ApiQuery({
+        name: 'page',
+        required: false,
+        type: Number,
+        description: 'Page number for pagination',
+        example: 1,
+      }),
+      ApiQuery({
+        name: 'limit',
+        required: false,
+        type: Number,
+        description: 'Number of items per page',
+        example: 10,
+      }),
       ApiResponse({
         status: 200,
         description: 'Products retrieved successfully',
@@ -236,15 +279,20 @@ export const ProductEndpoint = {
       }),
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
-      Version('1'),
-      UseGuards(JwtAuthGuard),
     ),
 
   GetProductById: () =>
     applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.READ,
+        PermissionScope.STORE,
+      ),
+      ApiTags('Products'),
       ApiOperation({
         summary: 'Get product by ID',
-        description: 'Retrieves a specific product by its ID with purchase order history.',
+        description:
+          'Retrieves a specific product by its ID with purchase order history.',
       }),
       ApiResponse({
         status: 200,
@@ -323,15 +371,20 @@ export const ProductEndpoint = {
       }),
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
-      Version('1'),
-      UseGuards(JwtAuthGuard),
     ),
 
   UpdateProduct: (dtoType: any) =>
     applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.UPDATE,
+        PermissionScope.STORE,
+      ),
+      ApiTags('Products'),
       ApiOperation({
         summary: 'Update product',
-        description: 'Updates an existing product. Only admins and managers can update products.',
+        description:
+          'Updates an existing product. Requires product update permissions.',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({
@@ -393,7 +446,10 @@ export const ProductEndpoint = {
       ApiResponse({
         status: 403,
         description: 'Forbidden - insufficient permissions',
-        schema: errorResponseSchema(403, 'Only admins and managers can update products'),
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to update products',
+        ),
       }),
       ApiResponse({
         status: 404,
@@ -402,15 +458,20 @@ export const ProductEndpoint = {
       }),
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
-      Version('1'),
-      UseGuards(JwtAuthGuard),
     ),
 
   DeleteProduct: () =>
     applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.DELETE,
+        PermissionScope.STORE,
+      ),
+      ApiTags('Products'),
       ApiOperation({
         summary: 'Delete product',
-        description: 'Soft deletes a product by setting its status to inactive. Only admins can delete products.',
+        description:
+          'Soft deletes a product by setting its status to inactive. Requires product deletion permissions.',
       }),
       ApiResponse({
         status: 200,
@@ -456,7 +517,10 @@ export const ProductEndpoint = {
       ApiResponse({
         status: 403,
         description: 'Forbidden - insufficient permissions',
-        schema: errorResponseSchema(403, 'Only admins can delete products'),
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to delete products',
+        ),
       }),
       ApiResponse({
         status: 404,
@@ -465,7 +529,5 @@ export const ProductEndpoint = {
       }),
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
-      Version('1'),
-      UseGuards(JwtAuthGuard),
     ),
 };

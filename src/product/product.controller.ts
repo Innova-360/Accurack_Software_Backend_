@@ -1,11 +1,29 @@
-import { Controller, Get, Post, Put, Delete, Query, Body, Req, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Query,
+  Body,
+  Req,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { ProductService } from './product.service';
-import { CreateProductDto, UpdateProductDto, ProductResponseDto } from './dto/product.dto';
+import {
+  CreateProductDto,
+  UpdateProductDto,
+  ProductResponseDto,
+} from './dto/product.dto';
 import { BaseProductController } from '../common/controllers/base-product.controller';
 import { ProductEndpoint } from '../common/decorators/product-endpoint.decorator';
 import { ResponseService } from '../common/services/response.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { PermissionsGuard } from '../guards/permissions.guard';
 
-@Controller('products')
+@Controller({ path: 'products', version: '1' })
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ProductController extends BaseProductController {
   constructor(
     private readonly productService: ProductService,
