@@ -31,7 +31,8 @@ const standardErrorResponses = () => [
 export const PermissionEndpoint = {
   // Permission Management Endpoints
   GetUserPermissions: () =>
-    applyDecorators(      RequireGlobalPermission(
+    applyDecorators(
+      RequireGlobalPermission(
         PermissionResource.PERMISSION,
         PermissionAction.READ,
       ),
@@ -51,7 +52,6 @@ export const PermissionEndpoint = {
         PermissionResource.PERMISSION,
         PermissionAction.ASSIGN,
       ),
-      ApiTags('permissions'),
       ApiOperation({ summary: 'Assign permission to user' }),
       ApiBody({ type: dtoType }),
       ApiResponse({
@@ -72,7 +72,6 @@ export const PermissionEndpoint = {
         PermissionResource.PERMISSION,
         PermissionAction.DELETE,
       ),
-      ApiTags('permissions'),
       ApiOperation({ summary: 'Revoke permission from user' }),
       ApiBody({ type: dtoType }),
       ApiResponse({
@@ -90,7 +89,6 @@ export const PermissionEndpoint = {
         PermissionResource.PERMISSION,
         PermissionAction.ASSIGN,
       ),
-      ApiTags('permissions'),
       ApiOperation({ summary: 'Bulk assign permissions to multiple users' }),
       ApiBody({ type: dtoType }),
       ApiResponse({
@@ -111,7 +109,6 @@ export const PermissionEndpoint = {
         PermissionResource.PERMISSION,
         PermissionAction.READ,
       ),
-      ApiTags('permissions'),
       ApiOperation({ summary: 'Check if user has specific permission' }),
       ApiBody({ type: dtoType }),
       ApiResponse({ status: 200, description: 'Permission check completed' }),
@@ -125,7 +122,6 @@ export const PermissionEndpoint = {
         PermissionResource.PERMISSION,
         PermissionAction.READ,
       ),
-      ApiTags('permissions'),
       ApiOperation({
         summary: 'Check if specific user has permission for specific store',
         description:
@@ -180,7 +176,6 @@ export const PermissionEndpoint = {
         PermissionResource.PERMISSION,
         PermissionAction.READ,
       ),
-      ApiTags('permissions'),
       ApiOperation({ summary: 'Get all role templates' }),
       ApiResponse({
         status: 200,
@@ -196,7 +191,6 @@ export const PermissionEndpoint = {
         PermissionResource.PERMISSION,
         PermissionAction.CREATE,
       ),
-      ApiTags('permissions'),
       ApiOperation({ summary: 'Create new role template' }),
       ApiBody({ type: dtoType }),
       ApiResponse({
@@ -217,7 +211,6 @@ export const PermissionEndpoint = {
         PermissionResource.PERMISSION,
         PermissionAction.UPDATE,
       ),
-      ApiTags('permissions'),
       ApiOperation({ summary: 'Update role template' }),
       ApiParam({ name: 'id', description: 'Role template ID' }),
       ApiBody({ type: dtoType }),
@@ -236,7 +229,6 @@ export const PermissionEndpoint = {
         PermissionResource.PERMISSION,
         PermissionAction.DELETE,
       ),
-      ApiTags('permissions'),
       ApiOperation({ summary: 'Delete role template' }),
       ApiParam({ name: 'id', description: 'Role template ID' }),
       ApiResponse({
@@ -254,7 +246,6 @@ export const PermissionEndpoint = {
         PermissionResource.PERMISSION,
         PermissionAction.ASSIGN,
       ),
-      ApiTags('permissions'),
       ApiOperation({ summary: 'Assign role template to users' }),
       ApiBody({ type: dtoType }),
       ApiResponse({
