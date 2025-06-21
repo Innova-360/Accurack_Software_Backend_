@@ -26,7 +26,7 @@ import {
   UpdateRoleTemplateDto,
 } from './dto/permission.dto';
 
-@ApiTags('permissions')
+@ApiTags('Permissions')
 @Controller('permissions')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class PermissionsController extends BaseAuthController {
