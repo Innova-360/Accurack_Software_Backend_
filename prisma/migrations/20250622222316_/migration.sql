@@ -47,6 +47,10 @@ CREATE TABLE "Users" (
     "status" "Status" NOT NULL DEFAULT 'active',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "employeeCode" TEXT,
+    "position" TEXT,
+    "department" TEXT,
+    "phone" TEXT,
 
     CONSTRAINT "Users_pkey" PRIMARY KEY ("id")
 );
@@ -108,75 +112,53 @@ CREATE TABLE "InviteLinks" (
 );
 
 -- CreateTable
-CREATE TABLE "Permissions" (
+CREATE TABLE "permissions" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "action" "Action" NOT NULL,
+    "storeId" TEXT,
     "resource" TEXT NOT NULL,
+    "actions" TEXT[],
+    "resourceId" TEXT,
+    "granted" BOOLEAN NOT NULL DEFAULT true,
+    "grantedBy" TEXT NOT NULL,
+    "grantedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3),
+    "conditions" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Permissions_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "permissions_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "EmployeePermissions" (
-    "id" TEXT NOT NULL,
-    "employeeId" TEXT NOT NULL,
-    "action" "Action" NOT NULL,
-    "resource" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "EmployeePermissions_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "PermissionGroups" (
+CREATE TABLE "role_templates" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "description" TEXT,
+    "permissions" JSONB NOT NULL,
+    "inheritsFrom" TEXT,
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "priority" INTEGER NOT NULL DEFAULT 0,
+    "createdBy" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "PermissionGroups_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "role_templates_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "PermissionGroupItems" (
+CREATE TABLE "user_roles" (
     "id" TEXT NOT NULL,
-    "permissionGroupId" TEXT NOT NULL,
-    "action" "Action" NOT NULL,
-    "resource" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "roleTemplateId" TEXT NOT NULL,
+    "storeId" TEXT,
+    "assignedBy" TEXT NOT NULL,
+    "assignedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "PermissionGroupItems_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "EmployeePermissionGroups" (
-    "id" TEXT NOT NULL,
-    "employeeId" TEXT NOT NULL,
-    "permissionGroupId" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "EmployeePermissionGroups_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "Employees" (
-    "id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
-    "phone" TEXT,
-    "storeId" TEXT NOT NULL,
-    "status" "Status" NOT NULL DEFAULT 'active',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Employees_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "user_roles_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -230,43 +212,6 @@ CREATE TABLE "PasswordResetTokens" (
 );
 
 -- CreateTable
-CREATE TABLE "Products" (
-    "id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "category" TEXT NOT NULL,
-    "ean" TEXT,
-    "pluUpc" TEXT NOT NULL,
-    "supplierId" TEXT,
-    "sku" TEXT,
-    "singleItemCostPrice" DOUBLE PRECISION NOT NULL,
-    "itemQuantity" INTEGER NOT NULL,
-    "msrpPrice" DOUBLE PRECISION NOT NULL,
-    "singleItemSellingPrice" DOUBLE PRECISION NOT NULL,
-    "hasVariants" BOOLEAN NOT NULL DEFAULT false,
-    "clientId" TEXT NOT NULL,
-    "storeId" TEXT NOT NULL,
-    "variants" JSONB[],
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Products_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "Pack" (
-    "id" TEXT NOT NULL,
-    "productId" TEXT NOT NULL,
-    "minimumSellingQuantity" INTEGER NOT NULL,
-    "totalPacksQuantity" INTEGER NOT NULL,
-    "orderedPacksPrice" DOUBLE PRECISION NOT NULL,
-    "percentDiscount" DOUBLE PRECISION NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Pack_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "Suppliers" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -285,13 +230,14 @@ CREATE TABLE "Suppliers" (
 CREATE TABLE "Sales" (
     "id" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
-    "employeeId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
     "storeId" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL,
     "price" DOUBLE PRECISION NOT NULL,
     "total" DOUBLE PRECISION NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "fileUploadSalesId" TEXT,
 
     CONSTRAINT "Sales_pkey" PRIMARY KEY ("id")
 );
@@ -301,7 +247,7 @@ CREATE TABLE "PurchaseOrders" (
     "id" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "supplierId" TEXT NOT NULL,
-    "employeeId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
     "storeId" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL,
     "price" DOUBLE PRECISION NOT NULL,
@@ -316,7 +262,7 @@ CREATE TABLE "PurchaseOrders" (
 -- CreateTable
 CREATE TABLE "Expenses" (
     "id" TEXT NOT NULL,
-    "employeeId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
     "storeId" TEXT NOT NULL,
     "amount" DOUBLE PRECISION NOT NULL,
     "description" TEXT NOT NULL,
@@ -339,6 +285,83 @@ CREATE TABLE "Reports" (
     CONSTRAINT "Reports_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "Products" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+    "ean" TEXT,
+    "pluUpc" TEXT NOT NULL,
+    "supplierId" TEXT NOT NULL,
+    "sku" TEXT NOT NULL,
+    "singleItemCostPrice" DOUBLE PRECISION NOT NULL,
+    "itemQuantity" INTEGER NOT NULL,
+    "msrpPrice" DOUBLE PRECISION NOT NULL,
+    "singleItemSellingPrice" DOUBLE PRECISION NOT NULL,
+    "clientId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "discountAmount" DOUBLE PRECISION NOT NULL,
+    "percentDiscount" DOUBLE PRECISION NOT NULL,
+    "hasVariants" BOOLEAN NOT NULL DEFAULT false,
+    "packIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "variants" JSONB[],
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "fileUploadId" TEXT,
+
+    CONSTRAINT "Products_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Pack" (
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "minimumSellingQuantity" INTEGER NOT NULL,
+    "totalPacksQuantity" INTEGER NOT NULL,
+    "orderedPacksPrice" DOUBLE PRECISION NOT NULL,
+    "discountAmount" DOUBLE PRECISION NOT NULL,
+    "percentDiscount" DOUBLE PRECISION NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Pack_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FileUploadInventory" (
+    "id" TEXT NOT NULL,
+    "fileHash" TEXT NOT NULL,
+    "fileName" TEXT NOT NULL,
+    "uploadedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "storeId" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "error" TEXT,
+
+    CONSTRAINT "FileUploadInventory_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ErrorLog" (
+    "id" TEXT NOT NULL,
+    "fileUploadId" TEXT NOT NULL,
+    "rowNumber" INTEGER NOT NULL,
+    "error" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ErrorLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FileUploadSales" (
+    "id" TEXT NOT NULL,
+    "fileHash" TEXT NOT NULL,
+    "fileName" TEXT NOT NULL,
+    "uploadedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "storeId" TEXT,
+
+    CONSTRAINT "FileUploadSales_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Clients_email_key" ON "Clients"("email");
 
@@ -347,6 +370,9 @@ CREATE UNIQUE INDEX "Users_googleId_key" ON "Users"("googleId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Users_email_key" ON "Users"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Users_employeeCode_key" ON "Users"("employeeCode");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "StoreSettings_storeId_key" ON "StoreSettings"("storeId");
@@ -358,19 +384,19 @@ CREATE UNIQUE INDEX "UserStoreMap_userId_storeId_key" ON "UserStoreMap"("userId"
 CREATE UNIQUE INDEX "InviteLinks_token_key" ON "InviteLinks"("token");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Permissions_userId_action_resource_key" ON "Permissions"("userId", "action", "resource");
+CREATE INDEX "permissions_userId_storeId_idx" ON "permissions"("userId", "storeId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "EmployeePermissions_employeeId_action_resource_key" ON "EmployeePermissions"("employeeId", "action", "resource");
+CREATE INDEX "permissions_resource_idx" ON "permissions"("resource");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "PermissionGroupItems_permissionGroupId_action_resource_key" ON "PermissionGroupItems"("permissionGroupId", "action", "resource");
+CREATE UNIQUE INDEX "permissions_userId_storeId_resource_resourceId_key" ON "permissions"("userId", "storeId", "resource", "resourceId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "EmployeePermissionGroups_employeeId_permissionGroupId_key" ON "EmployeePermissionGroups"("employeeId", "permissionGroupId");
+CREATE UNIQUE INDEX "role_templates_name_key" ON "role_templates"("name");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Employees_email_key" ON "Employees"("email");
+CREATE UNIQUE INDEX "user_roles_userId_roleTemplateId_storeId_key" ON "user_roles"("userId", "roleTemplateId", "storeId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ApiTokens_token_key" ON "ApiTokens"("token");
@@ -380,6 +406,15 @@ CREATE UNIQUE INDEX "PasswordResetTokens_token_key" ON "PasswordResetTokens"("to
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Products_pluUpc_key" ON "Products"("pluUpc");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Products_sku_key" ON "Products"("sku");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FileUploadInventory_fileHash_key" ON "FileUploadInventory"("fileHash");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FileUploadSales_fileHash_key" ON "FileUploadSales"("fileHash");
 
 -- AddForeignKey
 ALTER TABLE "Users" ADD CONSTRAINT "Users_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -400,22 +435,28 @@ ALTER TABLE "UserStoreMap" ADD CONSTRAINT "UserStoreMap_storeId_fkey" FOREIGN KE
 ALTER TABLE "InviteLinks" ADD CONSTRAINT "InviteLinks_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Permissions" ADD CONSTRAINT "Permissions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "permissions" ADD CONSTRAINT "permissions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "EmployeePermissions" ADD CONSTRAINT "EmployeePermissions_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "permissions" ADD CONSTRAINT "permissions_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "PermissionGroupItems" ADD CONSTRAINT "PermissionGroupItems_permissionGroupId_fkey" FOREIGN KEY ("permissionGroupId") REFERENCES "PermissionGroups"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "permissions" ADD CONSTRAINT "permissions_grantedBy_fkey" FOREIGN KEY ("grantedBy") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "EmployeePermissionGroups" ADD CONSTRAINT "EmployeePermissionGroups_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "role_templates" ADD CONSTRAINT "role_templates_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "EmployeePermissionGroups" ADD CONSTRAINT "EmployeePermissionGroups_permissionGroupId_fkey" FOREIGN KEY ("permissionGroupId") REFERENCES "PermissionGroups"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "role_templates" ADD CONSTRAINT "role_templates_inheritsFrom_fkey" FOREIGN KEY ("inheritsFrom") REFERENCES "role_templates"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Employees" ADD CONSTRAINT "Employees_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "user_roles" ADD CONSTRAINT "user_roles_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "user_roles" ADD CONSTRAINT "user_roles_roleTemplateId_fkey" FOREIGN KEY ("roleTemplateId") REFERENCES "role_templates"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "user_roles" ADD CONSTRAINT "user_roles_assignedBy_fkey" FOREIGN KEY ("assignedBy") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Notifications" ADD CONSTRAINT "Notifications_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -430,25 +471,16 @@ ALTER TABLE "ApiTokens" ADD CONSTRAINT "ApiTokens_userId_fkey" FOREIGN KEY ("use
 ALTER TABLE "PasswordResetTokens" ADD CONSTRAINT "PasswordResetTokens_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Products" ADD CONSTRAINT "Products_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Products" ADD CONSTRAINT "Products_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Products" ADD CONSTRAINT "Products_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Suppliers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Pack" ADD CONSTRAINT "Pack_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "Suppliers" ADD CONSTRAINT "Suppliers_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Sales" ADD CONSTRAINT "Sales_fileUploadSalesId_fkey" FOREIGN KEY ("fileUploadSalesId") REFERENCES "FileUploadSales"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Sales" ADD CONSTRAINT "Sales_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Sales" ADD CONSTRAINT "Sales_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Sales" ADD CONSTRAINT "Sales_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Sales" ADD CONSTRAINT "Sales_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -460,16 +492,40 @@ ALTER TABLE "PurchaseOrders" ADD CONSTRAINT "PurchaseOrders_productId_fkey" FORE
 ALTER TABLE "PurchaseOrders" ADD CONSTRAINT "PurchaseOrders_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Suppliers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "PurchaseOrders" ADD CONSTRAINT "PurchaseOrders_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "PurchaseOrders" ADD CONSTRAINT "PurchaseOrders_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "PurchaseOrders" ADD CONSTRAINT "PurchaseOrders_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Expenses" ADD CONSTRAINT "Expenses_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Expenses" ADD CONSTRAINT "Expenses_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Expenses" ADD CONSTRAINT "Expenses_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Reports" ADD CONSTRAINT "Reports_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Products" ADD CONSTRAINT "Products_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Products" ADD CONSTRAINT "Products_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Products" ADD CONSTRAINT "Products_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Suppliers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Products" ADD CONSTRAINT "Products_fileUploadId_fkey" FOREIGN KEY ("fileUploadId") REFERENCES "FileUploadInventory"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Pack" ADD CONSTRAINT "Pack_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FileUploadInventory" ADD CONSTRAINT "FileUploadInventory_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ErrorLog" ADD CONSTRAINT "ErrorLog_fileUploadId_fkey" FOREIGN KEY ("fileUploadId") REFERENCES "FileUploadInventory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FileUploadSales" ADD CONSTRAINT "FileUploadSales_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE SET NULL ON UPDATE CASCADE;

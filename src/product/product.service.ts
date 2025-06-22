@@ -2,20 +2,37 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import {
   CreateProductDto,
   UpdateProductDto,
   ProductResponseDto,
 } from './dto/product.dto';
-import { ResponseService } from '../common/services/response.service';
+import { parseExcel, ValidationResult, ProductExcelRow } from '../utils/fileParser';
+import * as crypto from 'crypto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
+import { chunk } from 'lodash';
+
+interface UploadedFile {
+  buffer: Buffer;
+  originalname: string;
+  size: number;
+}
+
+interface FileUpload {
+  id: string;
+  fileHash: string;
+  fileName: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  error?: string;
+  uploadedAt: Date;
+}
 
 @Injectable()
 export class ProductService {
   constructor(
     private readonly prisma: PrismaClientService,
-    private readonly responseService: ResponseService,
   ) {}
 
   private validateProductOperationPermissions(
@@ -147,7 +164,9 @@ export class ProductService {
       throw new BadRequestException(
         'Packs cannot be provided at product level when hasVariants is true',
       );
-    } // Create the product first with empty packIds and variants
+    }
+
+    // Create the product first with empty packIds and variants
     const product = await this.prisma.products.create({
       data: {
         name: createProductDto.name,
@@ -285,53 +304,53 @@ export class ProductService {
     });
 
     // Create a purchase order record if this is part of inventory management
-    if (
-      createProductDto.supplierId &&
-      createProductDto.itemQuantity > 0 &&
-      updatedProduct
-    ) {
-      try {
-        const employee = await this.prisma.employees.findFirst({
-          where: {
-            email: user.email,
-            storeId: createProductDto.storeId,
-          },
-        });
+    // if (
+    //   createProductDto.supplierId &&
+    //   createProductDto.itemQuantity > 0 &&
+    //   updatedProduct
+    // ) {
+    //   try {
+    //     const employee = await this.prisma.employees.findFirst({
+    //       where: {
+    //         email: user.email,
+    //         storeId: createProductDto.storeId,
+    //       },
+    //     });
 
-        if (employee) {
-          console.log(
-            `Creating purchase order with employee ID: ${employee.id}`,
-          );
-          await this.prisma.purchaseOrders.create({
-            data: {
-              productId: updatedProduct.id,
-              supplierId: createProductDto.supplierId,
-              employeeId: employee.id,
-              storeId: createProductDto.storeId,
-              quantity: createProductDto.itemQuantity,
-              price: createProductDto.singleItemCostPrice,
-              total:
-                createProductDto.singleItemCostPrice *
-                createProductDto.itemQuantity,
-              status: 'active',
-            },
-          });
-          console.log('Purchase order created successfully');
-        } else {
-          console.warn(
-            `No employee record found for user ${user.email} in store ${createProductDto.storeId}. Skipping purchase order creation.`,
-          );
-        }
-      } catch (purchaseOrderError) {
-        console.error('Failed to create purchase order:', purchaseOrderError);
-        if (purchaseOrderError.code === 'P2003') {
-          console.error(
-            'Foreign key constraint failed - one of the referenced records does not exist',
-          );
-          console.error('Constraint:', purchaseOrderError.meta?.constraint);
-        }
-      }
-    }
+    //     if (employee) {
+    //       console.log(
+    //         `Creating purchase order with employee ID: ${employee.id}`,
+    //       );
+    //       await this.prisma.purchaseOrders.create({
+    //         data: {
+    //           productId: updatedProduct.id,
+    //           supplierId: createProductDto.supplierId,
+    //           employeeId: employee.id,
+    //           storeId: createProductDto.storeId,
+    //           quantity: createProductDto.itemQuantity,
+    //           price: createProductDto.singleItemCostPrice,
+    //           total:
+    //             createProductDto.singleItemCostPrice *
+    //             createProductDto.itemQuantity,
+    //           status: 'active',
+    //         },
+    //       });
+    //       console.log('Purchase order created successfully');
+    //     } else {
+    //       console.warn(
+    //         `No employee record found for user ${user.email} in store ${createProductDto.storeId}. Skipping purchase order creation.`,
+    //       );
+    //     }
+    //   } catch (purchaseOrderError) {
+    //     console.error('Failed to create purchase order:', purchaseOrderError);
+    //     if (purchaseOrderError.code === 'P2003') {
+    //       console.error(
+    //         'Foreign key constraint failed - one of the referenced records does not exist',
+    //       );
+    //       console.error('Constraint:', purchaseOrderError.meta?.constraint);
+    //     }
+    //   }
+    // }
 
     if (!updatedProduct) {
       throw new BadRequestException('Failed to create product');
@@ -439,18 +458,16 @@ export class ProductService {
   async updateProduct(
     user: any,
     id: string,
-    updateProductDto: UpdateProductDto,
+    UpdateProductDto: UpdateProductDto,
   ): Promise<ProductResponseDto> {
     this.validateProductOperationPermissions(user, 'update');
 
     const product = await this.prisma.products.findUnique({ where: { id } });
     if (!product) {
       throw new NotFoundException('Product not found');
-
     }
-  }
 
-    if (updateProductDto.sku && updateProductDto.sku !== product.sku) {
+    if (UpdateProductDto.sku && UpdateProductDto.sku !== product.sku) {
       await this.validateSkuUniqueness(async (sku: string) => {
         const existing = await this.prisma.products.findFirst({
           where: {
@@ -459,7 +476,7 @@ export class ProductService {
           },
         });
         return !!existing;
-      }, updateProductDto.sku);
+      }, UpdateProductDto.sku);
     }
 
     let packIds: string[] = [];
@@ -467,18 +484,18 @@ export class ProductService {
 
     // Validate pack and variant constraints
     if (
-      updateProductDto.hasVariants === true &&
-      updateProductDto.packs &&
-      updateProductDto.packs?.length > 0
+      UpdateProductDto.hasVariants === true &&
+      UpdateProductDto.packs &&
+      UpdateProductDto.packs?.length > 0
     ) {
       throw new BadRequestException(
         'Packs cannot be provided at product level when hasVariants is true',
       );
     }
     if (
-      updateProductDto.hasVariants === false &&
-      updateProductDto.variants &&
-      updateProductDto.variants?.length > 0
+      UpdateProductDto.hasVariants === false &&
+      UpdateProductDto.variants &&
+      UpdateProductDto.variants?.length > 0
     ) {
       throw new BadRequestException(
         'Variants must be empty when hasVariants is false',
@@ -489,9 +506,9 @@ export class ProductService {
     await this.prisma.pack.deleteMany({ where: { productId: id } });
 
     // Handle pack updates based on hasVariants
-    if (updateProductDto.hasVariants && updateProductDto.variants) {
+    if (UpdateProductDto.hasVariants && UpdateProductDto.variants) {
       variantsWithPacks = await Promise.all(
-        updateProductDto.variants.map(async (variant) => {
+        UpdateProductDto.variants.map(async (variant) => {
           let variantPackIds: string[] = [];
           if (variant.packs && variant.packs.length > 0) {
             const createdPacks = await Promise.all(
@@ -519,9 +536,9 @@ export class ProductService {
           };
         }),
       );
-    } else if (updateProductDto.packs && updateProductDto.packs.length > 0) {
+    } else if (UpdateProductDto.packs && UpdateProductDto.packs.length > 0) {
       const createdPacks = await Promise.all(
-        updateProductDto.packs.map((pack) =>
+        UpdateProductDto.packs.map((pack) =>
           this.prisma.pack.create({
             data: {
               productId: id,
@@ -537,26 +554,27 @@ export class ProductService {
       );
       packIds = createdPacks.map((pack) => pack.id);
     }
+
     const updatedProduct = await this.prisma.products.update({
       where: { id },
       data: {
-        name: updateProductDto.name,
-        category: updateProductDto.category,
-        ean: updateProductDto.ean,
-        pluUpc: updateProductDto.pluUpc,
-        supplierId: updateProductDto.supplierId,
-        sku: updateProductDto.sku,
-        singleItemCostPrice: updateProductDto.singleItemCostPrice,
-        itemQuantity: updateProductDto.itemQuantity,
-        msrpPrice: updateProductDto.msrpPrice,
-        singleItemSellingPrice: updateProductDto.singleItemSellingPrice,
-        discountAmount: updateProductDto.discountAmount,
-        percentDiscount: updateProductDto.percentDiscount,
-        clientId: updateProductDto.clientId,
-        storeId: updateProductDto.storeId,
-        hasVariants: updateProductDto.hasVariants,
-        packIds: updateProductDto.hasVariants ? [] : packIds,
-        variants: updateProductDto.hasVariants ? variantsWithPacks : [],
+        name: UpdateProductDto.name,
+        category: UpdateProductDto.category,
+        ean: UpdateProductDto.ean,
+        pluUpc: UpdateProductDto.pluUpc,
+        supplierId: UpdateProductDto.supplierId,
+        sku: UpdateProductDto.sku,
+        singleItemCostPrice: UpdateProductDto.singleItemCostPrice,
+        itemQuantity: UpdateProductDto.itemQuantity,
+        msrpPrice: UpdateProductDto.msrpPrice,
+        singleItemSellingPrice: UpdateProductDto.singleItemSellingPrice,
+        discountAmount: UpdateProductDto.discountAmount,
+        percentDiscount: UpdateProductDto.percentDiscount,
+        clientId: UpdateProductDto.clientId,
+        storeId: UpdateProductDto.storeId,
+        hasVariants: UpdateProductDto.hasVariants,
+        packIds: UpdateProductDto.hasVariants ? [] : packIds,
+        variants: UpdateProductDto.hasVariants ? variantsWithPacks : [],
       },
       include: {
         packs: true,
@@ -626,5 +644,172 @@ export class ProductService {
 
     // Return void as the global response interceptor will handle the response format
     return;
+  }
+
+
+
+
+  async checkInventoryFileHash(fileHash: string) {
+    return await this.prisma.fileUploadInventory.findUnique({
+      where: { fileHash },
+    });
+  }
+
+  async checkInventoryFileStatus(file: Express.Multer.File, user: any): Promise<string> {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size exceeds 10MB limit');
+    }
+
+    const dataToHash = Buffer.concat([
+      file.buffer,
+      Buffer.from(user.sub),
+    ]);
+    const fileHash = crypto.createHash('sha256').update(dataToHash).digest('hex');
+
+    const existingFile = await this.checkInventoryFileHash(fileHash);
+    if (existingFile) {
+      throw new ConflictException('This file has already been uploaded');
+    }
+
+    return fileHash;
+  }
+
+  async uploadInventorySheet(user: any, parsedData: ValidationResult, file: Express.Multer.File, fileHash: string) {
+    const store = await this.prisma.stores.findFirst({
+      where: { clientId: user.sub },
+    });
+
+    if (!store) {
+      throw new NotFoundException('Store not found for this user');
+    }
+
+    this.validateProductAccess(user, store.id);
+
+    const batchSize = 500;
+    const errorLogs = parsedData.errors.map(err => ({
+      fileUploadId: '', // Will be set after fileUpload creation
+      rowNumber: err.row,
+      error: err.errors.join('; '),
+    }));
+
+    try {
+      const result = await this.prisma.$transaction(async (prisma) => {
+        const fileUpload = await prisma.fileUploadInventory.create({
+          data: {
+            fileHash,
+            storeId: store.id,
+            fileName: file.originalname,
+            status: 'processing',
+          },
+        });
+
+        if (errorLogs.length > 0) {
+          await prisma.errorLog.createMany({
+            data: errorLogs.map(log => ({ ...log, fileUploadId: fileUpload.id })),
+          });
+        }
+
+        let processedItems = 0;
+        const validRows = parsedData.data.filter((_, idx) =>
+          !parsedData.errors.some(err => err.row === idx + 1)
+        );
+
+        for (const productBatch of chunk(validRows, batchSize)) {
+          await prisma.products.createMany({
+            data: productBatch.map((product: ProductExcelRow) => ({
+              id: crypto.randomUUID(),
+              name: product.name,
+              category: product.category,
+              itemQuantity: product.stock,
+              singleItemCostPrice: product.price,
+              singleItemSellingPrice: product.sellingPrice,
+              pluUpc: product.PLU || crypto.randomUUID(),
+              storeId: store.id,
+              sku: product.SKU || product.PLU || crypto.randomUUID(),
+              fileUploadId: fileUpload.id,
+              clientId: user.sub,
+              msrpPrice: product.sellingPrice,
+              discountAmount: 0,
+              percentDiscount: 0,
+              hasVariants: false,
+              packIds: [],
+              variants: [],
+              supplierId: 'default-supplier', // Adjust as needed
+              ean: '',
+            })),
+            skipDuplicates: true,
+          });
+
+          processedItems += productBatch.length;
+        }
+
+        await prisma.fileUploadInventory.update({
+          where: { id: fileUpload.id },
+          data: { status: 'completed' },
+        });
+
+        return {
+          totalProcessed: processedItems,
+          totalItems: parsedData.data.length,
+          fileUploadId: fileUpload.id,
+        };
+      });
+
+      return {
+        success: true,
+        message: 'Inventory has been added successfully',
+        data: {
+          processedItems: result.totalProcessed,
+          totalItems: result.totalItems,
+          fileUploadId: result.fileUploadId,
+        },
+      };
+    } catch (error) {
+      console.error('❌ Upload failed:', error);
+
+      const fileUpload = await this.prisma.fileUploadInventory.findUnique({ where: { fileHash } });
+      if (fileUpload) {
+        await this.prisma.fileUploadInventory.update({
+          where: { id: fileUpload.id },
+          data: { status: 'failed', error: error.message },
+        });
+      }
+
+      if (error.code === 'P2002') {
+        throw new ConflictException('Duplicate SKU or PLU found in database');
+      }
+
+      throw new BadRequestException(`Error while adding inventory: ${error.message}`);
+    }
+  }
+
+  async addInventory(user: any, file: Express.Multer.File) {
+    const fileHash = await this.checkInventoryFileStatus(file, user);
+    const parsedData = parseExcel(file);
+    return await this.uploadInventorySheet(user, parsedData, file, fileHash);
+  }
+
+  async getUploadStatus(fileUploadId: string) {
+    const fileUpload = await this.prisma.fileUploadInventory.findUnique({
+      where: { id: fileUploadId },
+      select: { id: true, status: true, error: true, fileName: true, uploadedAt: true },
+    });
+
+    if (!fileUpload) {
+      throw new NotFoundException('Upload task not found');
+    }
+
+    return {
+      fileUploadId: fileUpload.id,
+      status: fileUpload.status,
+      error: fileUpload.error,
+      fileName: fileUpload.fileName,
+      uploadedAt: fileUpload.uploadedAt,
+    };
   }
 }
