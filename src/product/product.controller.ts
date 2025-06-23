@@ -13,6 +13,7 @@ import {
   ParseFilePipeBuilder,
   HttpStatus,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -93,10 +94,9 @@ export class ProductController extends BaseProductController {
     );
   }
 
-  @Post('uploadsheet')
-  @ApiOperation({
-    summary: 'Upload inventory from Excel file',
-    description: 'Upload products inventory data from an Excel file (.xlsx, .xls)',
+  @Post('uploadsheet')  @ApiOperation({
+    summary: 'Upload inventory from Excel or CSV file',
+    description: 'Upload products inventory data from an Excel file (.xlsx, .xls) or CSV file (.csv)',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -106,33 +106,49 @@ export class ProductController extends BaseProductController {
         file: {
           type: 'string',
           format: 'binary',
-          description: 'Excel file containing inventory data',
+          description: 'Excel (.xlsx, .xls) or CSV (.csv) file containing inventory data',
         },
       },
     },
   })
   @ApiResponse({ status: HttpStatus.OK, description: 'Inventory uploaded successfully' })
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Invalid file format or data' })
-  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'File already uploaded' })
-  @UseInterceptors(FileInterceptor('file'))
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'File already uploaded' })  @UseInterceptors(FileInterceptor('file'))
   async uploadInventory(
     @Req() req,
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addFileTypeValidator({
-          fileType: /(xlsx|xls|csv)$/,
-        })
-        .addMaxSizeValidator({
-          maxSize: 10 * 1024 * 1024, // 10MB
-        })
-        .build({
-          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-        }),
-    )
+    @UploadedFile()
     file: Express.Multer.File,
+    @Query('storeId') storeId?: string,
   ) {
+    // Custom validation for file types
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    const allowedMimeTypes = [
+      'text/csv',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel'
+    ];
+    
+    const allowedExtensions = /\.(xlsx|xls|csv)$/i;
+    const isValidMimeType = allowedMimeTypes.includes(file.mimetype);
+    const isValidExtension = allowedExtensions.test(file.originalname);
+
+    if (!isValidMimeType && !isValidExtension) {
+      throw new BadRequestException(
+        `Invalid file type. Expected Excel (.xlsx, .xls) or CSV (.csv) file. Received: ${file.mimetype}`
+      );
+    }
+
+    // Validate file size (10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size exceeds 10MB limit');
+    }
+
     return this.handleProductOperation(
-      () => this.productService.addInventory(req.user, file),
+      () => this.productService.addInventory(req.user, file, storeId ?? ''),
       'Inventory uploaded successfully',
     );
   }

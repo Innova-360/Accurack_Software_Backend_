@@ -653,7 +653,6 @@ export class ProductService {
       where: { fileHash },
     });
   }
-
   async checkInventoryFileStatus(
     file: Express.Multer.File,
     user: any,
@@ -661,23 +660,19 @@ export class ProductService {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
-
     const maxSize = 10 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
       throw new BadRequestException('File size exceeds 10MB limit');
     }
-
     const dataToHash = Buffer.concat([file.buffer, Buffer.from(user.id)]);
     const fileHash = crypto
       .createHash('sha256')
       .update(dataToHash)
       .digest('hex');
-
     const existingFile = await this.checkInventoryFileHash(fileHash);
     if (existingFile) {
       throw new ConflictException('This file has already been uploaded');
     }
-
     return fileHash;
   }
   async uploadInventorySheet(
@@ -685,22 +680,20 @@ export class ProductService {
     parsedData: ValidationResult,
     file: Express.Multer.File,
     fileHash: string,
+    storeId: string,
   ) {
     const store = await this.prisma.stores.findFirst({
-      where: { clientId: user.id },
+      where: { id: storeId },
     });
-
     if (!store) {
       throw new NotFoundException('Store not found for this user');
     }
-
     const batchSize = 500;
     const errorLogs = parsedData.errors.map((err) => ({
       fileUploadId: '', // Will be set after fileUpload creation
       rowNumber: err.row,
       error: err.errors.join('; '),
     }));
-
     try {
       const result = await this.prisma.$transaction(async (prisma) => {
         const fileUpload = await prisma.fileUploadInventory.create({
@@ -711,7 +704,6 @@ export class ProductService {
             status: 'processing',
           },
         });
-
         if (errorLogs.length > 0) {
           await prisma.errorLog.createMany({
             data: errorLogs.map((log) => ({
@@ -720,12 +712,10 @@ export class ProductService {
             })),
           });
         }
-
         let processedItems = 0;
         const validRows = parsedData.data.filter(
           (_, idx) => !parsedData.errors.some((err) => err.row === idx + 1),
         );
-
         // Process each product individually to handle suppliers, variants, and packs
         for (const product of validRows) {
           // Find or create supplier
@@ -751,7 +741,6 @@ export class ProductService {
             product.MatrixAttributes && product.MatrixAttributes.trim()
           );
           const hasVariants = hasMatrixAttributes;
-
           // Create the product
           const createdProduct = await prisma.products.create({
             data: {
@@ -786,7 +775,6 @@ export class ProductService {
                 percentDiscount: product.PercentDiscount || 0,
               },
             });
-
             // Update product with pack reference
             await prisma.products.update({
               where: { id: createdProduct.id },
@@ -804,13 +792,11 @@ export class ProductService {
               product.Attribute1,
               product.Attribute2,
             ].filter(Boolean);
-
             const variants: any[] = [];
             // If we have attribute values, create variants for each
             if (attributeValues.length > 0) {
               for (const attributeValue of attributeValues) {
                 if (!attributeValue) continue; // Skip undefined/null values
-
                 // Create pack for this variant
                 const pack = await prisma.pack.create({
                   data: {
@@ -823,7 +809,6 @@ export class ProductService {
                     percentDiscount: product.PercentDiscount || 0,
                   },
                 });
-
                 variants.push({
                   name: attributeValue.toString().trim(),
                   price: product.IndividualItemSellingPrice,
@@ -844,7 +829,6 @@ export class ProductService {
                   percentDiscount: product.PercentDiscount || 0,
                 },
               });
-
               variants.push({
                 name: 'Default Variant',
                 price: product.IndividualItemSellingPrice,
@@ -852,7 +836,6 @@ export class ProductService {
                 packIds: [pack.id],
               });
             }
-
             // Update product with variants
             await prisma.products.update({
               where: { id: createdProduct.id },
@@ -861,22 +844,18 @@ export class ProductService {
               },
             });
           }
-
           processedItems++;
         }
-
         await prisma.fileUploadInventory.update({
           where: { id: fileUpload.id },
           data: { status: 'completed' },
         });
-
         return {
           totalProcessed: processedItems,
           totalItems: parsedData.data.length,
           fileUploadId: fileUpload.id,
         };
       });
-
       return {
         success: true,
         message: 'Inventory has been added successfully',
@@ -887,8 +866,7 @@ export class ProductService {
         },
       };
     } catch (error) {
-      console.error('❌ Upload failed:', error);
-
+      console.error(':x: Upload failed:', error);
       const fileUpload = await this.prisma.fileUploadInventory.findUnique({
         where: { fileHash },
       });
@@ -898,21 +876,26 @@ export class ProductService {
           data: { status: 'failed', error: error.message },
         });
       }
-
       if (error.code === 'P2002') {
         throw new ConflictException('Duplicate SKU or PLU found in database');
       }
-
       throw new BadRequestException(
         `Error while adding inventory: ${error.message}`,
       );
     }
   }
-
-  async addInventory(user: any, file: Express.Multer.File) {
+  async addInventory(user: any, file: Express.Multer.File, storeId: string) {
+    console.log('user', user, 'file', file);
     const fileHash = await this.checkInventoryFileStatus(file, user);
     const parsedData = parseExcel(file);
-    return await this.uploadInventorySheet(user, parsedData, file, fileHash);
+    console.log('parsedData', parsedData);
+    return await this.uploadInventorySheet(
+      user,
+      parsedData,
+      file,
+      fileHash,
+      storeId,
+    );
   }
 
   async getUploadStatus(fileUploadId: string) {
@@ -926,11 +909,9 @@ export class ProductService {
         uploadedAt: true,
       },
     });
-
     if (!fileUpload) {
       throw new NotFoundException('Upload task not found');
     }
-
     return {
       fileUploadId: fileUpload.id,
       status: fileUpload.status,
