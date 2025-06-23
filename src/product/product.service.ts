@@ -9,7 +9,11 @@ import {
   UpdateProductDto,
   ProductResponseDto,
 } from './dto/product.dto';
-import { parseExcel, ValidationResult, ProductExcelRow } from '../utils/fileParser';
+import {
+  parseExcel,
+  ValidationResult,
+  ProductExcelRow,
+} from '../utils/fileParser';
 import * as crypto from 'crypto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { chunk } from 'lodash';
@@ -31,9 +35,7 @@ interface FileUpload {
 
 @Injectable()
 export class ProductService {
-  constructor(
-    private readonly prisma: PrismaClientService,
-  ) {}
+  constructor(private readonly prisma: PrismaClientService) {}
 
   private validateProductOperationPermissions(
     user: any,
@@ -646,16 +648,16 @@ export class ProductService {
     return;
   }
 
-
-
-
   async checkInventoryFileHash(fileHash: string) {
     return await this.prisma.fileUploadInventory.findUnique({
       where: { fileHash },
     });
   }
 
-  async checkInventoryFileStatus(file: Express.Multer.File, user: any): Promise<string> {
+  async checkInventoryFileStatus(
+    file: Express.Multer.File,
+    user: any,
+  ): Promise<string> {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
@@ -665,11 +667,11 @@ export class ProductService {
       throw new BadRequestException('File size exceeds 10MB limit');
     }
 
-    const dataToHash = Buffer.concat([
-      file.buffer,
-      Buffer.from(user.sub),
-    ]);
-    const fileHash = crypto.createHash('sha256').update(dataToHash).digest('hex');
+    const dataToHash = Buffer.concat([file.buffer, Buffer.from(user.id)]);
+    const fileHash = crypto
+      .createHash('sha256')
+      .update(dataToHash)
+      .digest('hex');
 
     const existingFile = await this.checkInventoryFileHash(fileHash);
     if (existingFile) {
@@ -678,20 +680,22 @@ export class ProductService {
 
     return fileHash;
   }
-
-  async uploadInventorySheet(user: any, parsedData: ValidationResult, file: Express.Multer.File, fileHash: string) {
+  async uploadInventorySheet(
+    user: any,
+    parsedData: ValidationResult,
+    file: Express.Multer.File,
+    fileHash: string,
+  ) {
     const store = await this.prisma.stores.findFirst({
-      where: { clientId: user.sub },
+      where: { clientId: user.id },
     });
 
     if (!store) {
       throw new NotFoundException('Store not found for this user');
     }
 
-    this.validateProductAccess(user, store.id);
-
     const batchSize = 500;
-    const errorLogs = parsedData.errors.map(err => ({
+    const errorLogs = parsedData.errors.map((err) => ({
       fileUploadId: '', // Will be set after fileUpload creation
       rowNumber: err.row,
       error: err.errors.join('; '),
@@ -710,42 +714,155 @@ export class ProductService {
 
         if (errorLogs.length > 0) {
           await prisma.errorLog.createMany({
-            data: errorLogs.map(log => ({ ...log, fileUploadId: fileUpload.id })),
+            data: errorLogs.map((log) => ({
+              ...log,
+              fileUploadId: fileUpload.id,
+            })),
           });
         }
 
         let processedItems = 0;
-        const validRows = parsedData.data.filter((_, idx) =>
-          !parsedData.errors.some(err => err.row === idx + 1)
+        const validRows = parsedData.data.filter(
+          (_, idx) => !parsedData.errors.some((err) => err.row === idx + 1),
         );
 
-        for (const productBatch of chunk(validRows, batchSize)) {
-          await prisma.products.createMany({
-            data: productBatch.map((product: ProductExcelRow) => ({
-              id: crypto.randomUUID(),
-              name: product.name,
-              category: product.category,
-              itemQuantity: product.stock,
-              singleItemCostPrice: product.price,
-              singleItemSellingPrice: product.sellingPrice,
-              pluUpc: product.PLU || crypto.randomUUID(),
+        // Process each product individually to handle suppliers, variants, and packs
+        for (const product of validRows) {
+          // Find or create supplier
+          let supplier = await prisma.suppliers.findFirst({
+            where: {
+              name: product.VendorName,
+              phone: product.VendorPhone,
               storeId: store.id,
-              sku: product.SKU || product.PLU || crypto.randomUUID(),
-              fileUploadId: fileUpload.id,
-              clientId: user.sub,
-              msrpPrice: product.sellingPrice,
-              discountAmount: 0,
-              percentDiscount: 0,
-              hasVariants: false,
+            },
+          });
+          if (!supplier) {
+            supplier = await prisma.suppliers.create({
+              data: {
+                name: product.VendorName,
+                phone: product.VendorPhone,
+                email: '', // Default empty email as it's not provided in Excel
+                storeId: store.id,
+                status: 'active',
+              },
+            });
+          } // Check if MatrixAttributes is null or empty to determine hasVariants
+          const hasMatrixAttributes = !!(
+            product.MatrixAttributes && product.MatrixAttributes.trim()
+          );
+          const hasVariants = hasMatrixAttributes;
+
+          // Create the product
+          const createdProduct = await prisma.products.create({
+            data: {
+              name: product.ProductName,
+              category: product.Category,
+              ean: product.EAN || '',
+              pluUpc: product['PLU/UPC'],
+              supplierId: supplier.id,
+              sku: product.SKU,
+              singleItemCostPrice: product.VendorPrice,
+              itemQuantity: product.IndividualItemQuantity,
+              msrpPrice: product.IndividualItemSellingPrice,
+              singleItemSellingPrice: product.IndividualItemSellingPrice,
+              discountAmount: product.DiscountValue || 0,
+              percentDiscount: product.DiscountPercentage || 0,
+              clientId: user.clientId,
+              storeId: store.id,
+              hasVariants,
               packIds: [],
               variants: [],
-              supplierId: 'default-supplier', // Adjust as needed
-              ean: '',
-            })),
-            skipDuplicates: true,
+            },
           });
+          if (!hasVariants) {
+            // No variants - create pack record and put its reference id directly in products table
+            const pack = await prisma.pack.create({
+              data: {
+                productId: createdProduct.id,
+                minimumSellingQuantity: product.MinimumSellingQuantity || 1,
+                totalPacksQuantity: product.PackOf || 1,
+                orderedPacksPrice: product.PackOfPrice,
+                discountAmount: product.PriceDiscountAmount || 0,
+                percentDiscount: product.PercentDiscount || 0,
+              },
+            });
 
-          processedItems += productBatch.length;
+            // Update product with pack reference
+            await prisma.products.update({
+              where: { id: createdProduct.id },
+              data: {
+                packIds: [pack.id],
+              },
+            });
+          } else {
+            // Has variants - create variant and pack record for each variant
+            const matrixAttributeNames =
+              product.MatrixAttributes?.split(/[\/,]/).map((attr) =>
+                attr.trim(),
+              ) || [];
+            const attributeValues = [
+              product.Attribute1,
+              product.Attribute2,
+            ].filter(Boolean);
+
+            const variants: any[] = [];
+            // If we have attribute values, create variants for each
+            if (attributeValues.length > 0) {
+              for (const attributeValue of attributeValues) {
+                if (!attributeValue) continue; // Skip undefined/null values
+
+                // Create pack for this variant
+                const pack = await prisma.pack.create({
+                  data: {
+                    productId: createdProduct.id,
+                    minimumSellingQuantity: product.MinimumSellingQuantity || 1,
+                    totalPacksQuantity: product.PackOf || 1,
+                    orderedPacksPrice:
+                      product.PackOfPrice || product.IndividualItemSellingPrice,
+                    discountAmount: product.PriceDiscountAmount || 0,
+                    percentDiscount: product.PercentDiscount || 0,
+                  },
+                });
+
+                variants.push({
+                  name: attributeValue.toString().trim(),
+                  price: product.IndividualItemSellingPrice,
+                  sku: `${product.SKU}-${attributeValue.toString().replace(/\s+/g, '').toUpperCase()}`,
+                  packIds: [pack.id],
+                });
+              }
+            } else {
+              // If no attribute values but MatrixAttributes exists, create a default variant
+              const pack = await prisma.pack.create({
+                data: {
+                  productId: createdProduct.id,
+                  minimumSellingQuantity: product.MinimumSellingQuantity || 1,
+                  totalPacksQuantity: product.PackOf || 1,
+                  orderedPacksPrice:
+                    product.PackOfPrice || product.IndividualItemSellingPrice,
+                  discountAmount: product.PriceDiscountAmount || 0,
+                  percentDiscount: product.PercentDiscount || 0,
+                },
+              });
+
+              variants.push({
+                name: 'Default Variant',
+                price: product.IndividualItemSellingPrice,
+                sku: `${product.SKU}-DEFAULT`,
+                packIds: [pack.id],
+              });
+            }
+
+            // Update product with variants
+            await prisma.products.update({
+              where: { id: createdProduct.id },
+              data: {
+                variants: variants,
+              },
+            });
+          }
+
+          processedItems++;
         }
 
         await prisma.fileUploadInventory.update({
@@ -772,7 +889,9 @@ export class ProductService {
     } catch (error) {
       console.error('❌ Upload failed:', error);
 
-      const fileUpload = await this.prisma.fileUploadInventory.findUnique({ where: { fileHash } });
+      const fileUpload = await this.prisma.fileUploadInventory.findUnique({
+        where: { fileHash },
+      });
       if (fileUpload) {
         await this.prisma.fileUploadInventory.update({
           where: { id: fileUpload.id },
@@ -784,7 +903,9 @@ export class ProductService {
         throw new ConflictException('Duplicate SKU or PLU found in database');
       }
 
-      throw new BadRequestException(`Error while adding inventory: ${error.message}`);
+      throw new BadRequestException(
+        `Error while adding inventory: ${error.message}`,
+      );
     }
   }
 
@@ -797,7 +918,13 @@ export class ProductService {
   async getUploadStatus(fileUploadId: string) {
     const fileUpload = await this.prisma.fileUploadInventory.findUnique({
       where: { id: fileUploadId },
-      select: { id: true, status: true, error: true, fileName: true, uploadedAt: true },
+      select: {
+        id: true,
+        status: true,
+        error: true,
+        fileName: true,
+        uploadedAt: true,
+      },
     });
 
     if (!fileUpload) {

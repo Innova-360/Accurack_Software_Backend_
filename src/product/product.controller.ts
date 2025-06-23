@@ -12,6 +12,7 @@ import {
   UploadedFile,
   ParseFilePipeBuilder,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -20,8 +21,11 @@ import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
 import { BaseProductController } from '../common/controllers/base-product.controller';
 import { ProductEndpoint } from '../common/decorators/product-endpoint.decorator';
 import { ResponseService } from '../common/services/response.service';
+import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 
-@Controller('products')
+
+@UseGuards(JwtAuthGuard)
+@Controller('product')
 export class ProductController extends BaseProductController {
   constructor(
     private readonly productService: ProductService,
@@ -89,7 +93,7 @@ export class ProductController extends BaseProductController {
     );
   }
 
-  @Post('upload/inventory')
+  @Post('uploadsheet')
   @ApiOperation({
     summary: 'Upload inventory from Excel file',
     description: 'Upload products inventory data from an Excel file (.xlsx, .xls)',
@@ -116,7 +120,7 @@ export class ProductController extends BaseProductController {
     @UploadedFile(
       new ParseFilePipeBuilder()
         .addFileTypeValidator({
-          fileType: /(xlsx|xls)$/,
+          fileType: /(xlsx|xls|csv)$/,
         })
         .addMaxSizeValidator({
           maxSize: 10 * 1024 * 1024, // 10MB

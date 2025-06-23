@@ -27,7 +27,7 @@ export class StoreController extends BaseAuthController {
   @StoreEndpoint.CreateStore(CreateStoreDto)
   @Post('create')
   @Version('1')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard)
   async createStore(@Request() req: any, @Body() dto: CreateStoreDto) {
     return this.handleServiceOperation(
       () => this.storeService.createStore(req.user, dto),
@@ -39,7 +39,7 @@ export class StoreController extends BaseAuthController {
   @StoreEndpoint.GetUserStores()
   @Get('list')
   @Version('1')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard)
   async getStores(@Request() req: any) {
     return this.handleServiceOperation(
       () => this.storeService.getStores(req.user),
@@ -50,7 +50,7 @@ export class StoreController extends BaseAuthController {
   @StoreEndpoint.GetStoreById()
   @Get(':id')
   @Version('1')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard)
   async findStoreById(@Request() req: any, @Param('id') id: string) {
     return this.handleServiceOperation(
       () => this.storeService.findStoreById(req.user, id),
