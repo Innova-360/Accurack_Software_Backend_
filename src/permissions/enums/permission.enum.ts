@@ -20,6 +20,7 @@ export enum PermissionResource {
   AUDIT = 'audit',
   INVITATION = 'invitation',
   PERMISSION = 'permission',
+  TENANT = 'tenant',
 }
 
 export enum PermissionAction {

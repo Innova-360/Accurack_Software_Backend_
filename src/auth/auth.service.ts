@@ -17,12 +17,14 @@ import {
   RefreshTokenDto,
   ForgotPasswordDto,
   SignupSuperAdminDto,
+  CreateClientWithSuperAdminDto,
   LoginDto,
   ResetPasswordDto,
   InviteDto,
   AcceptInviteDto,
 } from './dto/auth.dto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
+import { MultiTenantService } from '../database/multi-tenant.service';
 import { Role, Status } from '@prisma/client';
 
 import * as crypto from 'crypto';
@@ -34,6 +36,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly permissionsService: PermissionsService,
+    private readonly multiTenantService: MultiTenantService,
   ) {}
   async googleLogin(googleUser: GoogleProfileDto): Promise<AuthResponseDto> {
     try {
@@ -144,9 +147,9 @@ export class AuthService {
   }
 
   private async validateInput(dto: SignupSuperAdminDto): Promise<void> {
-    const { firstName, lastName, email, password } = dto;
+    const { firstName, lastName, email, password, clientId } = dto;
 
-    if (!firstName || !lastName || !email || !password) {
+    if (!firstName || !lastName || !email || !password || !clientId) {
       throw new BadRequestException('All fields are required');
     }
 
@@ -168,6 +171,13 @@ export class AuthService {
         'Password must contain at least one uppercase letter and one number',
       );
     }
+
+    // Validate UUID format for clientId
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(clientId)) {
+      throw new BadRequestException('Invalid client ID format');
+    }
   }
 
   async signupSuperAdmin(dto: SignupSuperAdminDto) {
@@ -175,7 +185,21 @@ export class AuthService {
       // Validate input
       await this.validateInput(dto);
 
-      const { firstName, lastName, email, password } = dto;
+      const { firstName, lastName, email, password, clientId } = dto;
+
+      // Check if the client/tenant exists
+      const client = await this.prisma.clients.findUnique({
+        where: { id: clientId },
+        select: { id: true, name: true, status: true },
+      });
+
+      if (!client) {
+        throw new BadRequestException('Invalid client ID - tenant not found');
+      }
+
+      if (client.status !== 'active') {
+        throw new BadRequestException('Client/tenant is not active');
+      }
 
       // Check for existing user
       const existingUser = await this.prisma.users.findUnique({
@@ -194,52 +218,33 @@ export class AuthService {
       const otp = this.generateOtp();
       const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiration
 
-      // Create transaction for client and user creation
-      const result = await this.prisma.$transaction(async (tx) => {
-        // Create client
-        const client = await tx.clients.create({
-          data: {
-            name: `${firstName} ${lastName}'s Organization`,
-            email,
-            databaseUrl: this.getDatabaseUrl(),
-            tier: 'free',
-          },
-          select: { id: true },
-        });
-
-        // Create user with OTP
-        const user = await tx.users.create({
-          data: {
-            firstName,
-            lastName,
-            email,
-            passwordHash,
-            role: Role.super_admin,
-            clientId: client.id,
-            status: Status.active,
-            otp,
-            otpExpiresAt,
-            isOtpUsed: false,
-          },
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            role: true,
-          },
-        });
-
-        return { client, user };
+      // Create user only (client already exists)
+      const user = await this.prisma.users.create({
+        data: {
+          firstName,
+          lastName,
+          email,
+          passwordHash,
+          role: Role.super_admin,
+          clientId: clientId, // Use provided clientId
+          status: Status.active,
+          otp,
+          otpExpiresAt,
+          isOtpUsed: false,
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+        },
       });
 
-      const { client, user } = result;
-
-      if (!client || !user) {
-        throw new InternalServerErrorException(
-          'Failed to create client or user',
-        );
+      if (!user) {
+        throw new InternalServerErrorException('Failed to create user');
       }
+      await this.permissionsService.assignDefaultPermissions(user.id);
 
       // Send OTP email
       await this.mailService.sendMail({
@@ -267,6 +272,7 @@ export class AuthService {
           details: {
             role: Role.super_admin,
             email,
+            clientId,
             timestamp: new Date().toISOString(),
           },
         },
@@ -280,6 +286,7 @@ export class AuthService {
           lastName: user.lastName,
           email: user.email,
           role: user.role,
+          clientId: clientId,
         },
       };
     } catch (error) {
@@ -388,7 +395,7 @@ export class AuthService {
       lastName: string;
       email: string;
       role: Role;
-      stores: { storeId: string }[];
+      stores: { storeId: string }[] | string[];
     };
   }> {
     const { email, password } = dto;
@@ -420,7 +427,7 @@ export class AuthService {
       role: user.role,
       email: user.email,
       clientId: user.clientId,
-      stores: user.stores,
+      stores: user.role === Role.super_admin ? ['*'] : user.stores,
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -431,6 +438,8 @@ export class AuthService {
       secret: process.env.JWT_SECRET,
       expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
     });
+    console.log('🔍 JWT TOKENS:', accessToken);
+    console.log('🔍 JWT payload:', payload);
 
     await this.prisma.auditLogs.create({
       data: {
@@ -450,7 +459,7 @@ export class AuthService {
         lastName: user.lastName,
         email: user.email,
         role: user.role,
-        stores: user.stores,
+        stores: payload.stores,
       },
     };
   }
@@ -482,7 +491,7 @@ export class AuthService {
         role: user.role,
         email: user.email,
         clientId: user.clientId,
-        stores: user.stores,
+        stores: user.role === Role.super_admin ? ['*'] : user.stores,
       };
 
       const accessToken = this.jwtService.sign(payload, {
@@ -1029,5 +1038,421 @@ export class AuthService {
     }
 
     return defaultClient;
+  }
+
+  async createClientWithSuperAdmin(dto: CreateClientWithSuperAdminDto) {
+    try {
+      const {
+        firstName,
+        lastName,
+        email,
+        password,
+        companyName,
+        companyEmail,
+        companyPhone,
+        companyAddress,
+      } = dto;
+
+      // Validate that user email doesn't already exist
+      const existingUser = await this.prisma.users.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+
+      if (existingUser) {
+        throw new BadRequestException('User email already exists');
+      }
+
+      // Validate that client email doesn't already exist
+      const clientEmailToUse = companyEmail || email;
+      const existingClient = await this.prisma.clients.findUnique({
+        where: { email: clientEmailToUse },
+        select: { id: true, name: true },
+      });
+
+      if (existingClient) {
+        throw new BadRequestException(
+          `Company email '${clientEmailToUse}' already exists for client '${existingClient.name}'`
+        );
+      }
+
+      // Step 1: Create client record first (quick operation)
+      const client = await this.prisma.clients.create({
+        data: {
+          name: companyName,
+          email: clientEmailToUse,
+          phone: companyPhone,
+          address: companyAddress,
+          status: Status.active,
+          tier: 'free',
+        },
+      });
+
+      let user;
+      try {
+        // Step 2: Create tenant database (long operation - outside transaction)
+        await this.multiTenantService.createTenantDatabase(client.id, {
+          id: client.id,
+          name: client.name,
+          email: client.email,
+          phone: client.phone,
+          address: client.address,
+          status: client.status,
+          tier: client.tier,
+        });
+
+        // Step 3: Create user (quick operation with transaction)
+        const passwordHash = await bcrypt.hash(password, 10);
+        const otp = this.generateOtp();
+        const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+        user = await this.prisma.users.create({
+          data: {
+            firstName,
+            lastName,
+            email,
+            passwordHash,
+            role: Role.super_admin,
+            clientId: client.id,
+            status: Status.active,
+            otp,
+            otpExpiresAt,
+            isOtpUsed: false,
+          },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+            clientId: true,
+            status: true,
+          },
+        });
+
+        // Step 4: Sync both client and user records to tenant database
+        await this.multiTenantService.ensureClientRecordExists(client.id, {
+          id: client.id,
+          name: client.name,
+          email: client.email,
+          phone: client.phone,
+          address: client.address,
+          status: client.status,
+          tier: client.tier,
+          createdAt: new Date(),
+        });
+
+        await this.multiTenantService.ensureUserRecordExists(client.id, {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          passwordHash,
+          role: user.role,
+          clientId: user.clientId,
+          status: user.status,
+          otp,
+          otpExpiresAt,
+          isOtpUsed: false,
+          createdAt: new Date(),
+        });
+
+        // Step 5: Initialize permissions for the super admin user
+        await this.permissionsService.assignDefaultPermissions(user.id);
+
+        const result = { client, user, otp };
+
+        // Step 5: Send welcome email with OTP
+        await this.mailService.sendMail({
+          to: email,
+          subject: 'Welcome to Accurack - Complete Your Setup',
+          html: `
+            <h2>Welcome to Accurack!</h2>
+            <p>Your account has been created successfully for <strong>${companyName}</strong>.</p>
+            <p>To complete your setup, please verify your email with this OTP code:</p>
+            <h3 style="color: #007bff; font-size: 24px; letter-spacing: 2px;">${result.otp}</h3>
+            <p>This code will expire in 10 minutes.</p>
+            <p>Once verified, you can start managing your business with Accurack!</p>
+          `,
+        });
+
+        return {
+          success: true,
+          message:
+            'Client and super admin account created successfully. Please check your email for OTP verification.',
+          data: {
+            client: {
+              id: result.client.id,
+              name: result.client.name,
+              email: result.client.email,
+            },
+            user: result.user,
+          },
+        };
+      } catch (dbError) {
+        // If user creation fails, we should clean up the client record
+        // But we leave the tenant database since it's harder to clean up and can be reused
+        console.error('Failed to create user, cleaning up client:', dbError);
+
+        try {
+          await this.prisma.clients.delete({ where: { id: client.id } });
+        } catch (cleanupError) {
+          console.error(
+            'Failed to cleanup client after user creation error:',
+            cleanupError,
+          );
+        }
+
+        throw new InternalServerErrorException(
+          'Failed to create user account. Please try again.',
+        );
+      }
+    } catch (error) {
+      console.error('Create client with super admin error:', error);
+
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to create client and user account: ' + error.message,
+      );
+    }
+  }
+
+  /**
+   * Fix permissions for existing super admin users who don't have them
+   * This is a one-time fix method
+   */
+  async fixSuperAdminPermissions(email: string) {
+    try {
+      const user = await this.prisma.users.findUnique({
+        where: { email },
+        select: { id: true, role: true, email: true },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      if (user.role !== Role.super_admin) {
+        throw new BadRequestException('User is not a super admin');
+      }
+
+      // Assign default permissions
+      await this.permissionsService.assignDefaultPermissions(user.id);
+
+      return {
+        success: true,
+        message: `Permissions successfully assigned to super admin ${user.email}`,
+        data: {
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+        },
+      };
+    } catch (error) {
+      console.error('Fix super admin permissions error:', error);
+
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to fix super admin permissions: ' + error.message,
+      );
+    }
+  }
+
+  /**
+   * Fix missing client record in tenant database
+   */
+  async fixClientRecord(clientId: string) {
+    try {
+      // Get client data from master database
+      const client = await this.prisma.clients.findUnique({
+        where: { id: clientId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          address: true,
+          status: true,
+          tier: true,
+        },
+      });
+
+      if (!client) {
+        throw new NotFoundException(`Client with ID ${clientId} not found`);
+      }
+
+      // Ensure client record exists in tenant database
+      await this.multiTenantService.ensureClientRecordExists(clientId, client);
+
+      return {
+        success: true,
+        message: `Client record synchronized successfully for ${client.name}`,
+        data: {
+          clientId: client.id,
+          clientName: client.name,
+          email: client.email,
+        },
+      };
+    } catch (error) {
+      console.error('Fix client record error:', error);
+
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to fix client record: ' + error.message,
+      );
+    }
+  }
+
+  /**
+   * Fix missing user record in tenant database
+   */
+  async fixUserRecord(userId: string) {
+    try {
+      // Validate userId parameter
+      if (!userId || typeof userId !== 'string') {
+        throw new BadRequestException('Valid userId is required');
+      }
+
+      // Get user data from master database
+      const user = await this.prisma.users.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          passwordHash: true,
+          role: true,
+          clientId: true,
+          status: true,
+          otp: true,
+          otpExpiresAt: true,
+          isOtpUsed: true,
+          createdAt: true,
+        },
+      });
+
+      if (!user) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+
+      // Check if user exists in tenant database first
+      const userExists = await this.multiTenantService.validateUserExists(
+        user.clientId,
+        user.id,
+      );
+
+      if (userExists) {
+        return {
+          success: true,
+          message: `User record already exists in tenant database for ${user.firstName} ${user.lastName}`,
+          data: {
+            userId: user.id,
+            email: user.email,
+            clientId: user.clientId,
+            alreadyExists: true,
+          },
+        };
+      }
+
+      // Ensure user record exists in tenant database
+      await this.multiTenantService.ensureUserRecordExists(user.clientId, user);
+
+      // Verify the user was actually inserted
+      const userExistsAfter = await this.multiTenantService.validateUserExists(
+        user.clientId,
+        user.id,
+      );
+
+      return {
+        success: true,
+        message: `User record synchronized successfully for ${user.firstName} ${user.lastName}`,
+        data: {
+          userId: user.id,
+          email: user.email,
+          clientId: user.clientId,
+          wasInserted: userExistsAfter,
+        },
+      };
+    } catch (error) {
+      console.error('Fix user record error:', error);
+
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to fix user record: ' + error.message,
+      );
+    }
+  }
+
+  /**
+   * Test method to verify super admin can access all stores in tenant
+   */
+  async testSuperAdminAccess(user: any) {
+    try {
+      // Get the tenant context to see which DB we're connected to
+      let tenantInfo = 'No tenant context';
+      try {
+        if (user.clientId) {
+          const tenantConnection =
+            await this.multiTenantService.getTenantConnection(user.clientId);
+          tenantInfo = tenantConnection
+            ? 'Tenant context available'
+            : 'No tenant context';
+        }
+      } catch (error) {
+        tenantInfo = 'Tenant context unavailable';
+      }
+
+      // This would use tenant-specific Prisma client via TenantContextService
+      // For now, let's just return user info and JWT token contents
+      return {
+        success: true,
+        message: 'Super admin access test completed',
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            clientId: user.clientId,
+            stores: user.stores, // Should be ['*'] for super admin
+          },
+          tenantInfo,
+          canAccessAllStores:
+            user.role === 'super_admin' || user.stores?.includes('*'),
+          instructions: [
+            'Super admin should have stores: ["*"]',
+            'This allows access to any store ID in the tenant database',
+            'Try calling /stores endpoint to see all stores in tenant',
+            'Try calling /products/create with any storeId from tenant DB',
+          ],
+        },
+      };
+    } catch (error) {
+      console.error('Test super admin access error:', error);
+      throw new InternalServerErrorException(
+        'Failed to test super admin access: ' + error.message,
+      );
+    }
   }
 }

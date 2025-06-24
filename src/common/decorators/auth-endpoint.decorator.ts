@@ -337,7 +337,5 @@ export const AuthEndpoint = {
       ApiBearerAuth('JWT-auth'),
       Version('1'),
       UseGuards(JwtAuthGuard),
-    ),  
+    ),
 };
-
-

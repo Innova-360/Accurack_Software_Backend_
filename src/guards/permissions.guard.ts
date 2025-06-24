@@ -109,8 +109,7 @@ export class PermissionsGuard implements CanActivate {
         `Permission check failed: ${error.message || 'Unknown error'}`,
       );
     }
-  }
-  private extractStoreId(request: any): string | undefined {
+  }  private extractStoreId(request: any): string | undefined {
     const user = request.user;
 
     // First, try to get storeId from request (for specific store operations)
@@ -123,11 +122,19 @@ export class PermissionsGuard implements CanActivate {
 
     // If a specific storeId is requested, validate user has access to it
     if (requestedStoreId) {
+      // Super admins have access to all stores (stores array contains ['*'])
+      if (user?.role === 'super_admin' || user?.stores?.includes('*')) {
+        return requestedStoreId;
+      }
+
+      // For other roles, check if they have access to the specific store
       if (user?.stores?.includes(requestedStoreId)) {
         return requestedStoreId;
       } else {
         // User doesn't have access to the requested store
-        throw new ForbiddenException(`No access to store: ${requestedStoreId}`);
+        throw new ForbiddenException(
+          `Access denied to store: ${requestedStoreId}. User ${user?.email} (${user?.role}) has access to stores: [${user?.stores?.join(', ')}]`
+        );
       }
     }
 
@@ -135,12 +142,19 @@ export class PermissionsGuard implements CanActivate {
     // return undefined so permission checks can work across all user's stores
     // The service layer will handle filtering based on user's accessible stores
     return undefined;
-  }
-  private async checkPermission(
+  }private async checkPermission(
     user: any,
     storeId: string | undefined,
     permission: PermissionRequirement,
   ): Promise<boolean> {
+    // Super admin role bypass - they have access to everything
+    if (user.role === 'super_admin') {
+      this.logger.debug(
+        `Permission granted: User ${user.id} is super_admin - bypassing permission checks`,
+      );
+      return true;
+    }
+
     // If storeId is specified, check permission for that specific store
     if (storeId) {
       const hasPermission = await this.permissionsService.hasPermission(
@@ -159,7 +173,30 @@ export class PermissionsGuard implements CanActivate {
         );
       }
       return true;
-    } // If no specific storeId, check if user has permission in any of their accessible stores
+    }
+
+    // Check for global permissions first (no storeId)
+    try {
+      const hasGlobalPermission = await this.permissionsService.hasPermission(
+        user.id,
+        permission.resource,
+        permission.action,
+        undefined, // Global permission
+      );
+
+      if (hasGlobalPermission) {
+        this.logger.debug(
+          `Permission granted: User ${user.id} has global ${permission.resource}.${permission.action} permission`,
+        );
+        return true;
+      }
+    } catch (error) {
+      this.logger.debug(
+        `Global permission check failed for user ${user.id}: ${error.message}`,
+      );
+    }
+
+    // If no global permission and user has stores, check permission in their accessible stores
     if (user.stores && user.stores.length > 0) {
       this.logger.debug(
         `Checking ${permission.resource}.${permission.action} permission across ${user.stores.length} stores for user ${user.id}: [${user.stores.join(', ')}]`,
@@ -194,24 +231,13 @@ export class PermissionsGuard implements CanActivate {
       }
     }
 
-    // Check for global permissions (no storeId)
-    const hasGlobalPermission = await this.permissionsService.hasPermission(
-      user.id,
-      permission.resource,
-      permission.action,
-      undefined,
+    // If we reach here, user has no permission
+    this.logger.warn(
+      `Permission denied: User ${user.id} does not have ${permission.resource}.${permission.action} permission globally or in any accessible store`,
     );
-
-    if (!hasGlobalPermission) {
-      this.logger.warn(
-        `Permission denied: User ${user.id} does not have ${permission.resource}.${permission.action} permission in any accessible store or globally`,
-      );
-      throw new ForbiddenException(
-        `Insufficient permissions: ${permission.resource}.${permission.action}`,
-      );
-    }
-
-    return true;
+    throw new ForbiddenException(
+      `Insufficient permissions: ${permission.resource}.${permission.action}`,
+    );
   }
   private async checkAnyPermission(
     user: any,

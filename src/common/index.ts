@@ -13,6 +13,8 @@ export * from './decorators/api-responses.decorator';
 export * from './decorators/auth-endpoint.decorator';
 export * from './decorators/permission-endpoint.decorator';
 export * from './decorators/store-endpoint.decorator';
+export * from './decorators/tenant-endpoint.decorator';
+export * from './decorators/use-master-db.decorator';
 
 // Filters
 export * from './filters/global-exception.filter';

@@ -2,14 +2,19 @@ import {
   Injectable,
   BadRequestException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
-import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
+import { TenantContextService } from '../tenant/tenant-context.service';
+import { MultiTenantService } from '../database/multi-tenant.service';
 import { CreateStoreDto, UpdateStoreDto } from './dto/dto.store';
 import { Role, Status } from '@prisma/client';
 
 @Injectable()
 export class StoreService {
-  constructor(private readonly prisma: PrismaClientService) {}
+  constructor(
+    private readonly tenantContext: TenantContextService,
+    private readonly multiTenantService: MultiTenantService,
+  ) {}
 
   async createStore(user: any, dto: CreateStoreDto) {
     // Only super_admin and admin can create stores
@@ -27,8 +32,17 @@ export class StoreService {
     } = dto;
 
     try {
+      // Get the tenant-specific Prisma client
+      const prisma = await this.tenantContext.getPrismaClient();
+
+      // Validate that client record exists in tenant database
+      await this.validateClientExists(user.clientId);
+
+      // Validate that user record exists in tenant database
+      await this.validateUserExists(user.clientId, user.id);
+
       // Create store and store settings in a transaction
-      const result = await this.prisma.$transaction(async (prisma) => {
+      const result = await prisma.$transaction(async (prisma) => {
         // Create the store
         const store = await prisma.stores.create({
           data: {
@@ -96,18 +110,29 @@ export class StoreService {
 
   async getStores(user: any) {
     try {
-      const stores = await this.prisma.stores.findMany({
+      // Get the tenant-specific Prisma client
+      const prisma = await this.tenantContext.getPrismaClient();
+
+      const stores = await prisma.stores.findMany({
         where: {
           ...(user.role === Role.super_admin
-            ? {}
+            ? {} // Super admin sees ALL stores in tenant
             : user.role === Role.employee
-              ? {}
-              : { clientId: user.clientId }),
-          users: {
-            some: {
-              userId: user.id,
-            },
-          },
+              ? {
+                  users: {
+                    some: {
+                      userId: user.id,
+                    },
+                  },
+                }
+              : { 
+                  clientId: user.clientId,
+                  users: {
+                    some: {
+                      userId: user.id,
+                    },
+                  },
+                }),
         },
         select: {
           id: true,
@@ -142,7 +167,10 @@ export class StoreService {
 
   async findStoreById(user: any, storeId: string) {
     try {
-      const store = await this.prisma.stores.findFirst({
+      // Get the tenant-specific Prisma client
+      const prisma = await this.tenantContext.getPrismaClient();
+
+      const store = await prisma.stores.findFirst({
         where: {
           id: storeId,
           ...(user.role === Role.super_admin
@@ -185,6 +213,60 @@ export class StoreService {
       throw new BadRequestException(
         'Failed to retrieve store: ' + error.message,
       );
+    }
+  }
+
+  /**
+   * Validate that client record exists in tenant database
+   */
+  private async validateClientExists(clientId: string): Promise<void> {
+    try {
+      const tenantInfo = this.tenantContext.getTenantInfo();
+      
+      if (!tenantInfo.clientId) {
+        throw new BadRequestException('No client ID found in request context');
+      }
+
+      // Check if client exists in tenant database
+      const exists = await this.multiTenantService.validateClientExists(tenantInfo.clientId, clientId);
+      
+      if (!exists) {
+        throw new NotFoundException(
+          `Client record not found in tenant database. Please contact support to fix this issue.`
+        );
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('Failed to validate client record');
+    }
+  }
+
+  /**
+   * Validate that user record exists in tenant database
+   */
+  private async validateUserExists(clientId: string, userId: string): Promise<void> {
+    try {
+      const tenantInfo = this.tenantContext.getTenantInfo();
+      
+      if (!tenantInfo.clientId) {
+        throw new BadRequestException('No client ID found in request context');
+      }
+
+      // Check if user exists in tenant database
+      const exists = await this.multiTenantService.validateUserExists(tenantInfo.clientId, userId);
+      
+      if (!exists) {
+        throw new NotFoundException(
+          `User record not found in tenant database. Please contact support to fix this issue.`
+        );
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('Failed to validate user record');
     }
   }
 }

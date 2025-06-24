@@ -40,17 +40,19 @@ enum Tier {
 }
 
 model Clients {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  phone     String?
-  address   String?
-  databaseUrl String
-  tier      Tier
-  dataSizeMB  String?
-  status    Status   @default(active)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  phone        String?
+  address      String?
+  contactName  String?
+  databaseUrl  String?
+  databaseName String?
+  tier         Tier
+  dataSizeMB   String?
+  status       Status   @default(active)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   users    Users[]
   stores   Stores[]
