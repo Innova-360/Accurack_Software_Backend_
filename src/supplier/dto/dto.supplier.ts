@@ -2,11 +2,6 @@ import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
 import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID } from "class-validator";
 
 export class CreateSupplierDto {
-  @ApiProperty({ description: 'Unique supplier identifier', example: 'SUP-001' })
-  @IsString()
-  @IsNotEmpty()
-  supplier_id: string;
-
   @ApiProperty({ description: 'Supplier name', example: 'ABC Suppliers Ltd' })
   @IsString()
   @IsNotEmpty()
@@ -51,9 +46,6 @@ export class UpdateSupplierDto extends PartialType(CreateSupplierDto) {}
 export class SupplierResponseDto {
   @ApiProperty({ description: 'Supplier ID', example: 'uuid-supplier-id' })
   id: string;
-
-  @ApiProperty({ description: 'Unique supplier identifier', example: 'SUP-001' })
-  supplier_id: string;
 
   @ApiProperty({ description: 'Supplier name', example: 'ABC Suppliers Ltd' })
   name: string;

@@ -15,6 +15,7 @@ export class SupplierService {
     private readonly prisma: PrismaClientService, // Keep for fallback/master DB operations
     private readonly tenantContext: TenantContextService, // Add tenant context
   ) {}
+  
   async createSupplier(user: any, createSupplierDto: CreateSupplierDto) {
     // Check permissions - only super_admin, admin, and manager can create suppliers
     if (![Role.super_admin, Role.admin, Role.manager].includes(user.role)) {
@@ -32,7 +33,6 @@ export class SupplierService {
 
       const supplier = await prisma.suppliers.create({
         data: {
-          supplier_id: createSupplierDto.supplier_id,
           name: createSupplierDto.name,
           email: createSupplierDto.email,
           phone: createSupplierDto.phone,
@@ -42,7 +42,6 @@ export class SupplierService {
         },
         select: {
           id: true,
-          supplier_id: true,
           name: true,
           email: true,
           phone: true,
@@ -133,7 +132,6 @@ export class SupplierService {
           where: whereClause,
           select: {
             id: true,
-            supplier_id: true,
             name: true,
             email: true,
             phone: true,
@@ -204,7 +202,6 @@ export class SupplierService {
         where: whereClause,
         select: {
           id: true,
-          supplier_id: true,
           name: true,
           email: true,
           phone: true,
@@ -245,7 +242,7 @@ export class SupplierService {
       const prisma = await this.tenantContext.getPrismaClient();
 
       let whereClause: any = {
-        supplier_id: supplierId,
+        id: supplierId, // Use 'id' instead of 'supplier_id' since that field doesn't exist
         status: Status.active,
       };
 
@@ -260,7 +257,6 @@ export class SupplierService {
         where: whereClause,
         select: {
           id: true,
-          supplier_id: true,
           name: true,
           email: true,
           phone: true,
@@ -328,7 +324,9 @@ export class SupplierService {
 
       if (!existingSupplier) {
         throw new NotFoundException('Supplier not found');
-      } // If storeId is being updated, validate the new store
+      } 
+
+      // If storeId is being updated, validate the new store
       if (
         updateSupplierDto.storeId &&
         updateSupplierDto.storeId !== existingSupplier.storeId
@@ -339,9 +337,6 @@ export class SupplierService {
       const updatedSupplier = await prisma.suppliers.update({
         where: { id: supplierId },
         data: {
-          ...(updateSupplierDto.supplier_id && {
-            supplier_id: updateSupplierDto.supplier_id,
-          }),
           ...(updateSupplierDto.name && { name: updateSupplierDto.name }),
           ...(updateSupplierDto.email !== undefined && {
             email: updateSupplierDto.email,
@@ -356,7 +351,6 @@ export class SupplierService {
         },
         select: {
           id: true,
-          supplier_id: true,
           name: true,
           email: true,
           phone: true,
@@ -469,6 +463,7 @@ export class SupplierService {
       );
     }
   }
+  
   private async validateStoreAccess(user: any, storeId: string): Promise<any> {
     if (!storeId) {
       throw new BadRequestException('Store ID is required');
