@@ -16,6 +16,12 @@ CREATE TYPE "Tier" AS ENUM ('free', 'basic', 'premium');
 -- CreateEnum
 CREATE TYPE "SupplierState" AS ENUM ('primary', 'secondary');
 
+-- CreateEnum
+CREATE TYPE "AdjustmentType" AS ENUM ('DAMAGE', 'REFUND', 'RETURN', 'EXCHANGE');
+
+-- CreateEnum
+CREATE TYPE "DamageSubCategory" AS ENUM ('SCRAP', 'RESELLABLE', 'NON_SELLABLE');
+
 -- CreateTable
 CREATE TABLE "Clients" (
     "id" TEXT NOT NULL,
@@ -73,6 +79,42 @@ CREATE TABLE "Stores" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Stores_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SaleAdjustment" (
+    "id" TEXT NOT NULL,
+    "saleId" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "adjustmentType" "AdjustmentType" NOT NULL,
+    "damageSubCategory" "DamageSubCategory",
+    "quantity" INTEGER NOT NULL,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "addToRevenue" BOOLEAN,
+    "addToInventory" BOOLEAN,
+    "replacementProductId" TEXT,
+    "reason" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "SaleAdjustment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Sales" (
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "quantity" INTEGER NOT NULL,
+    "price" DOUBLE PRECISION NOT NULL,
+    "total" DOUBLE PRECISION NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "fileUploadSalesId" TEXT,
+
+    CONSTRAINT "Sales_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -229,22 +271,6 @@ CREATE TABLE "Suppliers" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Suppliers_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "Sales" (
-    "id" TEXT NOT NULL,
-    "productId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "storeId" TEXT NOT NULL,
-    "quantity" INTEGER NOT NULL,
-    "price" DOUBLE PRECISION NOT NULL,
-    "total" DOUBLE PRECISION NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-    "fileUploadSalesId" TEXT,
-
-    CONSTRAINT "Sales_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -440,6 +466,33 @@ ALTER TABLE "Users" ADD CONSTRAINT "Users_clientId_fkey" FOREIGN KEY ("clientId"
 ALTER TABLE "Stores" ADD CONSTRAINT "Stores_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "SaleAdjustment" ADD CONSTRAINT "SaleAdjustment_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sales"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SaleAdjustment" ADD CONSTRAINT "SaleAdjustment_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SaleAdjustment" ADD CONSTRAINT "SaleAdjustment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SaleAdjustment" ADD CONSTRAINT "SaleAdjustment_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SaleAdjustment" ADD CONSTRAINT "SaleAdjustment_replacementProductId_fkey" FOREIGN KEY ("replacementProductId") REFERENCES "Products"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Sales" ADD CONSTRAINT "Sales_fileUploadSalesId_fkey" FOREIGN KEY ("fileUploadSalesId") REFERENCES "FileUploadSales"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Sales" ADD CONSTRAINT "Sales_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Sales" ADD CONSTRAINT "Sales_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Sales" ADD CONSTRAINT "Sales_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "StoreSettings" ADD CONSTRAINT "StoreSettings_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -489,18 +542,6 @@ ALTER TABLE "PasswordResetTokens" ADD CONSTRAINT "PasswordResetTokens_userId_fke
 
 -- AddForeignKey
 ALTER TABLE "Suppliers" ADD CONSTRAINT "Suppliers_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Sales" ADD CONSTRAINT "Sales_fileUploadSalesId_fkey" FOREIGN KEY ("fileUploadSalesId") REFERENCES "FileUploadSales"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Sales" ADD CONSTRAINT "Sales_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Sales" ADD CONSTRAINT "Sales_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Sales" ADD CONSTRAINT "Sales_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "PurchaseOrders" ADD CONSTRAINT "PurchaseOrders_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

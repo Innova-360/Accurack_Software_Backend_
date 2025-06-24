@@ -44,6 +44,19 @@ enum SupplierState {
   secondary
 }
 
+enum AdjustmentType {
+  DAMAGE
+  REFUND
+  RETURN
+  EXCHANGE
+}
+
+enum DamageSubCategory {
+  SCRAP
+  RESELLABLE
+  NON_SELLABLE
+}
+
 model Clients {
   id           String   @id @default(uuid())
   name         String
@@ -81,7 +94,6 @@ model Users {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  // Employee fields (previously in Employee model)
   employeeCode String?  @unique
   position     String?
   department   String?
@@ -90,23 +102,19 @@ model Users {
   client         Clients           @relation(fields: [clientId], references: [id])
   stores         UserStoreMap[]
   inviteLinks    InviteLinks[]
-  
-  // New permission system relations
-  permissions        Permission[]   @relation("UserPermissions")
-  grantedPermissions Permission[]   @relation("PermissionGrantedBy")
+  permissions    Permission[]      @relation("UserPermissions")
+  grantedPermissions Permission[]  @relation("PermissionGrantedBy")
   createdRoleTemplates RoleTemplate[] @relation("CreatedRoleTemplates")
-  userRoles          UserRole[]
-  assignedUserRoles  UserRole[]     @relation("AssignedUserRoles")
-  
-  // Business operations (previously linked to Employee model)
+  userRoles      UserRole[]
+  assignedUserRoles UserRole[]     @relation("AssignedUserRoles")
   sales          Sales[]
   purchaseOrders PurchaseOrders[]
   expenses       Expenses[]
-  
   notifications  Notifications[]
   auditLogs      AuditLogs[]
   apiTokens      ApiTokens[]
   passwordResetTokens PasswordResetTokens[]
+  saleAdjustments SaleAdjustment[]
 }
 
 model Stores {
@@ -132,8 +140,51 @@ model Stores {
   reports         Reports[]
   FileUploadInventory FileUploadInventory[]
   FileUploadSales     FileUploadSales[]
+  saleAdjustments SaleAdjustment[]
 }
 
+model SaleAdjustment {
+  id                String           @id @default(uuid())
+  saleId            String
+  productId         String
+  userId            String
+  storeId           String
+  adjustmentType    AdjustmentType
+  damageSubCategory DamageSubCategory? // Only for DAMAGE type
+  quantity          Int
+  amount            Float            // Amount affected (e.g., refund amount, damage cost)
+  addToRevenue      Boolean?         // For REFUND: whether to add to revenue
+  addToInventory    Boolean?         // For RETURN: whether to add to inventory
+  replacementProductId String?       // For EXCHANGE: ID of replacement product
+  reason            String?          // Optional reason for adjustment  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  sale              Sales            @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product           Products         @relation("ProductAdjustments", fields: [productId], references: [id])
+  user              Users            @relation(fields: [userId], references: [id])
+  store             Stores           @relation(fields: [storeId], references: [id])
+  replacementProduct Products?       @relation("ReplacementProduct", fields: [replacementProductId], references: [id])
+}
+
+model Sales {
+  id          String   @id @default(uuid())
+  productId   String
+  userId      String
+  storeId     String
+  quantity    Int
+  price       Float
+  total       Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  fileUploadSalesId String?
+  FileUploadSales   FileUploadSales? @relation(fields: [fileUploadSalesId], references: [id])
+  product     Products  @relation(fields: [productId], references: [id])
+  user        Users     @relation(fields: [userId], references: [id])
+  store       Stores    @relation(fields: [storeId], references: [id])
+  saleAdjustments SaleAdjustment[]
+}
+
+// Other models (StoreSettings, UserStoreMap, InviteLinks, etc.) remain unchanged
 model StoreSettings {
   id                String   @id @default(uuid())
   storeId          String   @unique
@@ -175,23 +226,21 @@ model InviteLinks {
   user      Users    @relation(fields: [userId], references: [id])
 }
 
-
 model Permission {
   id            String   @id @default(cuid())
   userId        String
-  storeId       String?  // null = global permission
-  resource      String   // 'inventory', 'product', 'store', etc.
-  actions       String[] // Array of action strings (e.g., ['create', 'read', 'update'])
-  resourceId    String?  // Specific resource ID (optional)
+  storeId       String?
+  resource      String
+  actions       String[]
+  resourceId    String?
   granted       Boolean  @default(true)
   grantedBy     String
   grantedAt     DateTime @default(now())
-  expiresAt     DateTime? // Optional permission expiration
-  conditions    Json?    // Additional conditions
+  expiresAt     DateTime?
+  conditions    Json?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  // Relations
   user          Users    @relation("UserPermissions", fields: [userId], references: [id], onDelete: Cascade)
   store         Stores?  @relation(fields: [storeId], references: [id], onDelete: Cascade)
   grantedByUser Users    @relation("PermissionGrantedBy", fields: [grantedBy], references: [id])
@@ -206,16 +255,15 @@ model RoleTemplate {
   id          String   @id @default(cuid())
   name        String   @unique
   description String?
-  permissions Json     // Array of permission objects
-  inheritsFrom String? // Parent role template ID
-  isDefault   Boolean  @default(false) // Default role for new users
+  permissions Json
+  inheritsFrom String?
+  isDefault   Boolean  @default(false)
   isActive    Boolean  @default(true)
-  priority    Int      @default(0) // For permission conflict resolution
+  priority    Int      @default(0)
   createdBy   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
   creator     Users        @relation("CreatedRoleTemplates", fields: [createdBy], references: [id])
   parent      RoleTemplate? @relation("RoleInheritance", fields: [inheritsFrom], references: [id])
   children    RoleTemplate[] @relation("RoleInheritance")
@@ -228,13 +276,12 @@ model UserRole {
   id             String       @id @default(cuid())
   userId         String
   roleTemplateId String
-  storeId        String?      // Store-specific role assignment
+  storeId        String?
   assignedBy     String
   assignedAt     DateTime     @default(now())
   isActive       Boolean      @default(true)
   createdAt      DateTime     @default(now())
 
-  // Relations
   user         Users        @relation(fields: [userId], references: [id], onDelete: Cascade)
   roleTemplate RoleTemplate @relation(fields: [roleTemplateId], references: [id], onDelete: Cascade)
   assignedByUser Users      @relation("AssignedUserRoles", fields: [assignedBy], references: [id])
@@ -242,8 +289,6 @@ model UserRole {
   @@unique([userId, roleTemplateId, storeId])
   @@map("user_roles")
 }
-
-
 
 model Notifications {
   id        String   @id @default(uuid())
@@ -303,25 +348,8 @@ model Suppliers {
   updatedAt   DateTime        @updatedAt
 
   store       Stores          @relation(fields: [storeId], references: [id])
-  productSuppliers ProductSupplier[] // Updated relation
+  productSuppliers ProductSupplier[]
   purchaseOrders  PurchaseOrders[]
-}
-model Sales {
-  id          String   @id @default(uuid())
-  productId   String
-  userId      String
-  storeId     String
-  quantity    Int
-  price       Float
-  total       Float
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  fileUploadSalesId String?
-  FileUploadSales   FileUploadSales? @relation(fields: [fileUploadSalesId], references: [id])
-  product     Products  @relation(fields: [productId], references: [id])
-  user        Users     @relation(fields: [userId], references: [id])
-  store       Stores    @relation(fields: [storeId], references: [id])
 }
 
 model PurchaseOrders {
@@ -374,7 +402,7 @@ model ProductSupplier {
   supplierId  String
   costPrice   Float
   category    String
-  state       SupplierState @default(secondary) // First supplier will be set to primary in application logic
+  state       SupplierState @default(secondary)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -406,11 +434,13 @@ model Products {
   updatedAt             DateTime  @updatedAt
   fileUploadId          String?   
   client                Clients   @relation(fields: [clientId], references: [id])
-  store                 Stores    @relation(fields: [storeId], references: [id])
-  productSuppliers      ProductSupplier[] // New relation
+  store                 Stores    @relation(fields: [storeId], references: [id])  
+  productSuppliers      ProductSupplier[]
   sales                 Sales[]
   fileUpload            FileUploadInventory? @relation(fields: [fileUploadId], references: [id])
   purchaseOrders        PurchaseOrders[]
+  saleAdjustments       SaleAdjustment[]  @relation("ProductAdjustments")
+  replacementAdjustments SaleAdjustment[] @relation("ReplacementProduct")
 }
 
 model Pack {
@@ -432,7 +462,7 @@ model FileUploadInventory {
   fileName   String
   uploadedAt DateTime    @default(now())
   storeId    String?
-  status     String      @default("pending") // pending, processing, completed, failed
+  status     String      @default("pending")
   error      String?
   products   Products[]
   store      Stores?     @relation(fields: [storeId], references: [id])
@@ -447,7 +477,6 @@ model ErrorLog {
   createdAt    DateTime  @default(now())
   fileUpload   FileUploadInventory @relation(fields: [fileUploadId], references: [id])
 }
-
 
 model FileUploadSales {
   id         String   @id @default(cuid())
