@@ -63,19 +63,19 @@ export class PermissionsService {
           where: { name: template.name },
         });
 
-        if (!existing) {
-          await this.prisma.roleTemplate.create({
-            data: {
-              name: template.name,
-              description: template.description,
-              permissions: template.permissions,
-              isDefault: template.isDefault,
-              priority: template.priority,
-              createdBy: createdByUserId,
-            },
-          });
-          this.logger.log(`Created default role template: ${template.name}`);
-        }
+        // if (!existing) {
+        //   await this.prisma.roleTemplate.create({
+        //     data: {
+        //       name: template.name,
+        //       description: template.description,
+        //       permissions: template.permissions,
+        //       isDefault: template.isDefault,
+        //       priority: template.priority,
+        //       createdBy: createdByUserId,
+        //     },
+        //   });
+        //   this.logger.log(`Created default role template: ${template.name}`);
+        // }
       }
     } catch (error) {
       this.logger.error('Failed to initialize default roles:', error);
