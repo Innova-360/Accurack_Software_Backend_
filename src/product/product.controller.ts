@@ -8,23 +8,31 @@ import {
   Body,
   Req,
   Param,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipeBuilder,
+  HttpStatus,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags,ApiConsumes, ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ProductService } from './product.service';
+import { BaseProductController } from '../common/controllers/base-product.controller';
+import { ProductEndpoint } from '../common/decorators/product-endpoint.decorator';
+import { ResponseService } from '../common/services/response.service';
+import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import {
   CreateProductDto,
   UpdateProductDto,
   ProductResponseDto,
 } from './dto/product.dto';
-import { BaseProductController } from '../common/controllers/base-product.controller';
-import { ProductEndpoint } from '../common/decorators/product-endpoint.decorator';
-import { ResponseService } from '../common/services/response.service';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+
 import { PermissionsGuard } from '../guards/permissions.guard';
 
+
 @ApiTags('Products')
-@Controller({ path: 'products', version: '1' })
+@Controller({ path: 'product', version: '1' })
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ProductController extends BaseProductController {
   constructor(
@@ -34,19 +42,18 @@ export class ProductController extends BaseProductController {
     super(responseService);
   }
 
-  @ProductEndpoint.CreateProduct(CreateProductDto)
   @Post('create')
+  @ProductEndpoint.CreateProduct(CreateProductDto)
   async createProduct(@Req() req, @Body() createProductDto: CreateProductDto) {
     const user = req.user;
     return this.handleProductOperation(
       () => this.productService.createProduct(user, createProductDto),
       'Product created successfully',
-      201,
     );
   }
 
-  @ProductEndpoint.GetProducts()
   @Get('list')
+  @ProductEndpoint.GetProducts()
   async getProducts(
     @Req() req,
     @Query('storeId') storeId?: string,
@@ -54,8 +61,8 @@ export class ProductController extends BaseProductController {
     @Query('limit') limit: number = 10,
   ) {
     const user = req.user;
-    return this.handleGetProducts(
-      () => this.productService.getProducts(user, storeId || '', page, limit),
+    return this.handleProductOperation(
+      () => this.productService.getProducts(user, storeId, page, limit),
       'Products retrieved successfully',
     );
   }
@@ -91,6 +98,65 @@ export class ProductController extends BaseProductController {
     return this.handleProductOperation(
       () => this.productService.deleteProduct(user, id),
       'Product deleted successfully',
+    );
+  }
+
+  @Post('uploadsheet')  @ApiOperation({
+    summary: 'Upload inventory from Excel or CSV file',
+    description: 'Upload products inventory data from an Excel file (.xlsx, .xls) or CSV file (.csv)',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Excel (.xlsx, .xls) or CSV (.csv) file containing inventory data',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Inventory uploaded successfully' })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Invalid file format or data' })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'File already uploaded' })  @UseInterceptors(FileInterceptor('file'))
+  async uploadInventory(
+    @Req() req,
+    @UploadedFile()
+    file: Express.Multer.File,
+    @Query('storeId') storeId?: string,
+  ) {
+    // Custom validation for file types
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    const allowedMimeTypes = [
+      'text/csv',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel'
+    ];
+    
+    const allowedExtensions = /\.(xlsx|xls|csv)$/i;
+    const isValidMimeType = allowedMimeTypes.includes(file.mimetype);
+    const isValidExtension = allowedExtensions.test(file.originalname);
+
+    if (!isValidMimeType && !isValidExtension) {
+      throw new BadRequestException(
+        `Invalid file type. Expected Excel (.xlsx, .xls) or CSV (.csv) file. Received: ${file.mimetype}`
+      );
+    }
+
+    // Validate file size (10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size exceeds 10MB limit');
+    }
+
+    return this.handleProductOperation(
+      () => this.productService.addInventory(req.user, file, storeId ?? ''),
+      'Inventory uploaded successfully',
     );
   }
 }

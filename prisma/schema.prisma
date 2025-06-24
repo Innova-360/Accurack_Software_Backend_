@@ -39,6 +39,11 @@ enum Tier {
   premium
 }
 
+enum SupplierState {
+  primary
+  secondary
+}
+
 model Clients {
   id        String   @id @default(uuid())
   name      String
@@ -123,6 +128,8 @@ model Stores {
   purchaseOrders  PurchaseOrders[]
   expenses        Expenses[]
   reports         Reports[]
+  FileUploadInventory FileUploadInventory[]
+  FileUploadSales     FileUploadSales[]
 }
 
 model StoreSettings {
@@ -282,68 +289,21 @@ model PasswordResetTokens {
   user      Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model Products {
-  id                    String    @id @default(uuid())
-  name                  String
-  category              String
-  ean                   String?
-  pluUpc                String    @unique
-  supplierId            String
-  sku                   String    @unique
-  singleItemCostPrice   Float
-  itemQuantity          Int
-  msrpPrice             Float
-  singleItemSellingPrice Float
-  clientId              String
-  storeId               String
-  discountAmount        Float
-  percentDiscount       Float
-  hasVariants           Boolean   @default(false)
-  packIds               String[]  @default([]) // Stores pack IDs when hasVariants is false
-  packs                 Pack[]
-  variants              Json[]    // Variants store their own packIds when hasVariants is true
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  
-  client                Clients     @relation(fields: [clientId], references: [id])
-  store                 Stores      @relation(fields: [storeId], references: [id])
-  supplier              Suppliers?  @relation(fields: [supplierId], references: [id])
-  sales                 Sales[]
-  purchaseOrders        PurchaseOrders[]
-}
-
-model Pack {
-  id                    String    @id @default(uuid())
-  productId             String
-  minimumSellingQuantity Int
-  totalPacksQuantity    Int
-  orderedPacksPrice     Float
-  discountAmount        Float
-  percentDiscount       Float
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  product               Products   @relation(fields: [productId], references: [id])
-}
-
-
-
 model Suppliers {
-  id          String   @id @default(uuid())
-  supplier_id String   @unique
+  id          String          @id @default(uuid())
   name        String
   email       String?
   phone       String
   address     String?
   storeId     String
-  status      Status   @default(active)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status      Status          @default(active)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
-  store       Stores           @relation(fields: [storeId], references: [id])
-  products    Products[]
-  purchaseOrders PurchaseOrders[]
+  store       Stores          @relation(fields: [storeId], references: [id])
+  productSuppliers ProductSupplier[] // Updated relation
+  purchaseOrders  PurchaseOrders[]
 }
-
 model Sales {
   id          String   @id @default(uuid())
   productId   String
@@ -354,7 +314,9 @@ model Sales {
   total       Float
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
+  
+  fileUploadSalesId String?
+  FileUploadSales   FileUploadSales? @relation(fields: [fileUploadSalesId], references: [id])
   product     Products  @relation(fields: [productId], references: [id])
   user        Users     @relation(fields: [userId], references: [id])
   store       Stores    @relation(fields: [storeId], references: [id])
@@ -402,4 +364,95 @@ model Reports {
   updatedAt   DateTime @updatedAt
 
   store       Stores    @relation(fields: [storeId], references: [id])
+}
+
+model ProductSupplier {
+  id          String        @id @default(uuid())
+  productId   String
+  supplierId  String
+  costPrice   Float
+  category    String
+  state       SupplierState @default(secondary) // First supplier will be set to primary in application logic
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  product     Products?      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier    Suppliers?     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, supplierId])
+}
+
+model Products {
+  id                    String    @id @default(uuid())
+  name                  String
+  category              String
+  ean                   String?
+  pluUpc                String?   @unique
+  sku                   String?
+  itemQuantity          Int
+  msrpPrice             Float
+  singleItemSellingPrice Float
+  clientId              String
+  storeId               String
+  discountAmount        Float
+  percentDiscount       Float
+  hasVariants           Boolean   @default(false)
+  packIds               String[]  @default([])
+  packs                 Pack[]
+  variants              Json[]    
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  fileUploadId          String?   
+  client                Clients   @relation(fields: [clientId], references: [id])
+  store                 Stores    @relation(fields: [storeId], references: [id])
+  productSuppliers      ProductSupplier[] // New relation
+  sales                 Sales[]
+  fileUpload            FileUploadInventory? @relation(fields: [fileUploadId], references: [id])
+  purchaseOrders        PurchaseOrders[]
+}
+
+model Pack {
+  id                    String    @id @default(uuid())
+  productId             String
+  minimumSellingQuantity Int
+  totalPacksQuantity    Int
+  orderedPacksPrice     Float
+  discountAmount        Float
+  percentDiscount       Float
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  product               Products  @relation(fields: [productId], references: [id])
+}
+
+model FileUploadInventory {
+  id         String      @id @default(cuid())
+  fileHash   String      @unique
+  fileName   String
+  uploadedAt DateTime    @default(now())
+  storeId    String?
+  status     String      @default("pending") // pending, processing, completed, failed
+  error      String?
+  products   Products[]
+  store      Stores?     @relation(fields: [storeId], references: [id])
+  errorLogs  ErrorLog[]
+}
+
+model ErrorLog {
+  id           String    @id @default(cuid())
+  fileUploadId String
+  rowNumber    Int
+  error        String
+  createdAt    DateTime  @default(now())
+  fileUpload   FileUploadInventory @relation(fields: [fileUploadId], references: [id])
+}
+
+
+model FileUploadSales {
+  id         String   @id @default(cuid())
+  fileHash   String   @unique
+  fileName   String
+  uploadedAt DateTime @default(now())
+  storeId    String?
+  Store      Stores?   @relation(fields: [storeId], references: [id])
+  Sale       Sales[]
 }

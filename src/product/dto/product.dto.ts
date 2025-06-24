@@ -1,6 +1,29 @@
-import { IsArray, IsBoolean, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsNumber, IsOptional, IsString, ValidateNested, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+
+enum SupplierState {
+  primary = 'primary',
+  secondary = 'secondary',
+}
+
+class ProductSupplierDto {
+  @ApiProperty({ example: 'uuid-supplier-id', description: 'ID of the supplier' })
+  @IsString()
+  supplierId: string;
+
+  @ApiProperty({ example: 19.99, description: 'Cost price from this supplier' })
+  @IsNumber()
+  costPrice: number;
+
+  @ApiProperty({ example: 'Beverages', description: 'Category for this supplier relationship' })
+  @IsString()
+  category: string;
+
+  @ApiProperty({ example: 'primary', description: 'Supplier state (primary or secondary)', enum: SupplierState })
+  @IsEnum(SupplierState)
+  state: SupplierState;
+}
 
 
 class PackDto {
@@ -33,11 +56,10 @@ class VariantDto {
   @ApiProperty({ example: 27.99, description: 'Price of the variant' })
   @IsNumber()
   price: number;
-
-  @ApiProperty({ example: 'COFFEE-001-DR', description: 'SKU of the variant', required: false })
+  @ApiProperty({ example: 'UPC123456', description: 'PLU/UPC code of the variant', required: false })
   @IsString()
   @IsOptional()
-  plu?: string;
+  pluUpc?: string;
 
   @ApiProperty({
     type: [PackDto],
@@ -75,23 +97,30 @@ export class CreateProductDto {
   @ApiProperty({ example: '1234567890123', description: 'EAN code of the product', required: false })
   @IsString()
   @IsOptional()
-  ean?: string;
-
-  @ApiProperty({ example: 'UPC123456', description: 'PLU/UPC code of the product' })
+  ean?: string;  @ApiProperty({ example: 'UPC123456', description: 'PLU/UPC code of the product', required: false })
   @IsString()
-  pluUpc: string;
+  @IsOptional()
+  pluUpc?: string;
+  @ApiProperty({ 
+    type: [ProductSupplierDto],
+    example: [{ supplierId: 'uuid-supplier-id', costPrice: 19.99, category: 'Beverages', state: 'primary' }],
+    description: 'Array of suppliers for this product',
+    required: false
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductSupplierDto)
+  @IsOptional()
+  productSuppliers?: ProductSupplierDto[];
 
-  @ApiProperty({ example: 'uuid-supplier-id', description: 'ID of the supplier' })
+  @ApiProperty({ example: 'COFFEE-001', description: 'SKU of the product', required: false })
   @IsString()
-  supplierId: string;
-
-  @ApiProperty({ example: 'COFFEE-001', description: 'SKU of the product' })
-  @IsString()
-  sku: string;
-
-  @ApiProperty({ example: 19.99, description: 'Cost price per single item' })
+  @IsOptional()
+  sku?: string;
+  @ApiProperty({ example: 19.99, description: 'Cost price per single item (from primary supplier)' })
   @IsNumber()
-  singleItemCostPrice: number;
+  @IsOptional()
+  singleItemCostPrice?: number;
 
   @ApiProperty({ example: 100, description: 'Quantity of items in stock' })
   @IsNumber()
@@ -163,16 +192,22 @@ export class UpdateProductDto {
   @IsString()
   @IsOptional()
   ean?: string;
-
   @ApiProperty({ example: 'UPC123456', description: 'PLU/UPC code of the product', required: false })
   @IsString()
   @IsOptional()
   pluUpc?: string;
 
-  @ApiProperty({ example: 'uuid-supplier-id', description: 'ID of the supplier', required: false })
-  @IsString()
+  @ApiProperty({ 
+    type: [ProductSupplierDto],
+    example: [{ supplierId: 'uuid-supplier-id', costPrice: 22.99, category: 'Beverages', state: 'primary' }],
+    description: 'Array of suppliers for this product',
+    required: false
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductSupplierDto)
   @IsOptional()
-  supplierId?: string;
+  productSuppliers?: ProductSupplierDto[];
 
   @ApiProperty({ example: 'COFFEE-001-UPDATED', description: 'SKU of the product', required: false })
   @IsString()
@@ -259,19 +294,31 @@ export class ProductResponseDto {
   category: string;
 
   @ApiProperty({ example: '1234567890123', description: 'EAN code of the product', required: false })
-  ean?: string;
+  ean?: string;  @ApiProperty({ example: 'UPC123456', description: 'PLU/UPC code of the product', required: false })
+  pluUpc?: string;@ApiProperty({ 
+    type: [ProductSupplierDto],
+    example: [
+      {
+        supplierId: 'uuid-supplier-id',
+        costPrice: 19.99,
+        category: 'Beverages',
+        state: 'primary'
+      }
+    ],
+    description: 'Array of supplier relationships for this product',
+    required: false
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductSupplierDto)
+  @IsOptional()
+  productSuppliers?: ProductSupplierDto[];
 
-  @ApiProperty({ example: 'UPC123456', description: 'PLU/UPC code of the product' })
-  pluUpc: string;
+  @ApiProperty({ example: 'COFFEE-001', description: 'SKU of the product', required: false })
+  sku?: string;
 
-  @ApiProperty({ example: 'uuid-supplier-id', description: 'ID of the supplier' })
-  supplierId: string;
-
-  @ApiProperty({ example: 'COFFEE-001', description: 'SKU of the product' })
-  sku: string;
-
-  @ApiProperty({ example: 19.99, description: 'Cost price per single item' })
-  singleItemCostPrice: number;
+  @ApiProperty({ example: 19.99, description: 'Cost price per single item (from primary supplier)', required: false })
+  singleItemCostPrice?: number;
 
   @ApiProperty({ example: 100, description: 'Quantity of items in stock' })
   itemQuantity: number;
@@ -337,21 +384,8 @@ export class ProductResponseDto {
 
   @ApiProperty({ example: 6.0, description: 'Profit amount (selling price - cost price)', required: false })
   profitAmount?: number;
-
   @ApiProperty({ example: 30.02, description: 'Profit margin percentage', required: false })
   profitMargin?: number;
-
-  @ApiProperty({
-    example: {
-      id: 'uuid-supplier-id',
-      name: 'ABC Suppliers Ltd',
-      email: 'contact@abcsuppliers.com',
-      phone: '123-456-7890',
-    },
-    description: 'Supplier details',
-    required: false,
-  })
-  supplier?: any;
 
   @ApiProperty({
     example: {
