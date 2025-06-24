@@ -52,9 +52,9 @@ export function validateExcelRow(row: any, rowIndex: number): string[] {
   }
   if (!row.VendorPhone || typeof row.VendorPhone !== 'string') {
     errors.push(`Row ${rowIndex + 1}: VendorPhone is required and must be text`);
-  }
-  if (!row['PLU/UPC'] || typeof row['PLU/UPC'] !== 'string') {
-    errors.push(`Row ${rowIndex + 1}: PLU/UPC is required and must be text`);
+  }  // PLU/UPC is now optional - only validate format if provided
+  if (row['PLU/UPC'] && typeof row['PLU/UPC'] !== 'string') {
+    errors.push(`Row ${rowIndex + 1}: PLU/UPC must be text if provided`);
   }
   if (!row.SKU || typeof row.SKU !== 'string') {
     errors.push(`Row ${rowIndex + 1}: SKU is required and must be text`);

@@ -13,6 +13,9 @@ CREATE TYPE "TaxMode" AS ENUM ('inclusive', 'exclusive');
 -- CreateEnum
 CREATE TYPE "Tier" AS ENUM ('free', 'basic', 'premium');
 
+-- CreateEnum
+CREATE TYPE "SupplierState" AS ENUM ('primary', 'secondary');
+
 -- CreateTable
 CREATE TABLE "Clients" (
     "id" TEXT NOT NULL,
@@ -286,15 +289,27 @@ CREATE TABLE "Reports" (
 );
 
 -- CreateTable
+CREATE TABLE "ProductSupplier" (
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "supplierId" TEXT NOT NULL,
+    "costPrice" DOUBLE PRECISION NOT NULL,
+    "category" TEXT NOT NULL,
+    "state" "SupplierState" NOT NULL DEFAULT 'secondary',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ProductSupplier_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Products" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "category" TEXT NOT NULL,
     "ean" TEXT,
-    "pluUpc" TEXT NOT NULL,
-    "supplierId" TEXT NOT NULL,
-    "sku" TEXT NOT NULL,
-    "singleItemCostPrice" DOUBLE PRECISION NOT NULL,
+    "pluUpc" TEXT,
+    "sku" TEXT,
     "itemQuantity" INTEGER NOT NULL,
     "msrpPrice" DOUBLE PRECISION NOT NULL,
     "singleItemSellingPrice" DOUBLE PRECISION NOT NULL,
@@ -405,10 +420,10 @@ CREATE UNIQUE INDEX "ApiTokens_token_key" ON "ApiTokens"("token");
 CREATE UNIQUE INDEX "PasswordResetTokens_token_key" ON "PasswordResetTokens"("token");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Products_pluUpc_key" ON "Products"("pluUpc");
+CREATE UNIQUE INDEX "ProductSupplier_productId_supplierId_key" ON "ProductSupplier"("productId", "supplierId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Products_sku_key" ON "Products"("sku");
+CREATE UNIQUE INDEX "Products_pluUpc_key" ON "Products"("pluUpc");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "FileUploadInventory_fileHash_key" ON "FileUploadInventory"("fileHash");
@@ -507,13 +522,16 @@ ALTER TABLE "Expenses" ADD CONSTRAINT "Expenses_storeId_fkey" FOREIGN KEY ("stor
 ALTER TABLE "Reports" ADD CONSTRAINT "Reports_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ProductSupplier" ADD CONSTRAINT "ProductSupplier_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProductSupplier" ADD CONSTRAINT "ProductSupplier_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Suppliers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Products" ADD CONSTRAINT "Products_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Products" ADD CONSTRAINT "Products_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Products" ADD CONSTRAINT "Products_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Suppliers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Products" ADD CONSTRAINT "Products_fileUploadId_fkey" FOREIGN KEY ("fileUploadId") REFERENCES "FileUploadInventory"("id") ON DELETE SET NULL ON UPDATE CASCADE;

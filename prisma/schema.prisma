@@ -39,6 +39,11 @@ enum Tier {
   premium
 }
 
+enum SupplierState {
+  primary
+  secondary
+}
+
 model Clients {
   id        String   @id @default(uuid())
   name      String
@@ -285,21 +290,20 @@ model PasswordResetTokens {
 }
 
 model Suppliers {
-  id          String   @id @default(uuid())
+  id          String          @id @default(uuid())
   name        String
   email       String?
   phone       String
   address     String?
   storeId     String
-  status      Status   @default(active)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status      Status          @default(active)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
-  store       Stores           @relation(fields: [storeId], references: [id])
-  products    Products[]
-  purchaseOrders PurchaseOrders[]
+  store       Stores          @relation(fields: [storeId], references: [id])
+  productSuppliers ProductSupplier[] // Updated relation
+  purchaseOrders  PurchaseOrders[]
 }
-
 model Sales {
   id          String   @id @default(uuid())
   productId   String
@@ -362,17 +366,29 @@ model Reports {
   store       Stores    @relation(fields: [storeId], references: [id])
 }
 
+model ProductSupplier {
+  id          String        @id @default(uuid())
+  productId   String
+  supplierId  String
+  costPrice   Float
+  category    String
+  state       SupplierState @default(secondary) // First supplier will be set to primary in application logic
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
+  product     Products?      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier    Suppliers?     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, supplierId])
+}
 
 model Products {
   id                    String    @id @default(uuid())
   name                  String
   category              String
   ean                   String?
-  pluUpc                String    @unique
-  supplierId            String
-  sku                   String    @unique
-  singleItemCostPrice   Float
+  pluUpc                String?   @unique
+  sku                   String?
   itemQuantity          Int
   msrpPrice             Float
   singleItemSellingPrice Float
@@ -389,7 +405,7 @@ model Products {
   fileUploadId          String?   
   client                Clients   @relation(fields: [clientId], references: [id])
   store                 Stores    @relation(fields: [storeId], references: [id])
-  supplier              Suppliers? @relation(fields: [supplierId], references: [id])
+  productSuppliers      ProductSupplier[] // New relation
   sales                 Sales[]
   fileUpload            FileUploadInventory? @relation(fields: [fileUploadId], references: [id])
   purchaseOrders        PurchaseOrders[]
