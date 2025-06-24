@@ -16,6 +16,9 @@ import {
 } from '../utils/fileParser';
 import * as crypto from 'crypto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
+import { TenantContextService } from '../tenant/tenant-context.service';
+
+
 import { chunk } from 'lodash';
 
 interface UploadedFile {
@@ -35,7 +38,11 @@ interface FileUpload {
 
 @Injectable()
 export class ProductService {
-  constructor(private readonly prisma: PrismaClientService) {}
+  constructor(
+    private readonly prisma: PrismaClientService, // Keep for fallback/master DB operations
+    private readonly responseService: ResponseService,
+    private readonly tenantContext: TenantContextService, // Add tenant context
+  ) {}
 
   private validateProductOperationPermissions(
     user: any,
@@ -173,10 +180,11 @@ export class ProductService {
   ): Promise<ProductResponseDto> {
     this.validateProductOperationPermissions(user, 'create');
 
+          const prisma = await this.tenantContext.getPrismaClient();
     // Validate PLU uniqueness for non-variant products (only if PLU is provided)
     if (!createProductDto.hasVariants && createProductDto.pluUpc) {
       await this.validatePluUniqueness(async (plu: string) => {
-        const existing = await this.prisma.products.findFirst({
+        const existing = await prisma.products.findFirst({
           where: { pluUpc: plu },
         });
         return !!existing;
@@ -194,7 +202,7 @@ export class ProductService {
     }
 
     // Validate that client exists
-    const client = await this.prisma.clients.findUnique({
+    const client = await prisma.clients.findUnique({
       where: { id: createProductDto.clientId },
     });
     if (!client) {
@@ -202,7 +210,7 @@ export class ProductService {
     }
 
     // Validate that store exists and belongs to the client
-    const store = await this.prisma.stores.findUnique({
+    const store = await prisma.stores.findUnique({
       where: { id: createProductDto.storeId },
     });
     if (!store) {
@@ -300,7 +308,7 @@ export class ProductService {
         createData.pluUpc = createProductDto.pluUpc;
       }
 
-      product = await this.prisma.products.create({
+      product = await prisma.products.create({
         data: createData,
         include: {
           packs: true,
@@ -332,7 +340,7 @@ export class ProductService {
     ) {
       // Validate that all suppliers exist
       const supplierIds = createProductDto.productSuppliers.map(ps => ps.supplierId);
-      const existingSuppliers = await this.prisma.suppliers.findMany({
+      const existingSuppliers = await prisma.suppliers.findMany({
         where: {
           id: { in: supplierIds },
           storeId: createProductDto.storeId, // Ensure suppliers belong to the same store
@@ -350,7 +358,7 @@ export class ProductService {
 
       await Promise.all(
         createProductDto.productSuppliers.map((supplierData) =>
-          this.prisma.productSupplier.create({
+          prisma.productSupplier.create({
             data: {
               productId: product.id,
               supplierId: supplierData.supplierId,
@@ -375,7 +383,7 @@ export class ProductService {
           if (variant.packs && variant.packs.length > 0) {
             const createdPacks = await Promise.all(
               variant.packs.map((pack) =>
-                this.prisma.pack.create({
+                prisma.pack.create({
                   data: {
                     productId: product.id, // Use valid productId
                     minimumSellingQuantity: pack.minimumSellingQuantity,
@@ -399,7 +407,7 @@ export class ProductService {
       );
 
       // Update product with variants
-      await this.prisma.products.update({
+      await prisma.products.update({
         where: { id: product.id },
         data: {
           variants: variantsWithPacks,
@@ -409,7 +417,7 @@ export class ProductService {
       // Create packs for non-variant products and store packIds in product
       const createdPacks = await Promise.all(
         createProductDto.packs.map((pack) =>
-          this.prisma.pack.create({
+          prisma.pack.create({
             data: {
               productId: product.id, // Use valid productId
               minimumSellingQuantity: pack.minimumSellingQuantity,
@@ -425,14 +433,16 @@ export class ProductService {
       packIds = createdPacks.map((pack) => pack.id);
 
       // Update product with packIds
-      await this.prisma.products.update({
+      await prisma.products.update({
         where: { id: product.id },
         data: {
           packIds,
         },
       });
-    } // Fetch the updated product with all relations
-    const updatedProduct = await this.prisma.products.findUnique({
+    }
+
+    // Fetch the updated product with all relations
+    const updatedProduct = await prisma.products.findUnique({
       where: { id: product.id },
       include: {
         packs: true,
@@ -516,6 +526,9 @@ export class ProductService {
   ) {
     this.validateProductAccess(user, storeId);
 
+    // Get the tenant-specific Prisma client
+    const prisma = await this.tenantContext.getPrismaClient();
+
     const skip = (page - 1) * limit;
 
     let where: any = {};
@@ -531,7 +544,7 @@ export class ProductService {
       where.storeId = storeId;
     }
     const [products, total] = await Promise.all([
-      this.prisma.products.findMany({
+      prisma.products.findMany({
         where,
         include: {
           packs: true,
@@ -553,7 +566,7 @@ export class ProductService {
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.products.count({ where }),
+      prisma.products.count({ where }),
     ]);
 
     return {
@@ -569,7 +582,11 @@ export class ProductService {
 
   async getProductById(user: any, id: string): Promise<ProductResponseDto> {
     this.validateProductAccess(user);
-    const product = await this.prisma.products.findUnique({
+
+    // Get the tenant-specific Prisma client
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    const product = await prisma.products.findUnique({
       where: { id },
       include: {
         packs: true,
@@ -603,14 +620,17 @@ export class ProductService {
   ): Promise<ProductResponseDto> {
     this.validateProductOperationPermissions(user, 'update');
 
-    const product = await this.prisma.products.findUnique({ where: { id } });
+    // Get the tenant-specific Prisma client
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    const product = await prisma.products.findUnique({ where: { id } });
     if (!product) {
       throw new NotFoundException('Product not found');
     }
 
     if (UpdateProductDto.sku && UpdateProductDto.sku !== product.sku) {
       await this.validatePluUniqueness(async (sku: string) => {
-        const existing = await this.prisma.products.findFirst({
+        const existing = await prisma.products.findFirst({
           where: {
             sku,
             NOT: { id },
@@ -623,7 +643,7 @@ export class ProductService {
     // Validate PLU/UPC uniqueness based on hasVariants
     if (UpdateProductDto.hasVariants === false && UpdateProductDto.pluUpc && UpdateProductDto.pluUpc !== product.pluUpc) {
       await this.validatePluUniqueness(async (plu: string) => {
-        const existing = await this.prisma.products.findFirst({
+        const existing = await prisma.products.findFirst({
           where: {
             pluUpc: plu,
             NOT: { id },
@@ -636,6 +656,46 @@ export class ProductService {
     // Validate PLU uniqueness for variants (if product has variants)
     if (UpdateProductDto.hasVariants && UpdateProductDto.variants) {
       await this.validateVariantPluUniqueness(UpdateProductDto.variants, id);
+    }
+
+    // Validate supplier exists in tenant database if being updated
+    if (updateProductDto.supplierId && updateProductDto.supplierId !== product.supplierId) {
+      const supplier = await prisma.suppliers.findUnique({
+        where: { id: updateProductDto.supplierId },
+        select: { id: true, name: true, status: true },
+      });
+
+      if (!supplier) {
+        throw new BadRequestException(
+          `Supplier with ID '${updateProductDto.supplierId}' not found in tenant database.`,
+        );
+      }
+
+      if (supplier.status !== 'active') {
+        throw new BadRequestException(
+          `Supplier '${supplier.name}' is not active and cannot be used.`,
+        );
+      }
+    }
+
+    // Validate store exists in tenant database if being updated
+    if (updateProductDto.storeId && updateProductDto.storeId !== product.storeId) {
+      const store = await prisma.stores.findUnique({
+        where: { id: updateProductDto.storeId },
+        select: { id: true, name: true, status: true },
+      });
+
+      if (!store) {
+        throw new BadRequestException(
+          `Store with ID '${updateProductDto.storeId}' not found in tenant database.`,
+        );
+      }
+
+      if (store.status !== 'active') {
+        throw new BadRequestException(
+          `Store '${store.name}' is not active and cannot be used.`,
+        );
+      }
     }
 
     let packIds: string[] = [];
@@ -678,7 +738,7 @@ export class ProductService {
     }
 
     // Delete existing packs to avoid duplicates
-    await this.prisma.pack.deleteMany({ where: { productId: id } });
+    await prisma.pack.deleteMany({ where: { productId: id } });
 
     // Handle pack updates based on hasVariants
     if (UpdateProductDto.hasVariants && UpdateProductDto.variants) {
@@ -688,7 +748,7 @@ export class ProductService {
           if (variant.packs && variant.packs.length > 0) {
             const createdPacks = await Promise.all(
               variant.packs.map((pack) =>
-                this.prisma.pack.create({
+                prisma.pack.create({
                   data: {
                     productId: id,
                     minimumSellingQuantity: pack.minimumSellingQuantity,
@@ -713,8 +773,8 @@ export class ProductService {
       );
     } else if (UpdateProductDto.packs && UpdateProductDto.packs.length > 0) {
       const createdPacks = await Promise.all(
-        UpdateProductDto.packs.map((pack) =>
-          this.prisma.pack.create({
+        updateProductDto.packs.map((pack) =>
+          prisma.pack.create({
             data: {
               productId: id,
               minimumSellingQuantity: pack.minimumSellingQuantity,
@@ -757,7 +817,7 @@ export class ProductService {
     updateData.packIds = UpdateProductDto.hasVariants ? [] : packIds;
     updateData.variants = UpdateProductDto.hasVariants ? variantsWithPacks : [];
 
-    const updatedProduct = await this.prisma.products.update({
+    const updatedProduct = await prisma.products.update({
       where: { id },
       data: updateData,
       include: {
@@ -784,15 +844,18 @@ export class ProductService {
   async deleteProduct(user: any, id: string): Promise<void> {
     this.validateProductOperationPermissions(user, 'delete');
 
-    const product = await this.prisma.products.findUnique({ where: { id } });
+    // Get the tenant-specific Prisma client
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    const product = await prisma.products.findUnique({ where: { id } });
     if (!product) {
       throw new NotFoundException('Product not found');
     }
 
     // Delete associated packs
-    await this.prisma.pack.deleteMany({ where: { productId: id } });
+    await prisma.pack.deleteMany({ where: { productId: id } });
 
-    await this.prisma.products.delete({
+    await prisma.products.delete({
       where: { id },
     });
 

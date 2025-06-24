@@ -24,8 +24,6 @@ export abstract class BaseAuthController {
       const result = await operation();
       const { accessToken, refreshToken, ...responseData } = result;
 
-      console.log('Auth operation result:', result);
-
       // Set authentication cookies
       CookieHelper.setAuthCookies(res, { accessToken, refreshToken });
 

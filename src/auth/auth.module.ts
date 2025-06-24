@@ -9,6 +9,7 @@ import { JwtStrategy } from '../strategies/jwt.strategy';
 import { PrismaClientModule } from 'src/prisma-client/prisma-client.module';
 import { MailModule } from 'src/mail/mail.module';
 import { PermissionsModule } from 'src/permissions/permissions.module';
+import { MultiTenantService } from '../database/multi-tenant.service';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { GoogleOAuthGuard } from 'src/guards/google-oauth.guard';
 import { RolesGuard } from 'src/guards/roles.guard';
@@ -40,6 +41,7 @@ import { RolesGuard } from 'src/guards/roles.guard';
     JwtAuthGuard,
     GoogleOAuthGuard,
     RolesGuard,
+    MultiTenantService, // Add MultiTenantService for tenant database creation
   ],
   exports: [
     AuthService,

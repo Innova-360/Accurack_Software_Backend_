@@ -5,6 +5,7 @@ import {
   IsUUID,
   IsEnum,
   IsString,
+  IsOptional,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
@@ -103,6 +104,14 @@ export class SignupSuperAdminDto {
   })
   @MinLength(8)
   password: string;
+
+  @ApiProperty({
+    description: 'Client/Tenant ID to associate the user with',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @IsUUID()
+  @IsNotEmpty()
+  clientId: string;
 }
 
 export class InviteDto {
@@ -249,4 +258,84 @@ export class UserProfileDto {
     example: '2025-06-18T10:30:00.000Z',
   })
   updatedAt: Date;
+}
+
+export class CreateClientWithSuperAdminDto {
+  @ApiProperty({ description: 'User first name', example: 'John' })
+  @IsNotEmpty()
+  @IsString()
+  firstName: string;
+
+  @ApiProperty({ description: 'User last name', example: 'Doe' })
+  @IsNotEmpty()
+  @IsString()
+  lastName: string;
+
+  @ApiProperty({
+    description: 'User email address (will also be used as client contact)',
+    example: 'admin@acmecorp.com',
+  })
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({
+    description: 'User password (minimum 8 characters)',
+    example: 'SecurePassword123!',
+    minLength: 8,
+  })
+  @MinLength(8)
+  password: string;
+
+  @ApiProperty({
+    description: 'Company/Client name',
+    example: 'Acme Corporation',
+  })
+  @IsOptional()
+  @IsString()
+  companyName: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Company contact email (defaults to user email if not provided)',
+    example: 'contact@acmecorp.com',
+  })
+  @IsEmail()
+  @IsOptional()
+  companyEmail?: string;
+
+  @ApiPropertyOptional({
+    description: 'Company phone number',
+    example: '+1-555-123-4567',
+  })
+  @IsString()
+  @IsOptional()
+  companyPhone?: string;
+
+  @ApiPropertyOptional({
+    description: 'Company address',
+    example: '123 Business Ave, Suite 100, City, State 12345',
+  })
+  @IsString()
+  @IsOptional()
+  companyAddress?: string;
+}
+
+export class FixClientRecordDto {
+  @ApiProperty({
+    description: 'Client ID to fix',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @IsString()
+  @IsNotEmpty()
+  clientId: string;
+}
+
+export class FixUserRecordDto {
+  @ApiProperty({
+    description: 'User ID to fix',
+    example: '456e7890-e89b-12d3-a456-426614174000',
+  })
+  @IsString()
+  @IsNotEmpty()
+  userId: string;
 }

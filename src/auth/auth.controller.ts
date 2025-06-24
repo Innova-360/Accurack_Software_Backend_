@@ -13,18 +13,27 @@ import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import {
   SignupSuperAdminDto,
+  CreateClientWithSuperAdminDto,
   LoginDto,
   RefreshTokenDto,
   ForgotPasswordDto,
   ResetPasswordDto,
   InviteDto,
   AcceptInviteDto,
+  FixClientRecordDto,
+  FixUserRecordDto,
 } from './dto/auth.dto';
 import { JwtService } from '@nestjs/jwt';
-import { ResponseService, BaseAuthController, AuthEndpoint } from '../common';
+import {
+  ResponseService,
+  BaseAuthController,
+  AuthEndpoint,
+  UseMasterDB,
+} from '../common';
 
 @ApiTags('Authentication')
 @Controller('auth')
+@UseMasterDB()
 export class AuthController extends BaseAuthController {
   constructor(
     private authService: AuthService,
@@ -72,6 +81,16 @@ export class AuthController extends BaseAuthController {
     return this.handleServiceOperation(
       () => this.authService.signupSuperAdmin(dto),
       'Super admin account created successfully',
+      201,
+    );
+  }
+
+  @AuthEndpoint.SignupSuperAdmin(CreateClientWithSuperAdminDto)
+  @Post('create-client-with-admin')
+  async createClientWithSuperAdmin(@Body() dto: CreateClientWithSuperAdminDto) {
+    return this.handleServiceOperation(
+      () => this.authService.createClientWithSuperAdmin(dto),
+      'Client and super admin account created successfully',
       201,
     );
   }
@@ -159,6 +178,45 @@ export class AuthController extends BaseAuthController {
     return this.handleServiceOperation(
       () => this.authService.getPermissions(req.user.id, storeId),
       'User permissions retrieved successfully',
+      200,
+    );
+  }
+
+  @AuthEndpoint.SignupSuperAdmin(SignupSuperAdminDto)
+  @Post('fix-super-admin-permissions')
+  async fixSuperAdminPermissions(@Body() body: { email: string }) {
+    return this.handleServiceOperation(
+      () => this.authService.fixSuperAdminPermissions(body.email),
+      'Super admin permissions fixed successfully',
+      200,
+    );
+  }
+  @AuthEndpoint.SignupSuperAdmin(FixClientRecordDto)
+  @Post('fix-client-record')
+  async fixClientRecord(@Body() body: FixClientRecordDto) {
+    return this.handleServiceOperation(
+      () => this.authService.fixClientRecord(body.clientId),
+      'Client record fixed successfully',
+      200,
+    );
+  }
+
+  @AuthEndpoint.SignupSuperAdmin(FixUserRecordDto)
+  @Post('fix-user-record')
+  async fixUserRecord(@Body() body: FixUserRecordDto) {
+    return this.handleServiceOperation(
+      () => this.authService.fixUserRecord(body.userId),
+      'User record fixed successfully',
+      200,
+    );
+  }
+
+  @AuthEndpoint.GetPermissions()
+  @Get('test-super-admin-access')
+  async testSuperAdminAccess(@Request() req) {
+    return this.handleServiceOperation(
+      () => this.authService.testSuperAdminAccess(req.user),
+      'Super admin access test completed',
       200,
     );
   }
