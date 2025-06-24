@@ -32,13 +32,11 @@ const standardErrorResponses = () => [
 export const StoreEndpoint = {
   // Get all stores user has access to
   GetUserStores: () =>
-    applyDecorators(
-      RequirePermissions(
+    applyDecorators(      RequirePermissions(
         PermissionResource.STORE,
         PermissionAction.READ,
         PermissionScope.STORE,
       ),
-      ApiTags('Stores'),
       ApiOperation({
         summary: 'Get list of user stores',
         description:
@@ -97,13 +95,11 @@ export const StoreEndpoint = {
 
   // Get specific store by ID (with store-specific permission check)
   GetStoreById: () =>
-    applyDecorators(
-      RequirePermissions(
+    applyDecorators(      RequirePermissions(
         PermissionResource.STORE,
         PermissionAction.READ,
         PermissionScope.STORE,
       ),
-      ApiTags('Stores'),
       ApiOperation({
         summary: 'Get store by ID',
         description:
@@ -171,9 +167,7 @@ export const StoreEndpoint = {
     applyDecorators(
       RequireGlobalPermission(
         PermissionResource.STORE,
-        PermissionAction.CREATE,
-      ),
-      ApiTags('Stores'),
+        PermissionAction.CREATE,      ),
       ApiOperation({
         summary: 'Create a new store',
         description:
@@ -237,11 +231,9 @@ export const StoreEndpoint = {
   UpdateStore: (dtoType: any) =>
     applyDecorators(
       RequirePermissions(
-        PermissionResource.STORE,
-        PermissionAction.UPDATE,
+        PermissionResource.STORE,        PermissionAction.UPDATE,
         PermissionScope.STORE,
       ),
-      ApiTags('Stores'),
       ApiOperation({
         summary: 'Update store',
         description:
@@ -269,10 +261,8 @@ export const StoreEndpoint = {
   DeleteStore: () =>
     applyDecorators(
       RequireGlobalPermission(
-        PermissionResource.STORE,
-        PermissionAction.DELETE,
+        PermissionResource.STORE,        PermissionAction.DELETE,
       ),
-      ApiTags('Stores'),
       ApiOperation({
         summary: 'Delete store',
         description:

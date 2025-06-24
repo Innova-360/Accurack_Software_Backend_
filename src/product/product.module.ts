@@ -6,6 +6,7 @@ import { PrismaClientModule } from '../prisma-client/prisma-client.module';
 import { ProductController } from './product.controller';
 import { ProductService } from './product.service';
 import { ResponseService } from '../common/services/response.service';
+import { PermissionsService } from 'src/common';
 
 @Module({
   imports: [
@@ -17,6 +18,6 @@ import { ResponseService } from '../common/services/response.service';
     PrismaClientModule,
   ],
   controllers: [ProductController],
-  providers: [ProductService, JwtStrategy, ResponseService],
+  providers: [ProductService, JwtStrategy, ResponseService, PermissionsService],
 })
 export class ProductModule {}

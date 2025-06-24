@@ -35,8 +35,8 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ transform: true }));
   // app.use(helmet());
   app.enableCors({
-    // origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    origin: '*',
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    // origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
   });

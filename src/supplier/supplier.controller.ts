@@ -11,8 +11,10 @@ import {
   Query,
   ParseIntPipe,
   DefaultValuePipe,
+  Version,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { PermissionsGuard } from '../guards/permissions.guard';
 import { CreateSupplierDto, UpdateSupplierDto } from './dto/dto.supplier';
 import { SupplierService } from './supplier.service';
 import { SupplierEndpoint } from '../common/decorators/supplier-endpoint.decorator';
@@ -20,8 +22,9 @@ import { ApiTags } from '@nestjs/swagger';
 import { BaseSupplierController } from '../common/controllers/base-supplier.controller';
 import { ResponseService } from '../common/services/response.service';
 
-@ApiTags('suppliers')
-@Controller('supplier')
+@ApiTags('Suppliers')
+@Controller({ path: 'supplier', version: '1' })
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class SupplierController extends BaseSupplierController {
   constructor(
     private readonly supplierService: SupplierService,
@@ -65,6 +68,18 @@ export class SupplierController extends BaseSupplierController {
     const user = req.user;
     return this.handleSupplierOperation(
       () => this.supplierService.getSupplierById(user, supplierId),
+      'Supplier retrieved successfully',
+    );
+  }
+  @SupplierEndpoint.GetSupplierBySupplierId()
+  @Get('by-supplier-id/:supplierId')
+  async getSupplierBySupplierId(
+    @Req() req,
+    @Param('supplierId') supplierId: string,
+  ) {
+    const user = req.user;
+    return this.handleSupplierOperation(
+      () => this.supplierService.getSupplierBySupplierId(user, supplierId),
       'Supplier retrieved successfully',
     );
   }

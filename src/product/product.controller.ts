@@ -16,17 +16,24 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiConsumes, ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags,ApiConsumes, ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ProductService } from './product.service';
-import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
 import { BaseProductController } from '../common/controllers/base-product.controller';
 import { ProductEndpoint } from '../common/decorators/product-endpoint.decorator';
 import { ResponseService } from '../common/services/response.service';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
+import {
+  CreateProductDto,
+  UpdateProductDto,
+  ProductResponseDto,
+} from './dto/product.dto';
+
+import { PermissionsGuard } from '../guards/permissions.guard';
 
 
-@UseGuards(JwtAuthGuard)
-@Controller('product')
+@ApiTags('Products')
+@Controller({ path: 'product', version: '1' })
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ProductController extends BaseProductController {
   constructor(
     private readonly productService: ProductService,

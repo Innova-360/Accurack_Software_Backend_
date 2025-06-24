@@ -104,6 +104,7 @@ export abstract class BaseSupplierController {
   protected extractSupplierData(supplier: any): any {
     return {
       id: supplier.id,
+      supplier_id: supplier.supplier_id,
       name: supplier.name,
       email: supplier.email,
       phone: supplier.phone,

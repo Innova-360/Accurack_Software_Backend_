@@ -6,6 +6,7 @@ import { SupplierService } from './supplier.service';
 import { JwtStrategy } from 'src/strategies/jwt.strategy';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { ResponseService } from '../common/services/response.service';
+import { PermissionsService } from 'src/common';
 
 @Module({
   imports: [
@@ -16,6 +17,12 @@ import { ResponseService } from '../common/services/response.service';
     }),
   ],
   controllers: [SupplierController],
-  providers: [SupplierService, JwtStrategy, PrismaClientService, ResponseService],
+  providers: [
+    SupplierService,
+    JwtStrategy,
+    PrismaClientService,
+    ResponseService,
+    PermissionsService,
+  ],
 })
 export class SupplierModule {}
