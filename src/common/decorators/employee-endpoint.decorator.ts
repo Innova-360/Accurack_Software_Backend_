@@ -7,12 +7,13 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
-import { RequirePermissions } from '../../decorators/permissions.decorator';
+
 import {
   PermissionResource,
   PermissionAction,
 } from '../../permissions/enums/permission.enum';
 import { Version } from '@nestjs/common';
+import { RequirePermissions } from 'src/auth/decorators/permissions.decorator';
 
 const standardErrorResponses = () => [
   ApiResponse({
