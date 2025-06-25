@@ -1,4 +1,4 @@
-import { Injectable, HttpException, HttpStatus, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaClientService } from '../prisma-client/prisma-client.service';
 import { CreateDamageDto, CreateRefundDto, CreateReturnDto, CreateExchangeDto } from './dto/sale-adjustments.dto';
 
@@ -273,9 +273,9 @@ export class SaleAdjustmentsService {
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      // orderBy: {
+      //   createdAt: 'desc',
+      // },
     });
 
     return adjustments;
@@ -291,7 +291,7 @@ export class SaleAdjustmentsService {
           sale: {
             select: {
               id: true,
-              total: true,
+              totalAmount: true,
               createdAt: true,
             },
           },
@@ -317,9 +317,9 @@ export class SaleAdjustmentsService {
             },
           },
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        // orderBy: {
+        //   createdAt: 'desc',
+        // },
         skip,
         take: limit,
       }),

@@ -14,6 +14,7 @@ export * from './decorators/auth-endpoint.decorator';
 export * from './decorators/permission-endpoint.decorator';
 export * from './decorators/store-endpoint.decorator';
 export * from './decorators/tenant-endpoint.decorator';
+export * from './decorators/sale-endpoint.decorator';
 export * from './decorators/use-master-db.decorator';
 
 // Filters
@@ -24,6 +25,7 @@ export * from './utils/cookie.helper';
 
 // Controllers
 export * from './controllers/base-auth.controller';
+export * from './controllers/base-sale.controller';
 
 // Guards
 export * from '../guards/permissions.guard';
@@ -31,7 +33,7 @@ export * from '../guards/permissions.guard';
 // Permissions
 export * from '../permissions/permissions.service';
 export * from '../permissions/enums/permission.enum';
-export * from '../decorators/permissions.decorator';
+export * from '../auth/decorators/permissions.decorator';
 
 // Module
 export * from './common.module';

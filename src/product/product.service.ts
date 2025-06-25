@@ -95,18 +95,18 @@ export class ProductService {
   ): Promise<void> {
     // Collect all PLU/UPC values from variants
     const variantPlus = variants
-      .map(v => v.pluUpc)
-      .filter(plu => plu && plu.trim()); // Only check non-empty PLUs
+      .map((v) => v.pluUpc)
+      .filter((plu) => plu && plu.trim()); // Only check non-empty PLUs
 
     if (variantPlus.length === 0) return; // No PLUs to validate
 
     // Check for duplicates within the variants array
-    const duplicatePlus = variantPlus.filter((plu, index) => 
-      variantPlus.indexOf(plu) !== index
+    const duplicatePlus = variantPlus.filter(
+      (plu, index) => variantPlus.indexOf(plu) !== index,
     );
     if (duplicatePlus.length > 0) {
       throw new BadRequestException(
-        `Duplicate PLU/UPC found in variants: ${duplicatePlus.join(', ')}`
+        `Duplicate PLU/UPC found in variants: ${duplicatePlus.join(', ')}`,
       );
     }
 
@@ -120,9 +120,11 @@ export class ProductService {
       const existing = await this.prisma.products.findFirst({
         where: whereCondition,
       });
-      
+
       if (existing) {
-        throw new BadRequestException(`PLU/UPC '${plu}' already exists in database`);
+        throw new BadRequestException(
+          `PLU/UPC '${plu}' already exists in database`,
+        );
       }
     }
   }
@@ -177,7 +179,7 @@ export class ProductService {
   ): Promise<ProductResponseDto> {
     this.validateProductOperationPermissions(user, 'create');
 
-          const prisma = await this.tenantContext.getPrismaClient();
+    const prisma = await this.tenantContext.getPrismaClient();
     // Validate PLU uniqueness for non-variant products (only if PLU is provided)
     if (!createProductDto.hasVariants && createProductDto.pluUpc) {
       await this.validatePluUniqueness(async (plu: string) => {
@@ -214,7 +216,9 @@ export class ProductService {
       throw new BadRequestException('Invalid storeId - store does not exist');
     }
     if (store.clientId !== createProductDto.clientId) {
-      throw new BadRequestException('Store does not belong to the specified client');
+      throw new BadRequestException(
+        'Store does not belong to the specified client',
+      );
     }
 
     // Validate that variants are empty if hasVariants is false
@@ -248,7 +252,10 @@ export class ProductService {
         );
       }
       // Ensure variants exist if hasVariants is true
-      if (!createProductDto.variants || createProductDto.variants.length === 0) {
+      if (
+        !createProductDto.variants ||
+        createProductDto.variants.length === 0
+      ) {
         throw new BadRequestException(
           'At least one variant must be provided when hasVariants is true',
         );
@@ -320,23 +327,27 @@ export class ProductService {
               name: true,
             },
           },
-          sales: true,
+          saleItems: true,
           purchaseOrders: true,
         },
       });
     } catch (error: any) {
       // Handle foreign key constraint violations
       if (error.code === 'P2003') {
-        throw new BadRequestException('Invalid clientId or storeId - referenced record does not exist');
+        throw new BadRequestException(
+          'Invalid clientId or storeId - referenced record does not exist',
+        );
       }
       throw error;
-    }// Create ProductSupplier relationships
+    } // Create ProductSupplier relationships
     if (
       createProductDto.productSuppliers &&
       createProductDto.productSuppliers.length > 0
     ) {
       // Validate that all suppliers exist
-      const supplierIds = createProductDto.productSuppliers.map(ps => ps.supplierId);
+      const supplierIds = createProductDto.productSuppliers.map(
+        (ps) => ps.supplierId,
+      );
       const existingSuppliers = await prisma.suppliers.findMany({
         where: {
           id: { in: supplierIds },
@@ -346,10 +357,10 @@ export class ProductService {
 
       if (existingSuppliers.length !== supplierIds.length) {
         const missingSupplierIds = supplierIds.filter(
-          id => !existingSuppliers.some(supplier => supplier.id === id)
+          (id) => !existingSuppliers.some((supplier) => supplier.id === id),
         );
         throw new BadRequestException(
-          `Invalid supplier IDs: ${missingSupplierIds.join(', ')} - suppliers do not exist or do not belong to this store`
+          `Invalid supplier IDs: ${missingSupplierIds.join(', ')} - suppliers do not exist or do not belong to this store`,
         );
       }
 
@@ -392,13 +403,19 @@ export class ProductService {
                   select: { id: true },
                 }),
               ),
-            );            variantPackIds = createdPacks.map((pack) => pack.id);
+            );
+            variantPackIds = createdPacks.map((pack) => pack.id);
           }
           return {
             name: variant.name,
             price: variant.price,
             pluUpc: variant.pluUpc,
             packIds: variantPackIds,
+            quantity: variant.quantity || 0, // Ensure quantity is set
+            msrpPrice: variant.msrpPrice || 0,
+            supplierId: variant.supplierId || null, // Optional supplierId
+            discountAmount: variant.discountAmount || 0,
+            percentDiscount: variant.percentDiscount || 0,
           };
         }),
       );
@@ -454,7 +471,7 @@ export class ProductService {
             name: true,
           },
         },
-        sales: true,
+        saleItems: true,
         purchaseOrders: true,
       },
     });
@@ -556,7 +573,7 @@ export class ProductService {
               name: true,
             },
           },
-          sales: true,
+          saleItems: true,
           purchaseOrders: true,
         },
         skip,
@@ -598,7 +615,7 @@ export class ProductService {
             name: true,
           },
         },
-        sales: true,
+        saleItems: true,
         purchaseOrders: true,
       },
     });
@@ -625,7 +642,11 @@ export class ProductService {
     }
 
     // Validate PLU/UPC uniqueness based on hasVariants
-    if (updateProductDto.hasVariants === false && updateProductDto.pluUpc && updateProductDto.pluUpc !== product.pluUpc) {
+    if (
+      updateProductDto.hasVariants === false &&
+      updateProductDto.pluUpc &&
+      updateProductDto.pluUpc !== product.pluUpc
+    ) {
       await this.validatePluUniqueness(async (plu: string) => {
         const existing = await prisma.products.findFirst({
           where: {
@@ -648,7 +669,9 @@ export class ProductService {
         where: { id: updateProductDto.clientId },
       });
       if (!client) {
-        throw new BadRequestException('Invalid clientId - client does not exist');
+        throw new BadRequestException(
+          'Invalid clientId - client does not exist',
+        );
       }
     }
 
@@ -659,8 +682,13 @@ export class ProductService {
       if (!store) {
         throw new BadRequestException('Invalid storeId - store does not exist');
       }
-      if (updateProductDto.clientId && store.clientId !== updateProductDto.clientId) {
-        throw new BadRequestException('Store does not belong to the specified client');
+      if (
+        updateProductDto.clientId &&
+        store.clientId !== updateProductDto.clientId
+      ) {
+        throw new BadRequestException(
+          'Store does not belong to the specified client',
+        );
       }
     }
 
@@ -696,7 +724,10 @@ export class ProductService {
         );
       }
       // Ensure variants exist if hasVariants is true
-      if (!updateProductDto.variants || updateProductDto.variants.length === 0) {
+      if (
+        !updateProductDto.variants ||
+        updateProductDto.variants.length === 0
+      ) {
         throw new BadRequestException(
           'At least one variant must be provided when hasVariants is true',
         );
@@ -791,25 +822,41 @@ export class ProductService {
 
     // Prepare update data with proper typing
     const updateData: any = {};
-    
-    if (updateProductDto.name !== undefined) updateData.name = updateProductDto.name;
-    if (updateProductDto.category !== undefined) updateData.category = updateProductDto.category;
-    if (updateProductDto.ean !== undefined) updateData.ean = updateProductDto.ean;
-    if (updateProductDto.sku !== undefined) updateData.sku = updateProductDto.sku;
-    if (updateProductDto.itemQuantity !== undefined) updateData.itemQuantity = updateProductDto.itemQuantity;
-    if (updateProductDto.msrpPrice !== undefined) updateData.msrpPrice = updateProductDto.msrpPrice;
-    if (updateProductDto.singleItemSellingPrice !== undefined) updateData.singleItemSellingPrice = updateProductDto.singleItemSellingPrice;
-    if (updateProductDto.discountAmount !== undefined) updateData.discountAmount = updateProductDto.discountAmount;
-    if (updateProductDto.percentDiscount !== undefined) updateData.percentDiscount = updateProductDto.percentDiscount;
-    if (updateProductDto.clientId !== undefined) updateData.clientId = updateProductDto.clientId;
-    if (updateProductDto.storeId !== undefined) updateData.storeId = updateProductDto.storeId;
-    if (updateProductDto.hasVariants !== undefined) updateData.hasVariants = updateProductDto.hasVariants;
+
+    if (updateProductDto.name !== undefined)
+      updateData.name = updateProductDto.name;
+    if (updateProductDto.category !== undefined)
+      updateData.category = updateProductDto.category;
+    if (updateProductDto.ean !== undefined)
+      updateData.ean = updateProductDto.ean;
+    if (updateProductDto.sku !== undefined)
+      updateData.sku = updateProductDto.sku;
+    if (updateProductDto.itemQuantity !== undefined)
+      updateData.itemQuantity = updateProductDto.itemQuantity;
+    if (updateProductDto.msrpPrice !== undefined)
+      updateData.msrpPrice = updateProductDto.msrpPrice;
+    if (updateProductDto.singleItemSellingPrice !== undefined)
+      updateData.singleItemSellingPrice =
+        updateProductDto.singleItemSellingPrice;
+    if (updateProductDto.discountAmount !== undefined)
+      updateData.discountAmount = updateProductDto.discountAmount;
+    if (updateProductDto.percentDiscount !== undefined)
+      updateData.percentDiscount = updateProductDto.percentDiscount;
+    if (updateProductDto.clientId !== undefined)
+      updateData.clientId = updateProductDto.clientId;
+    if (updateProductDto.storeId !== undefined)
+      updateData.storeId = updateProductDto.storeId;
+    if (updateProductDto.hasVariants !== undefined)
+      updateData.hasVariants = updateProductDto.hasVariants;
 
     // Handle pluUpc based on hasVariants logic
     if (updateProductDto.hasVariants === true) {
       // Clear pluUpc for variant products
       updateData.pluUpc = null;
-    } else if (updateProductDto.hasVariants === false && updateProductDto.pluUpc !== undefined) {
+    } else if (
+      updateProductDto.hasVariants === false &&
+      updateProductDto.pluUpc !== undefined
+    ) {
       // Set pluUpc for non-variant products
       updateData.pluUpc = updateProductDto.pluUpc;
     }
@@ -834,7 +881,7 @@ export class ProductService {
             name: true,
           },
         },
-        sales: true,
+        saleItems: true,
         purchaseOrders: true,
       },
     });
@@ -875,7 +922,7 @@ export class ProductService {
               name: true,
             },
           },
-          sales: true,
+          saleItems: true,
           purchaseOrders: true,
         },
       });
@@ -926,7 +973,7 @@ export class ProductService {
     //         name: true,
     //       },
     //     },
-    //     sales: true,
+    //     saleItems: true,
     //     purchaseOrders: true,
     //   },
     // });
@@ -961,7 +1008,8 @@ export class ProductService {
       throw new ConflictException('This file has already been uploaded');
     }
     return fileHash;
-  }  async uploadInventorySheet(
+  }
+  async uploadInventorySheet(
     user: any,
     parsedData: ValidationResult,
     file: Express.Multer.File,
@@ -980,7 +1028,9 @@ export class ProductService {
       where: { id: user.clientId },
     });
     if (!client) {
-      throw new BadRequestException('Invalid client - user client does not exist');
+      throw new BadRequestException(
+        'Invalid client - user client does not exist',
+      );
     }
 
     // Validate that the store belongs to the user's client
@@ -1037,7 +1087,7 @@ export class ProductService {
                 },
               });
             }
-          }          // Check if MatrixAttributes is null or empty to determine hasVariants
+          } // Check if MatrixAttributes is null or empty to determine hasVariants
           const hasMatrixAttributes = !!(
             product.MatrixAttributes && product.MatrixAttributes.trim()
           );
@@ -1050,16 +1100,16 @@ export class ProductService {
             });
             if (existingProduct) {
               throw new BadRequestException(
-                `PLU/UPC '${product['PLU/UPC']}' already exists in database`
+                `PLU/UPC '${product['PLU/UPC']}' already exists in database`,
               );
             }
-          }// Create the product (without supplier reference for now)
+          } // Create the product (without supplier reference for now)
           const productData: any = {
             name: product.ProductName,
             category: product.Category,
             ean: product.EAN || '',
             // Only set pluUpc if product doesn't have variants
-            pluUpc: hasVariants ? null : (product['PLU/UPC'] || null),
+            pluUpc: hasVariants ? null : product['PLU/UPC'] || null,
             sku: product.SKU,
             itemQuantity: product.IndividualItemQuantity,
             msrpPrice: product.IndividualItemSellingPrice,
@@ -1137,10 +1187,15 @@ export class ProductService {
                     discountAmount: product.PriceDiscountAmount || 0,
                     percentDiscount: product.PercentDiscount || 0,
                   },
-                });                variants.push({
+                });
+                variants.push({
                   name: attributeValue.toString().trim(),
                   price: product.IndividualItemSellingPrice,
-                  pluUpc: `${product['PLU/UPC'] || ''}-${attributeValue.toString().replace(/\s+/g, '').toUpperCase()}`.slice(0, 50), // Generate variant-specific PLU/UPC
+                  pluUpc:
+                    `${product['PLU/UPC'] || ''}-${attributeValue.toString().replace(/\s+/g, '').toUpperCase()}`.slice(
+                      0,
+                      50,
+                    ), // Generate variant-specific PLU/UPC
                   packIds: [pack.id],
                 });
               }
@@ -1156,7 +1211,8 @@ export class ProductService {
                   discountAmount: product.PriceDiscountAmount || 0,
                   percentDiscount: product.PercentDiscount || 0,
                 },
-              });              variants.push({
+              });
+              variants.push({
                 name: 'Default Variant',
                 price: product.IndividualItemSellingPrice,
                 pluUpc: product['PLU/UPC'] || null, // Use the product's PLU/UPC for the default variant

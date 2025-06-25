@@ -22,6 +22,15 @@ CREATE TYPE "AdjustmentType" AS ENUM ('DAMAGE', 'REFUND', 'RETURN', 'EXCHANGE');
 -- CreateEnum
 CREATE TYPE "DamageSubCategory" AS ENUM ('SCRAP', 'RESELLABLE', 'NON_SELLABLE');
 
+-- CreateEnum
+CREATE TYPE "PaymentMethod" AS ENUM ('CASH', 'CARD', 'BANK_TRANSFER', 'CHECK', 'DIGITAL_WALLET');
+
+-- CreateEnum
+CREATE TYPE "SaleStatus" AS ENUM ('PENDING', 'COMPLETED', 'CANCELLED', 'REFUNDED', 'PARTIALLY_RETURNED');
+
+-- CreateEnum
+CREATE TYPE "PaymentStatus" AS ENUM ('PAID', 'PARTIAL', 'UNPAID', 'OVERDUE');
+
 -- CreateTable
 CREATE TABLE "Clients" (
     "id" TEXT NOT NULL,
@@ -102,19 +111,109 @@ CREATE TABLE "SaleAdjustment" (
 );
 
 -- CreateTable
-CREATE TABLE "Sales" (
+CREATE TABLE "Customer" (
     "id" TEXT NOT NULL,
-    "productId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
+    "customerName" TEXT NOT NULL,
+    "customerAddress" TEXT,
+    "phoneNumber" TEXT NOT NULL,
+    "telephoneNumber" TEXT,
+    "customerMail" TEXT,
     "storeId" TEXT NOT NULL,
-    "quantity" INTEGER NOT NULL,
-    "price" DOUBLE PRECISION NOT NULL,
-    "total" DOUBLE PRECISION NOT NULL,
+    "clientId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "fileUploadSalesId" TEXT,
+
+    CONSTRAINT "Customer_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Sales" (
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "storeId" TEXT NOT NULL,
+    "clientId" TEXT NOT NULL,
+    "paymentMethod" "PaymentMethod" NOT NULL,
+    "totalAmount" DOUBLE PRECISION NOT NULL,
+    "tax" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "status" "SaleStatus" NOT NULL DEFAULT 'PENDING',
+    "generateInvoice" BOOLEAN NOT NULL DEFAULT true,
+    "cashierName" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "fileUploadSalesId" TEXT NOT NULL,
 
     CONSTRAINT "Sales_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SaleItem" (
+    "id" TEXT NOT NULL,
+    "saleId" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "productName" TEXT NOT NULL,
+    "quantity" INTEGER NOT NULL,
+    "sellingPrice" DOUBLE PRECISION NOT NULL,
+    "totalPrice" DOUBLE PRECISION NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "SaleItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Invoice" (
+    "id" TEXT NOT NULL,
+    "saleId" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "invoiceNumber" TEXT NOT NULL,
+    "customerName" TEXT NOT NULL,
+    "customerPhone" TEXT NOT NULL,
+    "customerMail" TEXT,
+    "companyName" TEXT,
+    "companyMail" TEXT,
+    "companyAddress" TEXT,
+    "companyNo" TEXT,
+    "shippingAddress" TEXT,
+    "paymentMethod" "PaymentMethod" NOT NULL,
+    "totalAmount" DOUBLE PRECISION NOT NULL,
+    "tax" DOUBLE PRECISION NOT NULL,
+    "status" "SaleStatus" NOT NULL,
+    "cashierName" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Invoice_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BalanceSheet" (
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "saleId" TEXT,
+    "remainingAmount" DOUBLE PRECISION NOT NULL,
+    "amountPaid" DOUBLE PRECISION NOT NULL,
+    "paymentStatus" "PaymentStatus" NOT NULL DEFAULT 'UNPAID',
+    "description" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "BalanceSheet_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SaleReturn" (
+    "id" TEXT NOT NULL,
+    "saleId" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "quantity" INTEGER NOT NULL,
+    "returnCategory" TEXT NOT NULL,
+    "reason" TEXT,
+    "processedBy" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "SaleReturn_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -418,6 +517,12 @@ CREATE UNIQUE INDEX "Users_email_key" ON "Users"("email");
 CREATE UNIQUE INDEX "Users_employeeCode_key" ON "Users"("employeeCode");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Customer_phoneNumber_key" ON "Customer"("phoneNumber");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Invoice_invoiceNumber_key" ON "Invoice"("invoiceNumber");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "StoreSettings_storeId_key" ON "StoreSettings"("storeId");
 
 -- CreateIndex
@@ -481,16 +586,52 @@ ALTER TABLE "SaleAdjustment" ADD CONSTRAINT "SaleAdjustment_storeId_fkey" FOREIG
 ALTER TABLE "SaleAdjustment" ADD CONSTRAINT "SaleAdjustment_replacementProductId_fkey" FOREIGN KEY ("replacementProductId") REFERENCES "Products"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Sales" ADD CONSTRAINT "Sales_fileUploadSalesId_fkey" FOREIGN KEY ("fileUploadSalesId") REFERENCES "FileUploadSales"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Customer" ADD CONSTRAINT "Customer_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Sales" ADD CONSTRAINT "Sales_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Customer" ADD CONSTRAINT "Customer_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Sales" ADD CONSTRAINT "Sales_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Sales" ADD CONSTRAINT "Sales_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Sales" ADD CONSTRAINT "Sales_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Sales" ADD CONSTRAINT "Sales_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Sales" ADD CONSTRAINT "Sales_fileUploadSalesId_fkey" FOREIGN KEY ("fileUploadSalesId") REFERENCES "FileUploadSales"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SaleItem" ADD CONSTRAINT "SaleItem_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sales"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SaleItem" ADD CONSTRAINT "SaleItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sales"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BalanceSheet" ADD CONSTRAINT "BalanceSheet_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BalanceSheet" ADD CONSTRAINT "BalanceSheet_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sales"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SaleReturn" ADD CONSTRAINT "SaleReturn_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sales"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SaleReturn" ADD CONSTRAINT "SaleReturn_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SaleReturn" ADD CONSTRAINT "SaleReturn_processedBy_fkey" FOREIGN KEY ("processedBy") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "StoreSettings" ADD CONSTRAINT "StoreSettings_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

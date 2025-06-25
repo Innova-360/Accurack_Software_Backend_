@@ -10,7 +10,7 @@ import {
 import {
   RequirePermissions,
   RequireGlobalPermission,
-} from '../../decorators/permissions.decorator';
+} from '../../auth/decorators/permissions.decorator';
 import {
   PermissionResource,
   PermissionAction,

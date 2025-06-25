@@ -1,60 +1,72 @@
-import { Controller, Post, Body, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, Request, Param, Query } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { SaleAdjustmentsService } from './sale-adjustments.service';
 import { CreateDamageDto, CreateRefundDto, CreateReturnDto, CreateExchangeDto } from './dto/sale-adjustments.dto';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard'; // Assumed authentication guard
-import { PermissionsGuard } from '../guards/permissions.guard'; // Assumed permissions guard
-// import { User } from '../auth/decorators/user.decorator'; // Assumed user decorator
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { PermissionsGuard } from '../guards/permissions.guard';
 
+@ApiTags('Sale Adjustments')
+@ApiBearerAuth()
 @Controller('sale-adjustments')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class SaleAdjustmentsController {
   constructor(private readonly saleAdjustmentsService: SaleAdjustmentsService) {}
 
   @Post('damage')
-  async createDamage(@Body() createDamageDto: CreateDamageDto, user: { id: string }) {
-    try {
-      return await this.saleAdjustmentsService.createDamage(createDamageDto, user.id);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Internal server error',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+  @ApiOperation({ summary: 'Create damage adjustment' })
+  @ApiResponse({ status: 201, description: 'Damage adjustment created successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 404, description: 'Sale not found' })
+  async createDamage(@Body() createDamageDto: CreateDamageDto, @Request() req: any) {
+    return await this.saleAdjustmentsService.createDamage(createDamageDto, req.user.id);
   }
 
   @Post('refund')
-  async createRefund(@Body() createRefundDto: CreateRefundDto, user: { id: string }) {
-    try {
-      return await this.saleAdjustmentsService.createRefund(createRefundDto, user.id);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Internal server error',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+  @ApiOperation({ summary: 'Create refund adjustment' })
+  @ApiResponse({ status: 201, description: 'Refund adjustment created successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 404, description: 'Sale not found' })
+  async createRefund(@Body() createRefundDto: CreateRefundDto, @Request() req: any) {
+    return await this.saleAdjustmentsService.createRefund(createRefundDto, req.user.id);
   }
 
   @Post('return')
-  async createReturn(@Body() createReturnDto: CreateReturnDto, user: { id: string }) {
-    try {
-      return await this.saleAdjustmentsService.createReturn(createReturnDto, user.id);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Internal server error',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+  @ApiOperation({ summary: 'Create return adjustment' })
+  @ApiResponse({ status: 201, description: 'Return adjustment created successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 404, description: 'Sale not found' })
+  async createReturn(@Body() createReturnDto: CreateReturnDto, @Request() req: any) {
+    return await this.saleAdjustmentsService.createReturn(createReturnDto, req.user.id);
   }
 
   @Post('exchange')
-  async createExchange(@Body() createExchangeDto: CreateExchangeDto, user: { id: string }) {
-    try {
-      return await this.saleAdjustmentsService.createExchange(createExchangeDto, user.id);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Internal server error',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+  @ApiOperation({ summary: 'Create exchange adjustment' })
+  @ApiResponse({ status: 201, description: 'Exchange adjustment created successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 404, description: 'Sale not found' })
+  async createExchange(@Body() createExchangeDto: CreateExchangeDto, @Request() req: any) {
+    return await this.saleAdjustmentsService.createExchange(createExchangeDto, req.user.id);
+  }
+
+  @Get('by-sale/:saleId')
+  @ApiOperation({ summary: 'Get adjustments by sale ID' })
+  @ApiResponse({ status: 200, description: 'Adjustments retrieved successfully' })
+  async getAdjustmentsBySale(@Param('saleId') saleId: string) {
+    return await this.saleAdjustmentsService.getAdjustmentsBySale(saleId);
+  }
+
+  @Get('by-store/:storeId')
+  @ApiOperation({ summary: 'Get adjustments by store ID' })
+  @ApiResponse({ status: 200, description: 'Adjustments retrieved successfully' })
+  async getAdjustmentsByStore(
+    @Param('storeId') storeId: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20'
+  ) {
+    return await this.saleAdjustmentsService.getAdjustmentsByStore(
+      storeId, 
+      parseInt(page), 
+      parseInt(limit)
+    );
   }
 }

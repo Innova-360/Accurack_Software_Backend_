@@ -57,6 +57,29 @@ enum DamageSubCategory {
   NON_SELLABLE
 }
 
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  CHECK
+  DIGITAL_WALLET
+}
+
+enum SaleStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_RETURNED
+}
+
+enum PaymentStatus {
+  PAID
+  PARTIAL
+  UNPAID
+  OVERDUE
+}
+
 model Clients {
   id           String   @id @default(uuid())
   name         String
@@ -72,9 +95,11 @@ model Clients {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  users    Users[]
-  stores   Stores[]
-  products Products[]
+  users        Users[]
+  stores       Stores[]
+  products     Products[]
+  customers    Customer[]
+  sales        Sales[]
 }
 
 model Users {
@@ -115,6 +140,7 @@ model Users {
   apiTokens      ApiTokens[]
   passwordResetTokens PasswordResetTokens[]
   saleAdjustments SaleAdjustment[]
+  processedReturns SaleReturn[]
 }
 
 model Stores {
@@ -141,6 +167,7 @@ model Stores {
   FileUploadInventory FileUploadInventory[]
   FileUploadSales     FileUploadSales[]
   saleAdjustments SaleAdjustment[]
+  customers       Customer[]
 }
 
 model SaleAdjustment {
@@ -165,23 +192,122 @@ model SaleAdjustment {
   replacementProduct Products?       @relation("ReplacementProduct", fields: [replacementProductId], references: [id])
 }
 
+model Customer {
+  id              String   @id @default(uuid())
+  customerName    String
+  customerAddress String?
+  phoneNumber     String   @unique
+  telephoneNumber String?
+  customerMail    String?
+  storeId         String
+  clientId        String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  store           Stores         @relation(fields: [storeId], references: [id])
+  client          Clients        @relation(fields: [clientId], references: [id])
+  sales           Sales[]
+  balanceSheets   BalanceSheet[]
+  invoices        Invoice[]
+}
+
 model Sales {
-  id          String   @id @default(uuid())
-  productId   String
-  userId      String
-  storeId     String
-  quantity    Int
-  price       Float
-  total       Float
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  id              String        @id @default(uuid())
+  customerId      String
+  userId          String
+  storeId         String
+  clientId        String
+  paymentMethod   PaymentMethod
+  totalAmount     Float
+  tax             Float         @default(0)
+  status          SaleStatus    @default(PENDING)
+  generateInvoice Boolean       @default(true)
+  cashierName     String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
   fileUploadSalesId String?
-  FileUploadSales   FileUploadSales? @relation(fields: [fileUploadSalesId], references: [id])
-  product     Products  @relation(fields: [productId], references: [id])
-  user        Users     @relation(fields: [userId], references: [id])
-  store       Stores    @relation(fields: [storeId], references: [id])
+  
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  user            Users         @relation(fields: [userId], references: [id])
+  store           Stores        @relation(fields: [storeId], references: [id])
+  client          Clients       @relation(fields: [clientId], references: [id])
+  fileUploadSales          FileUploadSales?       @relation(fields: [fileUploadSalesId], references: [id])
+  saleItems       SaleItem[]
   saleAdjustments SaleAdjustment[]
+  invoices        Invoice[]
+  returns         SaleReturn[]
+  balanceSheets   BalanceSheet[]
+}
+
+model SaleItem {
+  id              String   @id @default(uuid())
+  saleId          String
+  productId       String
+  productName     String
+  quantity        Int
+  sellingPrice    Float
+  totalPrice      Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sale            Sales    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product         Products @relation(fields: [productId], references: [id])
+}
+
+model Invoice {
+  id              String   @id @default(uuid())
+  saleId          String
+  customerId      String
+  invoiceNumber   String   @unique
+  customerName    String
+  customerPhone   String
+  customerMail    String?
+  companyName     String?
+  companyMail     String?
+  companyAddress  String?
+  companyNo       String?
+  shippingAddress String?
+  paymentMethod   PaymentMethod
+  totalAmount     Float
+  tax             Float
+  status          SaleStatus
+  cashierName     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sale            Sales    @relation(fields: [saleId], references: [id])
+  customer        Customer @relation(fields: [customerId], references: [id])
+}
+
+model BalanceSheet {
+  id              String        @id @default(uuid())
+  customerId      String
+  saleId          String?
+  remainingAmount Float
+  amountPaid      Float
+  paymentStatus   PaymentStatus @default(UNPAID)
+  description     String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  sale            Sales?        @relation(fields: [saleId], references: [id])
+}
+
+model SaleReturn {
+  id              String        @id @default(uuid())
+  saleId          String
+  productId       String
+  quantity        Int
+  returnCategory  String
+  reason          String?
+  processedBy     String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  sale            Sales         @relation(fields: [saleId], references: [id])
+  product         Products      @relation(fields: [productId], references: [id])
+  processedByUser Users         @relation(fields: [processedBy], references: [id])
 }
 
 // Other models (StoreSettings, UserStoreMap, InviteLinks, etc.) remain unchanged
@@ -432,15 +558,16 @@ model Products {
   variants              Json[]    
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
-  fileUploadId          String?   
+  fileUploadId          String?     
   client                Clients   @relation(fields: [clientId], references: [id])
-  store                 Stores    @relation(fields: [storeId], references: [id])  
+  store                 Stores    @relation(fields: [storeId], references: [id])
   productSuppliers      ProductSupplier[]
-  sales                 Sales[]
+  saleItems             SaleItem[]
   fileUpload            FileUploadInventory? @relation(fields: [fileUploadId], references: [id])
   purchaseOrders        PurchaseOrders[]
   saleAdjustments       SaleAdjustment[]  @relation("ProductAdjustments")
   replacementAdjustments SaleAdjustment[] @relation("ReplacementProduct")
+  returns               SaleReturn[]
 }
 
 model Pack {

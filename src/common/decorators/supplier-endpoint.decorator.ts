@@ -7,7 +7,7 @@ import {
   ApiQuery,
   ApiResponse,
 } from '@nestjs/swagger';
-import { RequirePermissions } from '../../decorators/permissions.decorator';
+import { RequirePermissions } from '../../auth/decorators/permissions.decorator';
 import {
   PermissionResource,
   PermissionAction,

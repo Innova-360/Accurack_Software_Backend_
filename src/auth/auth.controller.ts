@@ -108,11 +108,31 @@ export class AuthController extends BaseAuthController {
   @AuthEndpoint.LoginEndpoint(LoginDto)
   @Post('login')
   async login(@Body() dto: LoginDto, @Res() res) {
-    return this.handleCookieAuth(
-      res,
-      () => this.authService.login(dto),
-      'Login successful',
-      200,
+
+    const resp = await this.authService.login(dto);
+
+    res.cookie('accessToken', resp.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+
+    res.cookie('refreshToken', resp.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+
+    return res.status(200).json(
+      this.responseService.success(
+        'Login successful',
+        {
+          user: this.extractUserData(resp.user),
+          accessToken: resp.accessToken,
+          refreshToken: resp.refreshToken,
+        },
+        200,
+      ),
     );
   }
 
