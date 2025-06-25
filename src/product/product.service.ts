@@ -93,6 +93,7 @@ export class ProductService {
     variants: any[],
     productId?: string,
   ): Promise<void> {
+    const prisma = await this.tenantContext.getPrismaClient();
     // Collect all PLU/UPC values from variants
     const variantPlus = variants
       .map((v) => v.pluUpc)
@@ -117,7 +118,7 @@ export class ProductService {
         whereCondition.NOT = { id: productId };
       }
 
-      const existing = await this.prisma.products.findFirst({
+      const existing = await prisma.products.findFirst({
         where: whereCondition,
       });
 
@@ -983,7 +984,8 @@ export class ProductService {
   }
 
   async checkInventoryFileHash(fileHash: string) {
-    return await this.prisma.fileUploadInventory.findUnique({
+    const prisma = await this.tenantContext.getPrismaClient();
+    return await prisma.fileUploadInventory.findUnique({
       where: { fileHash },
     });
   }
@@ -1016,7 +1018,8 @@ export class ProductService {
     fileHash: string,
     storeId: string,
   ) {
-    const store = await this.prisma.stores.findFirst({
+    const prisma = await this.tenantContext.getPrismaClient();
+    const store = await prisma.stores.findFirst({
       where: { id: storeId },
     });
     if (!store) {
@@ -1024,7 +1027,7 @@ export class ProductService {
     }
 
     // Validate that the client exists
-    const client = await this.prisma.clients.findUnique({
+    const client = await prisma.clients.findUnique({
       where: { id: user.clientId },
     });
     if (!client) {
@@ -1044,7 +1047,8 @@ export class ProductService {
       error: err.errors.join('; '),
     }));
     try {
-      const result = await this.prisma.$transaction(async (prisma) => {
+      const prisma = await this.tenantContext.getPrismaClient();
+      const result = await prisma.$transaction(async (prisma) => {
         const fileUpload = await prisma.fileUploadInventory.create({
           data: {
             fileHash,
@@ -1250,11 +1254,13 @@ export class ProductService {
       };
     } catch (error) {
       console.error(':x: Upload failed:', error);
-      const fileUpload = await this.prisma.fileUploadInventory.findUnique({
+
+      const prisma = await this.tenantContext.getPrismaClient();
+      const fileUpload = await prisma.fileUploadInventory.findUnique({
         where: { fileHash },
       });
       if (fileUpload) {
-        await this.prisma.fileUploadInventory.update({
+        await prisma.fileUploadInventory.update({
           where: { id: fileUpload.id },
           data: { status: 'failed', error: error.message },
         });
@@ -1282,7 +1288,8 @@ export class ProductService {
   }
 
   async getUploadStatus(fileUploadId: string) {
-    const fileUpload = await this.prisma.fileUploadInventory.findUnique({
+    const prisma = await this.tenantContext.getPrismaClient();
+    const fileUpload = await prisma.fileUploadInventory.findUnique({
       where: { id: fileUploadId },
       select: {
         id: true,

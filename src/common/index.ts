@@ -16,16 +16,20 @@ export * from './decorators/store-endpoint.decorator';
 export * from './decorators/tenant-endpoint.decorator';
 export * from './decorators/sale-endpoint.decorator';
 export * from './decorators/use-master-db.decorator';
+export * from './decorators/employee-endpoint.decorator';
 
 // Filters
 export * from './filters/global-exception.filter';
 
 // Utils
 export * from './utils/cookie.helper';
+export * from './utils/generateRandomPass.helper';
 
 // Controllers
 export * from './controllers/base-auth.controller';
 export * from './controllers/base-sale.controller';
+export * from './controllers/base-employee.controller';
+
 
 // Guards
 export * from '../guards/permissions.guard';

@@ -9,6 +9,7 @@ import { PermissionsModule } from './permissions/permissions.module';
 import { ProductModule } from './product/product.module';
 import { TenantModule } from './tenant/tenant.module';
 import { DatabaseModule } from './database/database.module';
+import { EmployeeModule } from './employee/employee.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 import { SaleModule } from './sale/sale-adjustments.module';
 
@@ -23,7 +24,9 @@ import { SaleModule } from './sale/sale-adjustments.module';
     PermissionsModule,
     TenantModule,
     DatabaseModule,
-    SaleModule
+    SaleModule,
+    EmployeeModule,
+
   ],
   providers: [
     {

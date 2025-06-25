@@ -81,6 +81,7 @@ async function bootstrap() {
     .addTag('Products', 'Product management endpoints')
     .addTag('Suppliers', 'Supplier management endpoints')
     .addTag('Permissions', 'Permission and role management endpoints')
+    .addTag('employees', 'Employee management endpoints')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
