@@ -113,6 +113,40 @@ export class PermissionsService {
       return false;
     }
   }
+  // Tenant-aware version of hasPermission
+  async hasPermissionWithClient(
+    clientdb: any,
+    userId: string,
+    resource: string,
+    action: string,
+    storeId?: string,
+  ): Promise<boolean> {
+    try {
+      // Check direct permission first
+      const hasDirectPermission = await this.checkDirectPermissionWithClient(
+        clientdb,
+        userId,
+        resource,
+        action,
+        storeId,
+      );
+      if (hasDirectPermission) return true;
+
+      // Check role-based permissions
+      const hasRolePermission = await this.checkRolePermissionsWithClient(
+        clientdb,
+        userId,
+        resource,
+        action,
+        storeId,
+      );
+      return hasRolePermission;
+    } catch (error) {
+      this.logger.error(`Permission check failed for user ${userId}:`, error);
+      return false;
+    }
+  }
+
   // Check direct permission in database
   private async checkDirectPermission(
     userId: string,
@@ -159,6 +193,53 @@ export class PermissionsService {
     return !!permission;
   }
 
+  // Tenant-aware version of checkDirectPermission
+  private async checkDirectPermissionWithClient(
+    clientdb: any,
+    userId: string,
+    resource: string,
+    action: string,
+    storeId?: string,
+  ): Promise<boolean> {
+    // Handle wildcard permissions
+    if (resource === '*' || action === '*') {
+      const wildcardPermission = await clientdb.permission.findFirst({
+        where: {
+          userId,
+          OR: [
+            { storeId },
+            { storeId: null }, // Global permission
+          ],
+          resource: resource === '*' ? undefined : resource,
+          actions: action === '*' ? undefined : { has: action },
+          granted: true,
+        },
+      });
+
+      if (wildcardPermission) return true;
+    }
+
+    const permission = await clientdb.permission.findFirst({
+      where: {
+        userId,
+        OR: [
+          { storeId },
+          { storeId: null }, // Global permission takes precedence
+        ],
+        resource,
+        actions: { has: action }, // PostgreSQL array contains operator
+        granted: true,
+        AND: [
+          {
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+          },
+        ],
+      },
+    });
+
+    return !!permission;
+  }
+
   // Check role-based permissions
   private async checkRolePermissions(
     userId: string,
@@ -167,6 +248,40 @@ export class PermissionsService {
     storeId?: string,
   ): Promise<boolean> {
     const userRoles = await this.prisma.userRole.findMany({
+      where: {
+        userId,
+        OR: [{ storeId }, { storeId: null }],
+        isActive: true,
+      },
+      include: {
+        roleTemplate: true,
+      },
+    });
+
+    for (const userRole of userRoles) {
+      const permissions = userRole.roleTemplate.permissions as any[];
+
+      for (const permission of permissions) {
+        if (
+          (permission.resource === resource || permission.resource === '*') &&
+          (permission.action === action || permission.action === '*')
+        ) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+  // Tenant-aware version of checkRolePermissions
+  private async checkRolePermissionsWithClient(
+    clientdb: any,
+    userId: string,
+    resource: string,
+    action: string,
+    storeId?: string,
+  ): Promise<boolean> {
+    const userRoles = await clientdb.userRole.findMany({
       where: {
         userId,
         OR: [{ storeId }, { storeId: null }],
@@ -394,6 +509,112 @@ export class PermissionsService {
     }
   }
 
+  // New method to handle permissions with client DB
+  async bulkAssignPermissionsWithClient(
+    clientdb: any,
+    dto: BulkAssignPermissionsDto,
+    performedBy: string,
+  ): Promise<void> {
+    // Use the provided client DB instance instead of this.prisma
+    const { userIds, permissions } = dto;
+
+    if (!userIds || userIds.length === 0) {
+      throw new BadRequestException('At least one user ID is required');
+    }
+
+    if (!permissions || permissions.length === 0) {
+      throw new BadRequestException('At least one permission is required');
+    }
+
+    // Process each user
+    for (const userId of userIds) {
+      // Check if user exists
+      const user = await clientdb.users.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        this.logger.warn(
+          `User with ID ${userId} not found, skipping permission assignment`,
+        );
+        continue;
+      }
+
+      // Process each permission
+      for (const permission of permissions) {
+        try {
+          // Create permission record using the client DB
+          await clientdb.permission.create({
+            data: {
+              userId,
+              resource: permission.resource,
+              actions: [permission.action], // Employee service passes action as a single value
+              storeId: (permission as any).storeId, // Use type assertion to access custom properties
+              resourceId: null, // Resource ID is handled separately
+              granted: true,
+              grantedBy: performedBy,
+            },
+          });
+        } catch (error) {
+          this.logger.error(
+            `Failed to assign permission for user ${userId}: ${error.message}`,
+            error.stack,
+          );
+          // Continue with other permissions rather than failing the whole operation
+        }
+      }
+    }
+  }
+
+  // New method to assign default permissions with client DB
+  async assignDefaultPermissionsWithClient(
+    clientdb: any,
+    userId: string,
+    role: string,
+  ): Promise<void> {
+    // Find default role template for the given role
+    const defaultTemplate = await clientdb.roleTemplate.findFirst({
+      where: {
+        name: { contains: role, mode: 'insensitive' },
+        isDefault: true,
+      },
+    });
+
+    if (!defaultTemplate) {
+      this.logger.warn(`No default role template found for role: ${role}`);
+      return;
+    }
+
+    // Assign the template permissions
+    const templatePermissions = defaultTemplate.permissions as any[];
+
+    // Process each permission
+    for (const permission of templatePermissions) {
+      try {
+        // Create permission record using the client DB
+        await clientdb.permission.create({
+          data: {
+            userId,
+            resource: permission.resource,
+            actions: Array.isArray(permission.action)
+              ? permission.action
+              : [permission.action],
+            storeId: permission.storeId, // Template may pass storeId directly
+            resourceId: null, // Resource ID is handled separately
+            granted: true,
+            grantedBy: userId, // Self-assigned from template
+          },
+        });
+      } catch (error) {
+        this.logger.error(
+          `Failed to assign default permission for user ${userId}: ${error.message}`,
+          error.stack,
+        );
+        // Continue with other permissions rather than failing the whole operation
+      }
+    }
+  }
+
   // Get user permissions
   async getUserPermissions(
     userId: string,
@@ -502,6 +723,125 @@ export class PermissionsService {
       };
     } catch (error) {
       this.logger.error('Failed to get user permissions:', error);
+      throw error;
+    }
+  }
+
+  // Tenant-aware version of getUserPermissions
+  async getUserPermissionsWithClient(
+    clientdb: any,
+    userId: string,
+    storeId?: string,
+  ): Promise<UserPermissionsResponseDto> {
+    try {
+      // Get direct permissions using client DB
+      const directPermissions = await clientdb.permission.findMany({
+        where: {
+          userId,
+          OR: [
+            { storeId },
+            { storeId: null },
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+          granted: true,
+        },
+      });
+
+      // Get role permissions using client DB
+      const userRoles = await clientdb.userRole.findMany({
+        where: {
+          userId,
+          OR: [{ storeId }, { storeId: null }],
+          isActive: true,
+        },
+        include: {
+          roleTemplate: true,
+        },
+      });
+
+      const rolePermissions: any[] = [];
+      const roleTemplateNames: string[] = [];
+
+      for (const userRole of userRoles) {
+        roleTemplateNames.push(userRole.roleTemplate.name);
+        const permissions = userRole.roleTemplate.permissions as any[];
+        rolePermissions.push(...permissions);
+      }
+
+      // Group permissions by resource/store/resourceId combination
+      const permissionMap = new Map<
+        string,
+        {
+          resource: string;
+          storeId?: string;
+          resourceId?: string;
+          actions: Set<string>;
+          conditions?: Record<string, any>;
+          expiresAt?: string;
+        }
+      >();
+
+      // Process direct permissions (already have actions as arrays)
+      for (const p of directPermissions) {
+        const actions = (p as any).actions || [];
+        const key = `${p.resource}-${p.storeId || 'global'}-${p.resourceId || 'none'}`;
+        if (!permissionMap.has(key)) {
+          permissionMap.set(key, {
+            resource: p.resource,
+            storeId: p.storeId || undefined,
+            resourceId: p.resourceId || undefined,
+            actions: new Set<string>(),
+            conditions: (p.conditions as Record<string, any>) || undefined,
+            expiresAt: p.expiresAt?.toISOString(),
+          });
+        }
+
+        const permission = permissionMap.get(key)!;
+        actions.forEach((action: string) => permission.actions.add(action));
+      }
+
+      // Process role permissions (single action each)
+      for (const p of rolePermissions) {
+        const key = `${p.resource}-${p.storeId || 'global'}-${p.resourceId || 'none'}`;
+        if (!permissionMap.has(key)) {
+          permissionMap.set(key, {
+            resource: p.resource,
+            storeId: p.storeId || undefined,
+            resourceId: p.resourceId || undefined,
+            actions: new Set<string>(),
+            conditions: (p.conditions as Record<string, any>) || undefined,
+            expiresAt: p.expiresAt,
+          });
+        }
+
+        const permission = permissionMap.get(key)!;
+        permission.actions.add(p.action);
+      }
+
+      // Convert to final format
+      const groupedPermissions = Array.from(permissionMap.values()).map(
+        (p) => ({
+          resource: p.resource as PermissionResource,
+          actions: Array.from(p.actions),
+          storeId: p.storeId,
+          resourceId: p.resourceId,
+          conditions: p.conditions,
+          expiresAt: p.expiresAt,
+        }),
+      );
+
+      return {
+        userId,
+        storeId,
+        permissions: groupedPermissions,
+        roleTemplates: roleTemplateNames,
+      };
+    } catch (error) {
+      this.logger.error(
+        'Failed to get user permissions with client DB:',
+        error,
+      );
       throw error;
     }
   }
@@ -791,6 +1131,51 @@ export class PermissionsService {
       };
     } catch (error) {
       this.logger.error('Failed to check permission:', error);
+      throw error;
+    }
+  }
+
+  // Tenant-aware version of checkPermission
+  async checkPermissionWithClient(
+    clientdb: any,
+    dto: CheckPermissionDto,
+    userId: string,
+  ): Promise<PermissionCheckResponseDto> {
+    try {
+      const hasPermission = await this.hasPermissionWithClient(
+        clientdb,
+        userId,
+        dto.resource,
+        dto.action,
+        dto.storeId,
+      );
+
+      // Determine source of permission
+      let source: 'direct' | 'role' | 'inherited' = 'direct';
+
+      if (hasPermission) {
+        const directPermission = await this.checkDirectPermissionWithClient(
+          clientdb,
+          userId,
+          dto.resource,
+          dto.action,
+          dto.storeId,
+        );
+
+        if (!directPermission) {
+          source = 'role';
+        }
+      }
+
+      return {
+        hasPermission,
+        resource: dto.resource,
+        action: dto.action,
+        storeId: dto.storeId,
+        source,
+      };
+    } catch (error) {
+      this.logger.error('Failed to check permission with client DB:', error);
       throw error;
     }
   }

@@ -9,6 +9,7 @@ import { PermissionsModule } from './permissions/permissions.module';
 import { ProductModule } from './product/product.module';
 import { TenantModule } from './tenant/tenant.module';
 import { DatabaseModule } from './database/database.module';
+import { EmployeeModule } from './employee/employee.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 
 @Module({
@@ -22,6 +23,7 @@ import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
     PermissionsModule,
     TenantModule,
     DatabaseModule,
+    EmployeeModule,
   ],
   providers: [
     {
