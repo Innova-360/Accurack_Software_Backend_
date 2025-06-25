@@ -9,8 +9,8 @@ import { Reflector } from '@nestjs/core';
 import {
   PERMISSIONS_KEY,
   PermissionRequirement,
-} from '../decorators/permissions.decorator';
-import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+} from '../auth/decorators/permissions.decorator';
+import { IS_PUBLIC_KEY } from '../auth/decorators/public.decorator';
 import { PermissionsService } from '../permissions/permissions.service';
 
 @Injectable()

@@ -8,7 +8,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ProductResponseDto } from '../../product/dto/product.dto';
-import { RequirePermissions } from '../../decorators/permissions.decorator';
+import { RequirePermissions } from '../../auth/decorators/permissions.decorator';
 import {
   PermissionResource,
   PermissionAction,

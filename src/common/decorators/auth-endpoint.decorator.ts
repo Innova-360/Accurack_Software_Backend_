@@ -10,8 +10,8 @@ import {
 } from '@nestjs/swagger';
 import { Version } from '@nestjs/common';
 import { UseGuards } from '@nestjs/common';
-import { Public } from '../../decorators/public.decorator';
-import { Roles } from '../../decorators/roles.decorator';
+import { Public } from '../../auth/decorators/public.decorator';
+import { Roles } from '../../auth/decorators/roles.decorator';
 import { GoogleOAuthGuard } from '../../guards/google-oauth.guard';
 import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
 import { RolesGuard } from '../../guards/roles.guard';

@@ -328,7 +328,7 @@ export class ProductService {
               name: true,
             },
           },
-          sales: true,
+          saleItems: true,
           purchaseOrders: true,
         },
       });
@@ -412,6 +412,11 @@ export class ProductService {
             price: variant.price,
             pluUpc: variant.pluUpc,
             packIds: variantPackIds,
+            quantity: variant.quantity || 0, // Ensure quantity is set
+            msrpPrice: variant.msrpPrice || 0,
+            supplierId: variant.supplierId || null, // Optional supplierId
+            discountAmount: variant.discountAmount || 0,
+            percentDiscount: variant.percentDiscount || 0,
           };
         }),
       );
@@ -467,7 +472,7 @@ export class ProductService {
             name: true,
           },
         },
-        sales: true,
+        saleItems: true,
         purchaseOrders: true,
       },
     });
@@ -569,7 +574,7 @@ export class ProductService {
               name: true,
             },
           },
-          sales: true,
+          saleItems: true,
           purchaseOrders: true,
         },
         skip,
@@ -611,7 +616,7 @@ export class ProductService {
             name: true,
           },
         },
-        sales: true,
+        saleItems: true,
         purchaseOrders: true,
       },
     });
@@ -877,7 +882,7 @@ export class ProductService {
             name: true,
           },
         },
-        sales: true,
+        saleItems: true,
         purchaseOrders: true,
       },
     });
@@ -918,7 +923,7 @@ export class ProductService {
               name: true,
             },
           },
-          sales: true,
+          saleItems: true,
           purchaseOrders: true,
         },
       });
@@ -969,7 +974,7 @@ export class ProductService {
     //         name: true,
     //       },
     //     },
-    //     sales: true,
+    //     saleItems: true,
     //     purchaseOrders: true,
     //   },
     // });
