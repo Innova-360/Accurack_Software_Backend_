@@ -84,7 +84,7 @@ export class EmployeeService {
           phone,
           position,
           department,
-          role: roleTemplate.name, // Store role template name for compatibility
+          role: 'employee', // Store role template name for compatibility
           status: 'active',
           clientId: req.user.clientId,
         },
