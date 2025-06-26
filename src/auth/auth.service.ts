@@ -111,7 +111,7 @@ export class AuthService {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
-          role: user.role,
+          role: user.role || undefined,
           clientId: user.clientId,
           provider: 'google',
         },
@@ -394,7 +394,7 @@ export class AuthService {
       firstName: string;
       lastName: string;
       email: string;
-      role: Role;
+      role: string;
       stores: { storeId: string }[] | string[];
     };
   }> {
@@ -458,7 +458,7 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
-        role: user.role,
+        role: user.role ?? 'employee',
         stores: payload.stores,
       },
     };
@@ -1072,7 +1072,7 @@ export class AuthService {
 
       if (existingClient) {
         throw new BadRequestException(
-          `Company email '${clientEmailToUse}' already exists for client '${existingClient.name}'`
+          `Company email '${clientEmailToUse}' already exists for client '${existingClient.name}'`,
         );
       }
 

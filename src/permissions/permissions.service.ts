@@ -24,13 +24,17 @@ import {
   DEFAULT_ROLE_TEMPLATES,
   RESOURCE_PERMISSIONS,
 } from './enums/permission.enum';
+import { TenantContextService } from 'src/tenant/tenant-context.service';
 
 @Injectable()
 export class PermissionsService {
   private readonly logger = new Logger(PermissionsService.name);
   private readonly CACHE_TTL = 15 * 60; // 15 minutes
   private readonly CACHE_PREFIX = 'user_permissions:';
-  constructor(private prisma: PrismaClientService) {}
+  constructor(
+    private prisma: PrismaClientService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   // Helper to normalize actions to string array
   private normalizeActions(action: string | string[] | '*'): string[] {
@@ -48,10 +52,11 @@ export class PermissionsService {
   // Initialize default role templates
   async initializeDefaultRoles(createdBy?: string): Promise<void> {
     try {
+      const clientdb = await this.tenantContext.getPrismaClient();
       // If no createdBy provided, try to find the first super admin user
       let createdByUserId = createdBy;
       if (!createdByUserId) {
-        const superAdminUser = await this.prisma.users.findFirst({
+        const superAdminUser = await clientdb.users.findFirst({
           where: { role: 'super_admin' },
           select: { id: true },
         });
@@ -59,12 +64,12 @@ export class PermissionsService {
       }
 
       for (const [key, template] of Object.entries(DEFAULT_ROLE_TEMPLATES)) {
-        const existing = await this.prisma.roleTemplate.findUnique({
+        const existing = await clientdb.roleTemplate.findUnique({
           where: { name: template.name },
         });
 
         // if (!existing) {
-        //   await this.prisma.roleTemplate.create({
+        //   await clientdb.roleTemplate.create({
         //     data: {
         //       name: template.name,
         //       description: template.description,
@@ -155,8 +160,9 @@ export class PermissionsService {
     storeId?: string,
   ): Promise<boolean> {
     // Handle wildcard permissions
+    const clientdb = await this.tenantContext.getPrismaClient();
     if (resource === '*' || action === '*') {
-      const wildcardPermission = await this.prisma.permission.findFirst({
+      const wildcardPermission = await clientdb.permission.findFirst({
         where: {
           userId,
           OR: [
@@ -172,7 +178,7 @@ export class PermissionsService {
       if (wildcardPermission) return true;
     }
 
-    const permission = await this.prisma.permission.findFirst({
+    const permission = await clientdb.permission.findFirst({
       where: {
         userId,
         OR: [
@@ -247,7 +253,8 @@ export class PermissionsService {
     action: string,
     storeId?: string,
   ): Promise<boolean> {
-    const userRoles = await this.prisma.userRole.findMany({
+    const clientdb = await this.tenantContext.getPrismaClient();
+    const userRoles = await clientdb.userRole.findMany({
       where: {
         userId,
         OR: [{ storeId }, { storeId: null }],
@@ -342,7 +349,9 @@ export class PermissionsService {
       }
 
       // Check for existing permission with same criteria (excluding actions)
-      const existingPermission = await this.prisma.permission.findFirst({
+
+      const clientdb = await this.tenantContext.getPrismaClient();
+      const existingPermission = await clientdb.permission.findFirst({
         where: {
           userId: dto.userId,
           resource: dto.resource,
@@ -357,7 +366,7 @@ export class PermissionsService {
         const mergedActions = Array.from(
           new Set([...existingActions, ...actionsArray]),
         );
-        await (this.prisma.permission as any).update({
+        await clientdb.permission.update({
           where: { id: existingPermission.id },
           data: {
             actions: mergedActions,
@@ -375,7 +384,7 @@ export class PermissionsService {
         );
       } else {
         // Create new permission with actions array
-        const newPermission = await (this.prisma.permission as any).create({
+        const newPermission = await clientdb.permission.create({
           data: {
             userId: dto.userId,
             storeId: normalizedStoreId,
@@ -428,7 +437,9 @@ export class PermissionsService {
         dto.resourceId && dto.resourceId.trim() !== '' ? dto.resourceId : null;
 
       // Find existing permission
-      const existingPermission = await this.prisma.permission.findFirst({
+
+      const clientdb = await this.tenantContext.getPrismaClient();
+      const existingPermission = await clientdb.permission.findFirst({
         where: {
           userId: dto.userId,
           resource: dto.resource,
@@ -451,7 +462,7 @@ export class PermissionsService {
 
       if (remainingActions.length === 0) {
         // No actions left, delete the entire permission
-        await this.prisma.permission.delete({
+        await clientdb.permission.delete({
           where: { id: existingPermission.id },
         });
 
@@ -460,7 +471,7 @@ export class PermissionsService {
         );
       } else {
         // Update permission with remaining actions
-        await (this.prisma.permission as any).update({
+        await clientdb.permission.update({
           where: { id: existingPermission.id },
           data: {
             actions: remainingActions,
@@ -515,7 +526,7 @@ export class PermissionsService {
     dto: BulkAssignPermissionsDto,
     performedBy: string,
   ): Promise<void> {
-    // Use the provided client DB instance instead of this.prisma
+    // Use the provided client DB instance instead of clientdb
     const { userIds, permissions } = dto;
 
     if (!userIds || userIds.length === 0) {
@@ -622,7 +633,9 @@ export class PermissionsService {
   ): Promise<UserPermissionsResponseDto> {
     try {
       // Get direct permissions
-      const directPermissions = await this.prisma.permission.findMany({
+
+      const clientdb = await this.tenantContext.getPrismaClient();
+      const directPermissions = await clientdb.permission.findMany({
         where: {
           userId,
           OR: [
@@ -634,7 +647,7 @@ export class PermissionsService {
           granted: true,
         },
       }); // Get role permissions
-      const userRoles = await this.prisma.userRole.findMany({
+      const userRoles = await clientdb.userRole.findMany({
         where: {
           userId,
           OR: [{ storeId }, { storeId: null }],
@@ -856,7 +869,8 @@ export class PermissionsService {
       for (const permission of dto.permissions) {
         this.validatePermission(permission.resource, permission.action);
       }
-      const roleTemplate = await this.prisma.roleTemplate.create({
+      const clientdb = await this.tenantContext.getPrismaClient();
+      const roleTemplate = await clientdb.roleTemplate.create({
         data: {
           name: dto.name,
           description: dto.description,
@@ -882,7 +896,8 @@ export class PermissionsService {
     assignedBy: string,
   ): Promise<void> {
     try {
-      const roleTemplate = await this.prisma.roleTemplate.findUnique({
+      const clientdb = await this.tenantContext.getPrismaClient();
+      const roleTemplate = await clientdb.roleTemplate.findUnique({
         where: { id: dto.roleTemplateId },
       });
 
@@ -891,7 +906,7 @@ export class PermissionsService {
       }
 
       const operations = dto.userIds.map((userId) =>
-        this.prisma.userRole.upsert({
+        clientdb.userRole.upsert({
           where: {
             userId_roleTemplateId_storeId: {
               userId,
@@ -913,7 +928,7 @@ export class PermissionsService {
         }),
       );
 
-      await this.prisma.$transaction(operations);
+      await clientdb.$transaction(operations);
 
       this.logger.log(
         `Role template '${roleTemplate.name}' assigned to ${dto.userIds.length} users`,
@@ -930,8 +945,9 @@ export class PermissionsService {
     storeId?: string,
   ): Promise<void> {
     try {
+      const clientdb = await this.tenantContext.getPrismaClient();
       // First check if user is super admin
-      const user = await this.prisma.users.findUnique({
+      const user = await clientdb.users.findUnique({
         where: { id: userId },
         select: { role: true, email: true },
       });
@@ -942,7 +958,7 @@ export class PermissionsService {
 
       // For super admins, assign the Super Admin role template directly
       if (user.role === 'super_admin') {
-        const superAdminRole = await this.prisma.roleTemplate.findFirst({
+        const superAdminRole = await clientdb.roleTemplate.findFirst({
           where: { name: 'Super Admin' },
         });
 
@@ -964,7 +980,7 @@ export class PermissionsService {
           // If Super Admin role template doesn't exist, create it first
           await this.initializeDefaultRoles(userId); // Pass user ID
 
-          const newSuperAdminRole = await this.prisma.roleTemplate.findFirst({
+          const newSuperAdminRole = await clientdb.roleTemplate.findFirst({
             where: { name: 'Super Admin' },
           });
 
@@ -987,7 +1003,7 @@ export class PermissionsService {
       }
 
       // For other users, look for default role
-      const defaultRole = await this.prisma.roleTemplate.findFirst({
+      const defaultRole = await clientdb.roleTemplate.findFirst({
         where: { isDefault: true, isActive: true },
       });
       if (defaultRole) {
@@ -1011,7 +1027,8 @@ export class PermissionsService {
 
   // Get all role templates
   async getRoleTemplates(): Promise<any[]> {
-    return this.prisma.roleTemplate.findMany({
+    const clientdb = await this.tenantContext.getPrismaClient();
+    return clientdb.roleTemplate.findMany({
       where: { isActive: true },
       orderBy: [{ priority: 'desc' }, { name: 'asc' }],
     });
@@ -1024,7 +1041,8 @@ export class PermissionsService {
     updatedBy: string,
   ): Promise<any> {
     try {
-      const existing = await this.prisma.roleTemplate.findUnique({
+      const clientdb = await this.tenantContext.getPrismaClient();
+      const existing = await clientdb.roleTemplate.findUnique({
         where: { id },
       });
 
@@ -1046,7 +1064,7 @@ export class PermissionsService {
         updateData.permissions = dto.permissions as any;
       }
 
-      const updated = await this.prisma.roleTemplate.update({
+      const updated = await clientdb.roleTemplate.update({
         where: { id },
         data: updateData,
       });
@@ -1062,7 +1080,8 @@ export class PermissionsService {
   // Delete role template
   async deleteRoleTemplate(id: string, deletedBy: string): Promise<void> {
     try {
-      const roleTemplate = await this.prisma.roleTemplate.findUnique({
+      const clientdb = await this.tenantContext.getPrismaClient();
+      const roleTemplate = await clientdb.roleTemplate.findUnique({
         where: { id },
       });
 
@@ -1071,7 +1090,7 @@ export class PermissionsService {
       }
 
       // Check if role template is in use
-      const userRolesCount = await this.prisma.userRole.count({
+      const userRolesCount = await clientdb.userRole.count({
         where: { roleTemplateId: id, isActive: true },
       });
 
@@ -1081,7 +1100,7 @@ export class PermissionsService {
         );
       }
 
-      await this.prisma.roleTemplate.update({
+      await clientdb.roleTemplate.update({
         where: { id },
         data: { isActive: false },
       });
@@ -1188,6 +1207,7 @@ export class PermissionsService {
     action: string,
   ): Promise<UserStorePermissionResponseDto> {
     try {
+      const clientdb = await this.tenantContext.getPrismaClient();
       // Step 1: Check if user has access to this store
       const hasStoreAccess = await this.hasStoreAccess(userId, storeId);
       if (!hasStoreAccess) {
@@ -1202,7 +1222,7 @@ export class PermissionsService {
       }
 
       // Step 2: Check permissions in order of precedence      // Check GLOBAL permission (can do anywhere)
-      const globalPermission = await (this.prisma.permission as any).findFirst({
+      const globalPermission = await (clientdb.permission as any).findFirst({
         where: {
           userId,
           storeId: null, // global permission
@@ -1227,7 +1247,7 @@ export class PermissionsService {
           action,
         };
       } // Check STORE-SPECIFIC permission
-      const storePermission = await (this.prisma.permission as any).findFirst({
+      const storePermission = await (clientdb.permission as any).findFirst({
         where: {
           userId,
           storeId, // specific store
@@ -1291,7 +1311,8 @@ export class PermissionsService {
     userId: string,
     storeId: string,
   ): Promise<boolean> {
-    const storeMap = await this.prisma.userStoreMap.findUnique({
+    const clientdb = await this.tenantContext.getPrismaClient();
+    const storeMap = await clientdb.userStoreMap.findUnique({
       where: {
         userId_storeId: { userId, storeId },
       },
@@ -1336,7 +1357,8 @@ export class PermissionsService {
   async addUserToStore(userId: string, storeId: string): Promise<void> {
     try {
       // Check if mapping already exists
-      const existingMapping = await this.prisma.userStoreMap.findUnique({
+      const clientdb = await this.tenantContext.getPrismaClient();
+      const existingMapping = await clientdb.userStoreMap.findUnique({
         where: {
           userId_storeId: { userId, storeId },
         },
@@ -1350,7 +1372,7 @@ export class PermissionsService {
       }
 
       // Create the mapping
-      await this.prisma.userStoreMap.create({
+      await clientdb.userStoreMap.create({
         data: {
           userId,
           storeId,
@@ -1482,12 +1504,13 @@ export class PermissionsService {
         JSON.stringify(whereClause, null, 2),
       );
 
-      const existing = await this.prisma.permission.findFirst({
+      const clientdb = await this.tenantContext.getPrismaClient();
+      const existing = await clientdb.permission.findFirst({
         where: whereClause,
       });
 
       // Also find all permissions for this user/store/resource for comparison
-      const allRelated = await this.prisma.permission.findMany({
+      const allRelated = await clientdb.permission.findMany({
         where: {
           userId,
           resource,
@@ -1526,9 +1549,10 @@ export class PermissionsService {
     userId: string,
     storeId: string,
   ): Promise<void> {
+    const clientdb = await this.tenantContext.getPrismaClient();
     try {
       // Check if user still has any permissions for this store
-      const remainingPermissions = await this.prisma.permission.findFirst({
+      const remainingPermissions = await clientdb.permission.findFirst({
         where: {
           userId,
           storeId,
@@ -1538,7 +1562,7 @@ export class PermissionsService {
 
       // If no permissions remain, remove user from store
       if (!remainingPermissions) {
-        await this.prisma.userStoreMap.deleteMany({
+        await clientdb.userStoreMap.deleteMany({
           where: {
             userId,
             storeId,

@@ -41,7 +41,7 @@ export class AuthResponseDto {
     email: string;
     firstName?: string;
     lastName?: string;
-    role?: string;
+    role?: string | Role | null | undefined;
     clientId?: string;
     provider: string;
   };
