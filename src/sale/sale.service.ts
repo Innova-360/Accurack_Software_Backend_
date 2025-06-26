@@ -144,11 +144,11 @@ export class SaleService {
       // Validate products and update inventory
       for (const item of dto.saleItems) {
         const product = await tx.products.findUnique({
-          where: { id: item.productId },
+          where: { id: item.pluUpc },
         });
 
         if (!product) {
-          throw new NotFoundException(`Product with ID ${item.productId} not found`);
+          throw new NotFoundException(`Product with ID ${item.pluUpc} not found`);
         }
 
         if (product.itemQuantity < item.quantity) {
@@ -157,7 +157,7 @@ export class SaleService {
 
         // Update product inventory
         await tx.products.update({
-          where: { id: item.productId },
+          where: { id: item.pluUpc },
           data: {
             itemQuantity: {
               decrement: item.quantity,
@@ -187,7 +187,7 @@ export class SaleService {
         await tx.saleItem.create({
           data: {
             saleId: sale.id,
-            productId: item.productId,
+            pluUpc: item.pluUpc,
             productName: item.productName,
             quantity: item.quantity,
             sellingPrice: item.sellingPrice,
@@ -380,7 +380,7 @@ export class SaleService {
       // Restore inventory
       for (const item of sale.saleItems) {
         await tx.products.update({
-          where: { id: item.productId },
+          where: { id: item.pluUpc },
           data: {
             itemQuantity: {
               increment: item.quantity,
@@ -407,7 +407,7 @@ export class SaleService {
         where: { id: dto.saleId },
         include: {
           saleItems: {
-            where: { productId: dto.productId },
+            where: { pluUpc: dto.pluUpc },
           },
           customer: true,
         },
@@ -430,7 +430,7 @@ export class SaleService {
       const returnRecord = await tx.saleReturn.create({
         data: {
           saleId: dto.saleId,
-          productId: dto.productId,
+          pluUpc: dto.pluUpc,
           quantity: dto.quantity,
           returnCategory: dto.returnCategory,
           reason: dto.reason,
@@ -440,7 +440,7 @@ export class SaleService {
 
       // Update inventory based on return category
       const product = await tx.products.findUnique({
-        where: { id: dto.productId },
+        where: { id: dto.pluUpc },
       });
 
       if (!product) {
@@ -452,7 +452,7 @@ export class SaleService {
         case ReturnCategory.SCRAP:
           // Add back to inventory
           await tx.products.update({
-            where: { id: dto.productId },
+            where: { id: dto.pluUpc },
             data: {
               itemQuantity: {
                 increment: dto.quantity,
@@ -463,7 +463,7 @@ export class SaleService {
         case ReturnCategory.NON_SALEABLE:
           // Remove from inventory (already sold, now damaged)
           await tx.products.update({
-            where: { id: dto.productId },
+            where: { id: dto.pluUpc },
             data: {
               itemQuantity: {
                 decrement: Math.min(dto.quantity, product.itemQuantity),

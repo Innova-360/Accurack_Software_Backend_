@@ -91,7 +91,7 @@ export class SaleController extends BaseSaleController {
 
   // Sale endpoints
   @SaleEndpoint.CreateSale(CreateSaleDto)
-  @Post()
+  @Post('create')
   async createSale(@Body() dto: CreateSaleDto, @Request() req: any) {
     return this.handleSaleCreation(
       () => this.saleService.createSale(dto, req.user.id),
@@ -100,7 +100,7 @@ export class SaleController extends BaseSaleController {
   }
 
   @SaleEndpoint.GetSales()
-  @Get()
+  @Get('list')
   async getSales(
     @Query('storeId') storeId: string,
     @Query() query: SaleQueryDto

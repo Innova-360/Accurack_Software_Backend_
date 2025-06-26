@@ -89,7 +89,11 @@ export class UpdateCustomerDto {
 export class SaleItemDto {
   @ApiProperty({ description: 'Product ID' })
   @IsUUID()
-  productId: string;
+  productId?: string;
+
+  @ApiProperty({ description: 'Product PLU/UPC' })
+  @IsUUID()
+  pluUpc: string;
 
   @ApiProperty({ description: 'Product name' })
   @IsString()
@@ -136,7 +140,7 @@ export class CreateSaleDto {
 
   @ApiProperty({ description: 'Total amount' })
   @IsNumber()
-  @IsPositive()
+  // @IsPositive()
   totalAmount: number;
 
   @ApiPropertyOptional({ description: 'Tax amount', default: 0 })
@@ -221,7 +225,11 @@ export class CreateSaleReturnDto {
 
   @ApiProperty({ description: 'Product ID' })
   @IsUUID()
-  productId: string;
+  productId?: string;
+
+  @ApiProperty({ description: 'Product PLU/UPC' })
+  @IsUUID()
+  pluUpc: string;
 
   @ApiProperty({ description: 'Quantity to return' })
   @IsNumber()

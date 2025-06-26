@@ -42,7 +42,9 @@ export function validateExcelRow(row: any, rowIndex: number): string[] {
 
   // Required fields validation
   if (!row.ProductName || typeof row.ProductName !== 'string') {
-    errors.push(`Row ${rowIndex + 1}: ProductName is required and must be text`);
+    errors.push(
+      `Row ${rowIndex + 1}: ProductName is required and must be text`,
+    );
   }
   if (!row.Category || typeof row.Category !== 'string') {
     errors.push(`Row ${rowIndex + 1}: Category is required and must be text`);
@@ -51,8 +53,10 @@ export function validateExcelRow(row: any, rowIndex: number): string[] {
     errors.push(`Row ${rowIndex + 1}: VendorName is required and must be text`);
   }
   if (!row.VendorPhone || typeof row.VendorPhone !== 'string') {
-    errors.push(`Row ${rowIndex + 1}: VendorPhone is required and must be text`);
-  }  // PLU/UPC is now optional - only validate format if provided
+    errors.push(
+      `Row ${rowIndex + 1}: VendorPhone is required and must be text`,
+    );
+  } // PLU/UPC is now optional - only validate format if provided
   if (row['PLU/UPC'] && typeof row['PLU/UPC'] !== 'string') {
     errors.push(`Row ${rowIndex + 1}: PLU/UPC must be text if provided`);
   }
@@ -62,37 +66,75 @@ export function validateExcelRow(row: any, rowIndex: number): string[] {
 
   // Numeric fields validation
   if (row.VendorPrice === undefined || isNaN(Number(row.VendorPrice))) {
-    errors.push(`Row ${rowIndex + 1}: VendorPrice is required and must be a number`);
+    errors.push(
+      `Row ${rowIndex + 1}: VendorPrice is required and must be a number`,
+    );
   }
-  if (row.IndividualItemQuantity === undefined || isNaN(Number(row.IndividualItemQuantity))) {
-    errors.push(`Row ${rowIndex + 1}: IndividualItemQuantity is required and must be a number`);
+  if (
+    row.IndividualItemQuantity === undefined ||
+    isNaN(Number(row.IndividualItemQuantity))
+  ) {
+    errors.push(
+      `Row ${rowIndex + 1}: IndividualItemQuantity is required and must be a number`,
+    );
   }
-  if (row.IndividualItemSellingPrice === undefined || isNaN(Number(row.IndividualItemSellingPrice))) {
-    errors.push(`Row ${rowIndex + 1}: IndividualItemSellingPrice is required and must be a number`);
+  if (
+    row.IndividualItemSellingPrice === undefined ||
+    isNaN(Number(row.IndividualItemSellingPrice))
+  ) {
+    errors.push(
+      `Row ${rowIndex + 1}: IndividualItemSellingPrice is required and must be a number`,
+    );
   }
   if (row.DiscountValue === undefined || isNaN(Number(row.DiscountValue))) {
-    errors.push(`Row ${rowIndex + 1}: DiscountValue is required and must be a number`);
+    errors.push(
+      `Row ${rowIndex + 1}: DiscountValue is required and must be a number`,
+    );
   }
-  if (row.DiscountPercentage === undefined || isNaN(Number(row.DiscountPercentage))) {
-    errors.push(`Row ${rowIndex + 1}: DiscountPercentage is required and must be a number`);
+  if (
+    row.DiscountPercentage === undefined ||
+    isNaN(Number(row.DiscountPercentage))
+  ) {
+    errors.push(
+      `Row ${rowIndex + 1}: DiscountPercentage is required and must be a number`,
+    );
   }
-  if (row.MinimumSellingQuantity === undefined || isNaN(Number(row.MinimumSellingQuantity))) {
-    errors.push(`Row ${rowIndex + 1}: MinimumSellingQuantity is required and must be a number`);
+  if (
+    row.MinimumSellingQuantity === undefined ||
+    isNaN(Number(row.MinimumSellingQuantity))
+  ) {
+    errors.push(
+      `Row ${rowIndex + 1}: MinimumSellingQuantity is required and must be a number`,
+    );
   }
-  if (row.MinimumOrderValue === undefined || isNaN(Number(row.MinimumOrderValue))) {
-    errors.push(`Row ${rowIndex + 1}: MinimumOrderValue is required and must be a number`);
+  if (
+    row.MinimumOrderValue === undefined ||
+    isNaN(Number(row.MinimumOrderValue))
+  ) {
+    errors.push(
+      `Row ${rowIndex + 1}: MinimumOrderValue is required and must be a number`,
+    );
   }
   if (row.PackOf === undefined || isNaN(Number(row.PackOf))) {
     errors.push(`Row ${rowIndex + 1}: PackOf is required and must be a number`);
   }
   if (row.PackOfPrice === undefined || isNaN(Number(row.PackOfPrice))) {
-    errors.push(`Row ${rowIndex + 1}: PackOfPrice is required and must be a number`);
+    errors.push(
+      `Row ${rowIndex + 1}: PackOfPrice is required and must be a number`,
+    );
   }
-  if (row.PriceDiscountAmount === undefined || isNaN(Number(row.PriceDiscountAmount))) {
-    errors.push(`Row ${rowIndex + 1}: PriceDiscountAmount is required and must be a number`);
+  if (
+    row.PriceDiscountAmount === undefined ||
+    isNaN(Number(row.PriceDiscountAmount))
+  ) {
+    errors.push(
+      `Row ${rowIndex + 1}: PriceDiscountAmount is required and must be a number`,
+    );
   }
   if (row.PercentDiscount === undefined || isNaN(Number(row.PercentDiscount))) {
-    errors.push(`Row ${rowIndex + 1}: PercentDiscount is required and must be a number`);
+    errors.push(
+      `Row ${rowIndex + 1}: PercentDiscount is required and must be a number`,
+    );
   }
 
   // Optional fields validation
@@ -117,33 +159,49 @@ export function validateExcelRow(row: any, rowIndex: number): string[] {
     errors.push(`Row ${rowIndex + 1}: VendorPrice cannot be negative`);
   }
   if (Number(row.IndividualItemSellingPrice) < 0) {
-    errors.push(`Row ${rowIndex + 1}: IndividualItemSellingPrice cannot be negative`);
+    errors.push(
+      `Row ${rowIndex + 1}: IndividualItemSellingPrice cannot be negative`,
+    );
   }
   if (Number(row.IndividualItemQuantity) < 0) {
-    errors.push(`Row ${rowIndex + 1}: IndividualItemQuantity cannot be negative`);
+    errors.push(
+      `Row ${rowIndex + 1}: IndividualItemQuantity cannot be negative`,
+    );
   }
   if (Number(row.DiscountValue) < 0) {
     errors.push(`Row ${rowIndex + 1}: DiscountValue cannot be negative`);
   }
-  if (Number(row.DiscountPercentage) < 0 || Number(row.DiscountPercentage) > 100) {
-    errors.push(`Row ${rowIndex + 1}: DiscountPercentage must be between 0 and 100`);
+  if (
+    Number(row.DiscountPercentage) < 0 ||
+    Number(row.DiscountPercentage) > 100
+  ) {
+    errors.push(
+      `Row ${rowIndex + 1}: DiscountPercentage must be between 0 and 100`,
+    );
   }
   if (Number(row.PercentDiscount) < 0 || Number(row.PercentDiscount) > 100) {
-    errors.push(`Row ${rowIndex + 1}: PercentDiscount must be between 0 and 100`);
+    errors.push(
+      `Row ${rowIndex + 1}: PercentDiscount must be between 0 and 100`,
+    );
   }
 
   return errors;
-};
+}
 
-export function parseExcel(file: { buffer: Buffer; originalname: string }): ValidationResult {
+export function parseExcel(file: {
+  buffer: Buffer;
+  originalname: string;
+}): ValidationResult {
   try {
     // Validate file type
     if (!file.originalname.match(/\.(xlsx|xls|csv)$/)) {
-      throw new BadRequestException('Only Excel files (.xlsx, .xls, .csv) are allowed');
+      throw new BadRequestException(
+        'Only Excel files (.xlsx, .xls, .csv) are allowed',
+      );
     }
 
     const workbook = XLSX.read(file.buffer, { type: 'buffer' });
-    
+
     if (workbook.SheetNames.length === 0) {
       throw new BadRequestException('Excel file is empty');
     }
@@ -159,32 +217,36 @@ export function parseExcel(file: { buffer: Buffer; originalname: string }): Vali
     const validationResult: ValidationResult = {
       isValid: true,
       errors: [],
-      data: []
+      data: [],
     };
 
     // Validate each row
     rawData.forEach((row: any, index: number) => {
-      const rowErrors = validateExcelRow(row, index);
-      
-      if (rowErrors.length > 0) {
-        validationResult.isValid = false;
-        validationResult.errors.push({
-          row: index + 1,
-          errors: rowErrors
-        });
-      }      // Convert types and clean data
+      // const rowErrors = validateExcelRow(row, index);
+
+      // if (rowErrors.length > 0) {
+      //   validationResult.isValid = false;
+      //   validationResult.errors.push({
+      //     row: index + 1,
+      //     errors: rowErrors
+      //   });
+      // }      // Convert types and clean data
       const cleanedRow: ProductExcelRow = {
-        ProductName: String(row.ProductName).trim(),
-        Category: String(row.Category).trim(),
-        description: row.description ? String(row.description).trim() : undefined,
-        VendorPrice: Number(row.VendorPrice),
-        'PLU/UPC': String(row['PLU/UPC']).trim(),
+        ProductName: String(row.ProductName || row.name).trim(),
+        Category: String(row.Category || row.category).trim(),
+        description: row.Description
+          ? String(row.Description).trim()
+          : undefined,
+        VendorPrice: Number(row.VendorPrice || row.Price),
+        'PLU/UPC': String(row['PLU/UPC'] || row.PLU).trim(),
         EAN: row.EAN ? String(row.EAN).trim() : undefined,
-        SKU: String(row.SKU).trim(),
+        SKU: String(row.CustomSKU).trim(),
         VendorName: String(row.VendorName).trim(),
         VendorPhone: String(row.VendorPhone).trim(),
-        IndividualItemQuantity: Number(row.IndividualItemQuantity),
-        IndividualItemSellingPrice: Number(row.IndividualItemSellingPrice),
+        IndividualItemQuantity: Number(row.IndividualItemQuantity || row.stock),
+        IndividualItemSellingPrice: Number(
+          row.IndividualItemSellingPrice || row.SellingPrice,
+        ),
         DiscountValue: Number(row.DiscountValue),
         DiscountPercentage: Number(row.DiscountPercentage),
         MinimumSellingQuantity: Number(row.MinimumSellingQuantity),
@@ -193,19 +255,26 @@ export function parseExcel(file: { buffer: Buffer; originalname: string }): Vali
         PackOfPrice: Number(row.PackOfPrice),
         PriceDiscountAmount: Number(row.PriceDiscountAmount),
         PercentDiscount: Number(row.PercentDiscount),
-        MatrixAttributes: row.MatrixAttributes ? String(row.MatrixAttributes).trim() : undefined,
+        MatrixAttributes: row.MatrixAttributes
+          ? String(row.MatrixAttributes).trim()
+          : undefined,
         Attribute1: row.Attribute1 ? String(row.Attribute1).trim() : undefined,
         Attribute2: row.Attribute2 ? String(row.Attribute2).trim() : undefined,
       };
 
+
       validationResult.data.push(cleanedRow);
     });
+
+    console.log(validationResult.data);
 
     return validationResult;
   } catch (error) {
     if (error instanceof BadRequestException) {
       throw error;
     }
-    throw new BadRequestException(`Failed to parse Excel file: ${error.message}`);
+    throw new BadRequestException(
+      `Failed to parse Excel file: ${error.message}`,
+    );
   }
 }
