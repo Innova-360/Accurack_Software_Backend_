@@ -19,7 +19,11 @@ import {
   PaymentStatus,
 } from './dto/sale.dto';
 import { TenantContextService } from '../tenant/tenant-context.service';
-import { parseExcelOrHTML, ProductExcelRow, ValidationResult } from 'src/utils/salesFileParser';
+import {
+  parseExcelOrHTML,
+  ProductExcelRow,
+  ValidationResult,
+} from 'src/utils/salesFileParser';
 import * as crypto from 'crypto';
 import { chunk } from 'lodash';
 
@@ -506,6 +510,9 @@ export class SaleService {
       }
 
       // Update customer balance sheet if sale was paid
+      if (!sale.customerId) {
+        throw new BadRequestException('Sale does not have a valid customerId');
+      }
       const lastBalance = await tx.balanceSheet.findFirst({
         where: { customerId: sale.customerId },
         orderBy: { createdAt: 'desc' },
@@ -628,7 +635,6 @@ export class SaleService {
     return `${prefix}-${String(sequence).padStart(4, '0')}`;
   }
 
-
   async checkSalesFileHash(fileHash: string) {
     const prisma = await this.tenantContext.getPrismaClient();
     return await prisma.fileUploadSales.findUnique({
@@ -691,106 +697,166 @@ export class SaleService {
       throw new BadRequestException('Store does not belong to your client');
     }
 
-    // Group data by customer (CustomerName and CustomerPhoneNumber)
-    const salesByCustomer = parsedData.data.reduce(
-      (acc, row) => {
-        const key = `${row.CustomerName}-${row.CustomerPhoneNumber}`;
-        if (!acc[key]) {
-          acc[key] = {
-            customerName: row.CustomerName,
-            customerPhoneNumber: row.CustomerPhoneNumber,
-            items: [],
-            totalAmount: 0,
-          };
-        }
-        acc[key].items.push(row);
-        acc[key].totalAmount += row.TotalPrice;
-        return acc;
-      },
-      {} as Record<
-        string,
-        {
-          customerName: string;
-          customerPhoneNumber: Number;
-          items: ProductExcelRow[];
-          totalAmount: number;
-        }
-      >,
-    );
-
     // Start a transaction to ensure atomicity
-    await prisma.$transaction(async (prisma) => {
-      // Create FileUploadSales record
-      const fileUpload = await prisma.fileUploadSales.create({
-        data: {
-          fileHash,
-          storeId: store.id,
-          fileName: file.originalname,
-        },
-      });
-
-      // Process each customer sale
-      for (const customerSale of Object.values(salesByCustomer)) {
-        // Find or create customer
-        let customer = await prisma.customer.findFirst({
-          where: {
-            customerName: customerSale.customerName,
-            phoneNumber: String(customerSale.customerPhoneNumber),
-            clientId: user.clientId,
+    await prisma.$transaction(
+      async (prisma) => {
+        // Create FileUploadSales record
+        const fileUpload = await prisma.fileUploadSales.create({
+          data: {
+            fileHash,
+            storeId: store.id,
+            fileName: file.originalname,
           },
         });
 
-        if (!customer) {
-          customer = await prisma.customer.create({
+        // Step 1: Aggregate unique product sales by PLU/UPC and calculate total quantity
+        const productSalesCount = parsedData.data.reduce((map, item) => {
+          const plu = item['PLU/UPC'];
+          const quantity = item.IndividualItemQuantity || 0;
+          map.set(plu, (map.get(plu) || 0) + quantity);
+          return map;
+        }, new Map<string, number>());
+
+        // Step 2: Fetch product inventory and validate stock
+        const inventoryMap = new Map<string, any>();
+        for (const plu of productSalesCount.keys()) {
+          const product = await prisma.products.findFirst({
+            where: { pluUpc: plu, storeId: store.id },
+          });
+          if (product) {
+            inventoryMap.set(plu, product);
+          }
+        }
+
+        // Step 3: Decrement stock for valid products
+        for (const [plu, quantity] of productSalesCount.entries()) {
+          const product = inventoryMap.get(plu);
+          console.log("product", product);
+          if (product && product.quantity >= quantity) {
+            await prisma.products.update({
+              where: { id: product.id },
+              data: { itemQuantity: { decrement: quantity } },
+            });
+          } else {
+            throw new BadRequestException(
+              `Insufficient stock for product with PLU/UPC: ${plu} or product not found`,
+            );
+          }
+        }
+
+        // Step 4: Group data by customer (CustomerName and CustomerPhoneNumber, allowing null/undefined)
+        const salesByCustomer = parsedData.data.reduce(
+          (acc, row) => {
+            const customerName = row.CustomerName || 'Unknown';
+            const customerPhoneNumber = String(row.CustomerPhoneNumber || '');
+            const key = `${customerName}-${customerPhoneNumber}`;
+            if (!acc[key]) {
+              acc[key] = {
+                customerName,
+                customerPhoneNumber,
+                items: [],
+                totalAmount: 0,
+              };
+            }
+            acc[key].items.push(row);
+            acc[key].totalAmount += row.TotalPrice;
+            return acc;
+          },
+          {} as Record<
+            string,
+            {
+              customerName: string;
+              customerPhoneNumber: string;
+              items: ProductExcelRow[];
+              totalAmount: number;
+            }
+          >,
+        );
+
+        // Step 5: Process each customer sale
+        for (const customerSale of Object.values(salesByCustomer)) {
+          let customerId = 'walking-customer';
+
+          // Only attempt to find or create customer if we have meaningful details
+          if (
+            customerSale.customerName !== 'Unknown' ||
+            customerSale.customerPhoneNumber
+          ) {
+            // Build where filter without null values
+            const customerWhere: any = { clientId: user.clientId };
+            if (customerSale.customerName !== 'Unknown') {
+              customerWhere.customerName = customerSale.customerName;
+            }
+            if (customerSale.customerPhoneNumber) {
+              customerWhere.phoneNumber = customerSale.customerPhoneNumber;
+            }
+
+            let customer = await prisma.customer.findFirst({
+              where: customerWhere,
+            });
+
+            if (
+              !customer &&
+              (customerSale.customerName !== 'Unknown' ||
+                customerSale.customerPhoneNumber)
+            ) {
+              customer = await prisma.customer.create({
+                data: {
+                  customerName:
+                    customerSale.customerName === 'Unknown'
+                      ? 'Anonymous'
+                      : customerSale.customerName,
+                  phoneNumber: customerSale.customerPhoneNumber || '',
+                  clientId: user.clientId,
+                  storeId: store.id,
+                },
+              });
+              customerId = customer.id;
+            }
+          }
+
+          // Step 6: Create Sales record
+          const sale = await prisma.sales.create({
             data: {
-              customerName: customerSale.customerName,
-              phoneNumber: String(customerSale.customerPhoneNumber),
-              clientId: user.clientId,
+              customerId,
+              userId: user.id,
               storeId: store.id,
+              clientId: user.clientId,
+              paymentMethod: PaymentMethod.CASH, // Adjust based on your requirements
+              totalAmount: customerSale.totalAmount,
+              tax: 0, // Adjust based on your requirements
+              status: 'PENDING',
+              generateInvoice: false,
+              cashierName: user.name || 'System',
+              fileUploadSalesId: fileUpload.id,
             },
           });
+
+          // Step 7: Create SaleItem records
+          const saleItems = customerSale.items.map((item) => ({
+            saleId: sale.id,
+            productId: inventoryMap.get(item['PLU/UPC'])?.id || null, // Use actual productId or null
+            pluUpc: item['PLU/UPC'],
+            productName: item.ProductName,
+            quantity: item.IndividualItemQuantity || 0,
+            sellingPrice: item.IndividualItemSellingPrice || 0,
+            totalPrice: item.TotalPrice,
+          }));
+
+          // Batch create SaleItems
+          const batchSize = 500;
+          const itemBatches = chunk(saleItems, batchSize);
+          for (const batch of itemBatches) {
+            await prisma.saleItem.createMany({
+              data: batch,
+            });
+          }
         }
-
-        // Create Sales record
-        const sale = await prisma.sales.create({
-          data: {
-            customerId: customer.id,
-            userId: user.id,
-            storeId: store.id,
-            clientId: user.clientId,
-            paymentMethod: PaymentMethod.CASH, // Adjust based on your requirements
-            totalAmount: customerSale.totalAmount,
-            tax: 0, // Adjust based on your requirements
-            status: 'PENDING',
-            generateInvoice: false,
-            cashierName: user.name || 'System',
-            fileUploadSalesId: fileUpload.id,
-          },
-        });
-
-        // Create SaleItem records
-        const saleItems = customerSale.items.map((item) => ({
-          saleId: sale.id,
-          productId: null, // Set to null if no product mapping is available
-          pluUpc: item['PLU/UPC'],
-          productName: item.ProductName,
-          quantity: item.IndividualItemQuantity || 0,
-          sellingPrice: item.IndividualItemSellingPrice || 0,
-          totalPrice: item.TotalPrice,
-        }));
-
-        // Batch create SaleItems
-        const batchSize = 500;
-        const itemBatches = chunk(saleItems, batchSize);
-        for (const batch of itemBatches) {
-          await prisma.saleItem.createMany({
-            data: batch,
-          });
-        }
-      }
-    }, {
-      timeout: 120000, // 120 seconds = 2 mins
-    });
+      },
+      {
+        timeout: 120000, // 120 seconds = 2 mins
+      },
+    );
 
     return { success: true, message: 'Sales processed successfully' };
   }
