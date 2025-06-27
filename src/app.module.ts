@@ -11,7 +11,7 @@ import { TenantModule } from './tenant/tenant.module';
 import { DatabaseModule } from './database/database.module';
 import { EmployeeModule } from './employee/employee.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
-import { SaleModule } from './sale/sale-adjustments.module';
+import { SaleModule } from './sale/sale.module';
 
 @Module({
   imports: [

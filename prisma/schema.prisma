@@ -242,7 +242,8 @@ model Sales {
 model SaleItem {
   id              String   @id @default(uuid())
   saleId          String
-  productId       String
+  productId       String?
+  pluUpc          String
   productName     String
   quantity        Int
   sellingPrice    Float
@@ -251,7 +252,7 @@ model SaleItem {
   updatedAt       DateTime @updatedAt
 
   sale            Sales    @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product         Products @relation(fields: [productId], references: [id])
+  product         Products? @relation(fields: [productId], references: [id])
 }
 
 model Invoice {
@@ -297,7 +298,8 @@ model BalanceSheet {
 model SaleReturn {
   id              String        @id @default(uuid())
   saleId          String
-  productId       String
+  productId       String?
+  pluUpc          String
   quantity        Int
   returnCategory  String
   reason          String?
@@ -306,7 +308,7 @@ model SaleReturn {
   updatedAt       DateTime      @updatedAt
 
   sale            Sales         @relation(fields: [saleId], references: [id])
-  product         Products      @relation(fields: [productId], references: [id])
+  product         Products?      @relation(fields: [productId], references: [id])
   processedByUser Users         @relation(fields: [processedBy], references: [id])
 }
 
@@ -543,7 +545,7 @@ model Products {
   name                  String
   category              String
   ean                   String?
-  pluUpc                String?   @unique
+  pluUpc                String?  
   sku                   String?
   itemQuantity          Int
   msrpPrice             Float

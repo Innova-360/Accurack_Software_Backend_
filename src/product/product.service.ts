@@ -13,7 +13,7 @@ import {
   parseExcel,
   ValidationResult,
   ProductExcelRow,
-} from '../utils/fileParser';
+} from '../utils/productsFileParser';
 import * as crypto from 'crypto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -208,19 +208,19 @@ export class ProductService {
 
     const prisma = await this.tenantContext.getPrismaClient();
     // Validate PLU uniqueness for non-variant products (only if PLU is provided)
-    if (!createProductDto.hasVariants && createProductDto.pluUpc) {
-      await this.validatePluUniqueness(async (plu: string) => {
-        const existing = await prisma.products.findFirst({
-          where: { pluUpc: plu },
-        });
-        return !!existing;
-      }, createProductDto.pluUpc);
-    }
+    // if (!createProductDto.hasVariants && createProductDto.pluUpc) {
+    //   await this.validatePluUniqueness(async (plu: string) => {
+    //     const existing = await prisma.products.findFirst({
+    //       where: { pluUpc: plu },
+    //     });
+    //     return !!existing;
+    //   }, createProductDto.pluUpc);
+    // }
 
     // Validate PLU uniqueness for variants (if product has variants)
-    if (createProductDto.hasVariants && createProductDto.variants) {
-      await this.validateVariantPluUniqueness(createProductDto.variants);
-    }
+    // if (createProductDto.hasVariants && createProductDto.variants) {
+    //   await this.validateVariantPluUniqueness(createProductDto.variants);
+    // }
 
     // Validate clientId and storeId
     if (!createProductDto.clientId || !createProductDto.storeId) {
@@ -589,7 +589,7 @@ export class ProductService {
     user: any,
     storeId?: string,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 1000,
   ) {
     this.validateProductAccess(user, storeId);
 
@@ -1093,6 +1093,7 @@ export class ProductService {
     }
     return fileHash;
   }
+
   async uploadInventorySheet(
     user: any,
     parsedData: ValidationResult,
@@ -1123,157 +1124,180 @@ export class ProductService {
       throw new BadRequestException('Store does not belong to your client');
     }
     const batchSize = 500;
-    const errorLogs = parsedData.errors.map((err) => ({
-      fileUploadId: '', // Will be set after fileUpload creation
-      rowNumber: err.row,
-      error: err.errors.join('; '),
-    }));
+    // const errorLogs = parsedData.errors.map((err) => ({
+    //   fileUploadId: '', // Will be set after fileUpload creation
+    //   rowNumber: err.row,
+    //   error: err.errors.join('; '),
+    // }));
     try {
       const prisma = await this.tenantContext.getPrismaClient();
-      const result = await prisma.$transaction(async (prisma) => {
-        const fileUpload = await prisma.fileUploadInventory.create({
-          data: {
-            fileHash,
-            storeId: store.id,
-            fileName: file.originalname,
-            status: 'processing',
-          },
-        });
-        if (errorLogs.length > 0) {
-          await prisma.errorLog.createMany({
-            data: errorLogs.map((log) => ({
-              ...log,
-              fileUploadId: fileUpload.id,
-            })),
+
+      // Ensure fresh connection for large operations
+      await prisma.$connect();
+
+      const result = await prisma.$transaction(
+        async (prisma) => {
+          const fileUpload = await prisma.fileUploadInventory.create({
+            data: {
+              fileHash,
+              storeId: store.id,
+              fileName: file.originalname,
+              status: 'processing',
+            },
           });
-        }
-        let processedItems = 0;
-        const validRows = parsedData.data.filter(
-          (_, idx) => !parsedData.errors.some((err) => err.row === idx + 1),
-        ); // Process each product individually to handle suppliers, variants, and packs
-        for (const product of validRows) {
-          // Find or create supplier only if vendor data is provided
-          let supplier: any = null;
-          if (product.VendorName && product.VendorName.trim()) {
-            supplier = await prisma.suppliers.findFirst({
-              where: {
-                name: product.VendorName,
-                phone: product.VendorPhone,
-                storeId: store.id,
-              },
-            });
-            if (!supplier) {
-              supplier = await prisma.suppliers.create({
-                data: {
-                  name: product.VendorName,
-                  phone: product.VendorPhone || '',
-                  email: '', // Default empty email as it's not provided in Excel
+          // if (errorLogs.length > 0) {
+          //   await prisma.errorLog.createMany({
+          //     data: errorLogs.map((log) => ({
+          //       ...log,
+          //       fileUploadId: fileUpload.id,
+          //     })),
+          //   });
+          // }
+          let processedItems = 0;
+          const validRows = parsedData.data.filter(
+            (_, idx) => !parsedData.errors.some((err) => err.row === idx + 1),
+          );
+
+          // Process each product individually to handle suppliers, variants, and packs
+          if (
+            parsedData.data &&
+            parsedData.data.length > 0 &&
+            parsedData.data[0].SKU !== 'undefined'
+          ) {
+            // Pre-create suppliers to reduce queries in the loop
+            const supplierMap = new Map();
+            const uniqueSuppliers = new Map();
+
+            // Collect unique suppliers first
+            for (const product of validRows) {
+              if (product.VendorName && product.VendorName.trim()) {
+                const supplierKey = `${product.VendorName}-${product.VendorPhone || ''}`;
+                if (!uniqueSuppliers.has(supplierKey)) {
+                  uniqueSuppliers.set(supplierKey, {
+                    name: product.VendorName,
+                    phone: product.VendorPhone || '',
+                    email: '',
+                    storeId: store.id,
+                    status: 'active',
+                  });
+                }
+              }
+            }
+
+            // Create or find suppliers in bulk
+            for (const [key, supplierData] of uniqueSuppliers) {
+              let supplier = await prisma.suppliers.findFirst({
+                where: {
+                  name: supplierData.name,
+                  phone: supplierData.phone,
                   storeId: store.id,
-                  status: 'active',
                 },
               });
-            }
-          } // Check if MatrixAttributes is null or empty to determine hasVariants
-          const hasMatrixAttributes = !!(
-            product.MatrixAttributes && product.MatrixAttributes.trim()
-          );
-          const hasVariants = hasMatrixAttributes;
 
-          // Validate PLU/UPC uniqueness if provided
-          if (!hasVariants && product['PLU/UPC'] && product['PLU/UPC'].trim()) {
-            const existingProduct = await prisma.products.findFirst({
-              where: { pluUpc: product['PLU/UPC'].trim() },
-            });
-            if (existingProduct) {
-              throw new BadRequestException(
-                `PLU/UPC '${product['PLU/UPC']}' already exists in database`,
+              if (!supplier) {
+                supplier = await prisma.suppliers.create({
+                  data: supplierData,
+                });
+              }
+
+              supplierMap.set(key, supplier);
+            }
+            for (const product of validRows) {
+              // Get supplier from pre-created map
+              let supplier: any = null;
+              if (product.VendorName && product.VendorName.trim()) {
+                const supplierKey = `${product.VendorName}-${product.VendorPhone || ''}`;
+                supplier = supplierMap.get(supplierKey);
+              } // Check if MatrixAttributes is null or empty to determine hasVariants
+              const hasMatrixAttributes = !!(
+                product.MatrixAttributes && product.MatrixAttributes.trim()
               );
-            }
-          } // Create the product (without supplier reference for now)
-          const productData: any = {
-            name: product.ProductName,
-            category: product.Category,
-            ean: product.EAN || '',
-            // Only set pluUpc if product doesn't have variants
-            pluUpc: hasVariants ? null : product['PLU/UPC'] || null,
-            sku: product.SKU,
-            itemQuantity: product.IndividualItemQuantity,
-            msrpPrice: product.IndividualItemSellingPrice,
-            singleItemSellingPrice: product.IndividualItemSellingPrice,
-            discountAmount: product.DiscountValue || 0,
-            percentDiscount: product.DiscountPercentage || 0,
-            clientId: user.clientId,
-            storeId: store.id,
-            hasVariants,
-            packIds: [],
-            variants: [],
-          };
+              const hasVariants = hasMatrixAttributes;
 
-          // Remove old supplierId logic since we now use ProductSupplier relationship
-
-          const createdProduct = await prisma.products.create({
-            data: productData,
-          });
-
-          // Create ProductSupplier relationship if supplier exists
-          if (supplier) {
-            await prisma.productSupplier.create({
-              data: {
-                productId: createdProduct.id,
-                supplierId: supplier.id,
-                costPrice: product.VendorPrice || 0,
+              // Validate PLU/UPC uniqueness if provided
+              if (
+                !hasVariants &&
+                product['PLU/UPC'] &&
+                product['PLU/UPC'].trim()
+              ) {
+                const existingProduct = await prisma.products.findFirst({
+                  where: { pluUpc: product['PLU/UPC'].trim() },
+                });
+                if (existingProduct) {
+                  throw new BadRequestException(
+                    `PLU/UPC '${product['PLU/UPC']}' already exists in database`,
+                  );
+                }
+              } // Create the product (without supplier reference for now)
+              const productData: any = {
+                name: product.ProductName,
                 category: product.Category,
-                state: 'primary', // Default to primary for uploaded products
-              },
-            });
-          }
+                ean: product.EAN || '',
+                // Only set pluUpc if product doesn't have variants
+                pluUpc: hasVariants
+                  ? null
+                  : product['PLU/UPC'] && product['PLU/UPC'] !== 'undefined'
+                    ? product['PLU/UPC']
+                    : null,
+                sku:
+                  product.SKU && product.SKU !== 'undefined'
+                    ? product.SKU
+                    : null,
+                itemQuantity: product.IndividualItemQuantity || 0,
+                msrpPrice: isNaN(product.IndividualItemSellingPrice)
+                  ? 0
+                  : product.IndividualItemSellingPrice,
+                singleItemSellingPrice: isNaN(
+                  product.IndividualItemSellingPrice,
+                )
+                  ? 0
+                  : product.IndividualItemSellingPrice,
+                discountAmount: product.DiscountValue || 0,
+                percentDiscount: product.DiscountPercentage || 0,
+                hasVariants,
+                packIds: [],
+                variants: [],
+                // Use relation objects instead of IDs
+                client: {
+                  connect: { id: user.clientId },
+                },
+                store: {
+                  connect: { id: store.id },
+                },
+              };
 
-          if (!hasVariants) {
-            // No variants - create pack record and put its reference id directly in products table
-            const pack = await prisma.pack.create({
-              data: {
-                productId: createdProduct.id,
-                minimumSellingQuantity: product.MinimumSellingQuantity || 1,
-                totalPacksQuantity: product.PackOf || 1,
-                orderedPacksPrice: product.PackOfPrice,
-                discountAmount: product.PriceDiscountAmount || 0,
-                percentDiscount: product.PercentDiscount || 0,
-              },
-            });
-            // Update product with pack reference
-            await prisma.products.update({
-              where: { id: createdProduct.id },
-              data: {
-                packIds: [pack.id],
-              },
-            });
-          } else {
-            // Has variants - create variant and pack record for each variant
-            const matrixAttributeNames =
-              product.MatrixAttributes?.split(/[\/,]/).map((attr) =>
-                attr.trim(),
-              ) || [];
-            const attributeValues = [
-              product.Attribute1,
-              product.Attribute2,
-            ].filter(Boolean);
-            const variants: any[] = [];
-            // If we have attribute values, create variants for each
-            if (attributeValues.length > 0) {
-              for (const attributeValue of attributeValues) {
-                if (!attributeValue) continue; // Skip undefined/null values
-                // Create pack for this variant
+              // Remove old supplierId logic since we now use ProductSupplier relationship
+
+              const createdProduct = await prisma.products.create({
+                data: productData,
+              });
+
+              // Create ProductSupplier relationship if supplier exists
+              if (supplier) {
+                await prisma.productSupplier.create({
+                  data: {
+                    productId: createdProduct.id,
+                    supplierId: supplier.id,
+                    costPrice: product.VendorPrice || 0,
+                    category: product.Category,
+                    state: 'primary', // Default to primary for uploaded products
+                  },
+                });
+              }
+
+              if (!hasVariants) {
+                // No variants - create pack record and put its reference id directly in products table
                 const pack = await prisma.pack.create({
                   data: {
                     productId: createdProduct.id,
                     minimumSellingQuantity: product.MinimumSellingQuantity || 1,
                     totalPacksQuantity: product.PackOf || 1,
-                    orderedPacksPrice:
-                      product.PackOfPrice || product.IndividualItemSellingPrice,
+                    orderedPacksPrice: product.PackOfPrice,
                     discountAmount: product.PriceDiscountAmount || 0,
                     percentDiscount: product.PercentDiscount || 0,
                   },
                 });
+
 
                 // Extract any additional columns as dynamic properties
                 const dynamicProperties = {};
@@ -1398,27 +1422,103 @@ export class ProductService {
                 // Dynamic properties
                 ...dynamicProperties, // Include any additional dynamic properties
               });
+
             }
-            // Update product with variants
-            await prisma.products.update({
-              where: { id: createdProduct.id },
-              data: {
-                variants: variants,
-              },
-            });
+          } else {
+            const batches = chunk(parsedData.data, 500);
+
+            await Promise.all(
+              batches.map(async (batch) => {
+                processedItems += batch.length;
+                await prisma.products.createMany({
+                  data: batch.map((product) => ({
+                    name: product.ProductName,
+                    category: product.Category,
+                    pluUpc:
+                      product['PLU/UPC'] && product['PLU/UPC'] !== 'undefined'
+                        ? product['PLU/UPC']
+                        : null,
+                    sku:
+                      product.SKU && product.SKU !== 'undefined'
+                        ? product.SKU
+                        : null,
+                    itemQuantity: product.IndividualItemQuantity || 0,
+                    msrpPrice: isNaN(product.IndividualItemSellingPrice)
+                      ? 0
+                      : product.IndividualItemSellingPrice,
+                    singleItemSellingPrice: isNaN(
+                      product.IndividualItemSellingPrice,
+                    )
+                      ? 0
+                      : product.IndividualItemSellingPrice,
+                    discountAmount: product.DiscountValue || 0,
+                    percentDiscount: product.DiscountPercentage || 0,
+                    hasVariants: false,
+                    packIds: [],
+                    variants: [],
+                    clientId: user.clientId,
+                    storeId: store.id,
+                  })),
+                });
+              })
+            );
+
+            // for (const product of validRows) {
+            //   const productData: any = {
+            //     name: product.ProductName,
+            //     category: product.Category,
+            //     pluUpc:
+            //       product['PLU/UPC'] && product['PLU/UPC'] !== 'undefined'
+            //         ? product['PLU/UPC']
+            //         : null,
+            //     sku:
+            //       product.SKU && product.SKU !== 'undefined'
+            //         ? product.SKU
+            //         : null,
+            //     itemQuantity: product.IndividualItemQuantity || 0,
+            //     msrpPrice: isNaN(product.IndividualItemSellingPrice)
+            //       ? 0
+            //       : product.IndividualItemSellingPrice,
+            //     singleItemSellingPrice: isNaN(
+            //       product.IndividualItemSellingPrice,
+            //     )
+            //       ? 0
+            //       : product.IndividualItemSellingPrice,
+            //     discountAmount: product.DiscountValue || 0,
+            //     percentDiscount: product.DiscountPercentage || 0,
+            //     hasVariants: false,
+            //     packIds: [],
+            //     variants: [],
+            //     client: {
+            //       connect: { id: user.clientId },
+            //     },
+            //     store: {
+            //       connect: { id: store.id },
+            //     },
+            //   };
+
+            //   const createdProduct = await prisma.products.create({
+            //     data: productData,
+            //   });
+
+            //   processedItems++;
+            // }
           }
-          processedItems++;
-        }
-        await prisma.fileUploadInventory.update({
-          where: { id: fileUpload.id },
-          data: { status: 'completed' },
-        });
-        return {
-          totalProcessed: processedItems,
-          totalItems: parsedData.data.length,
-          fileUploadId: fileUpload.id,
-        };
-      });
+
+          await prisma.fileUploadInventory.update({
+            where: { id: fileUpload.id },
+            data: { status: 'completed' },
+          });
+          return {
+            totalProcessed: processedItems,
+            totalItems: parsedData.data.length,
+            fileUploadId: fileUpload.id,
+          };
+        },
+        {
+          timeout: 240000, // 240 seconds timeout for large file uploads
+        },
+      );
       return {
         success: true,
         message: 'Inventory has been added successfully',
@@ -1431,24 +1531,41 @@ export class ProductService {
     } catch (error) {
       console.error(':x: Upload failed:', error);
 
-      const prisma = await this.tenantContext.getPrismaClient();
-      const fileUpload = await prisma.fileUploadInventory.findUnique({
-        where: { fileHash },
-      });
-      if (fileUpload) {
-        await prisma.fileUploadInventory.update({
-          where: { id: fileUpload.id },
-          data: { status: 'failed', error: error.message },
+      try {
+        const prisma = await this.tenantContext.getPrismaClient();
+        const fileUpload = await prisma.fileUploadInventory.findUnique({
+          where: { fileHash },
         });
+        if (fileUpload) {
+          await prisma.fileUploadInventory.update({
+            where: { id: fileUpload.id },
+            data: { status: 'failed', error: error.message },
+          });
+        }
+      } catch (updateError) {
+        console.error('Failed to update file upload status:', updateError);
       }
+
       if (error.code === 'P2002') {
         throw new ConflictException('Duplicate SKU or PLU found in database');
       }
+
+      // Handle specific transaction errors
+      if (
+        error.message?.includes('Transaction not found') ||
+        error.message?.includes('Transaction already closed')
+      ) {
+        throw new BadRequestException(
+          'Upload failed due to timeout. Please try uploading a smaller file or contact support for large file uploads.',
+        );
+      }
+
       throw new BadRequestException(
         `Error while adding inventory: ${error.message}`,
       );
     }
   }
+
   async addInventory(user: any, file: Express.Multer.File, storeId: string) {
     console.log('user', user, 'file', file);
     const fileHash = await this.checkInventoryFileStatus(file, user);

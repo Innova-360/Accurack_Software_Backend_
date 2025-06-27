@@ -1,22 +1,34 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaClientService } from '../prisma-client/prisma-client.service';
-import { 
-  CreateSaleDto, 
-  UpdateSaleDto, 
-  CreateSaleReturnDto, 
-  CreatePaymentDto, 
+import {
+  CreateSaleDto,
+  UpdateSaleDto,
+  CreateSaleReturnDto,
+  CreatePaymentDto,
   SaleQueryDto,
   CreateCustomerDto,
   UpdateCustomerDto,
   PaymentMethod,
   SaleStatus,
   ReturnCategory,
-  PaymentStatus
+  PaymentStatus,
 } from './dto/sale.dto';
+import { TenantContextService } from '../tenant/tenant-context.service';
+import { parseExcelOrHTML, ProductExcelRow, ValidationResult } from 'src/utils/salesFileParser';
+import * as crypto from 'crypto';
+import { chunk } from 'lodash';
 
 @Injectable()
 export class SaleService {
-  constructor(private prisma: PrismaClientService) {}
+  constructor(
+    private prisma: PrismaClientService,
+    private readonly tenantContext: TenantContextService, // Add tenant context
+  ) {}
 
   // Customer Management
   async createCustomer(dto: CreateCustomerDto) {
@@ -26,7 +38,9 @@ export class SaleService {
     });
 
     if (existingCustomer) {
-      throw new BadRequestException('Customer with this phone number already exists');
+      throw new BadRequestException(
+        'Customer with this phone number already exists',
+      );
     }
 
     return await this.prisma.$transaction(async (tx) => {
@@ -122,9 +136,11 @@ export class SaleService {
         customer = existingCustomer;
       } else {
         if (!dto.customerData) {
-          throw new BadRequestException('Customer data required for new customer');
+          throw new BadRequestException(
+            'Customer data required for new customer',
+          );
         }
-        
+
         customer = await tx.customer.create({
           data: dto.customerData,
         });
@@ -148,11 +164,15 @@ export class SaleService {
         });
 
         if (!product) {
-          throw new NotFoundException(`Product with ID ${item.productId} not found`);
+          throw new NotFoundException(
+            `Product with ID ${item.pluUpc} not found`,
+          );
         }
 
         if (product.itemQuantity < item.quantity) {
-          throw new BadRequestException(`Insufficient inventory for product ${product.name}`);
+          throw new BadRequestException(
+            `Insufficient inventory for product ${product.name}`,
+          );
         }
 
         // Update product inventory
@@ -188,6 +208,7 @@ export class SaleService {
           data: {
             saleId: sale.id,
             productId: item.productId,
+            pluUpc: item.pluUpc,
             productName: item.productName,
             quantity: item.quantity,
             sellingPrice: item.sellingPrice,
@@ -200,7 +221,7 @@ export class SaleService {
       let invoice: any = null;
       if (dto.generateInvoice) {
         const invoiceNumber = await this.generateInvoiceNumber();
-        
+
         invoice = await tx.invoice.create({
           data: {
             saleId: sale.id,
@@ -244,7 +265,15 @@ export class SaleService {
   }
 
   async getSales(query: SaleQueryDto, storeId: string) {
-    const { page = 1, limit = 20, customerId, status, paymentMethod, dateFrom, dateTo } = query;
+    const {
+      page = 1,
+      limit = 20,
+      customerId,
+      status,
+      paymentMethod,
+      dateFrom,
+      dateTo,
+    } = query;
     const skip = (page - 1) * limit;
 
     const where: any = { storeId };
@@ -252,7 +281,7 @@ export class SaleService {
     if (customerId) where.customerId = customerId;
     if (status) where.status = status;
     if (paymentMethod) where.paymentMethod = paymentMethod;
-    
+
     if (dateFrom || dateTo) {
       where.createdAt = {};
       if (dateFrom) where.createdAt.gte = new Date(dateFrom);
@@ -380,7 +409,7 @@ export class SaleService {
       // Restore inventory
       for (const item of sale.saleItems) {
         await tx.products.update({
-          where: { id: item.productId },
+          where: { id: item.pluUpc },
           data: {
             itemQuantity: {
               increment: item.quantity,
@@ -423,7 +452,9 @@ export class SaleService {
       }
 
       if (dto.quantity > saleItem.quantity) {
-        throw new BadRequestException('Return quantity cannot exceed purchased quantity');
+        throw new BadRequestException(
+          'Return quantity cannot exceed purchased quantity',
+        );
       }
 
       // Create return record
@@ -431,6 +462,7 @@ export class SaleService {
         data: {
           saleId: dto.saleId,
           productId: dto.productId,
+          pluUpc: dto.pluUpc,
           quantity: dto.quantity,
           returnCategory: dto.returnCategory,
           reason: dto.reason,
@@ -460,17 +492,17 @@ export class SaleService {
             },
           });
           break;
-        case ReturnCategory.NON_SALEABLE:
-          // Remove from inventory (already sold, now damaged)
-          await tx.products.update({
-            where: { id: dto.productId },
-            data: {
-              itemQuantity: {
-                decrement: Math.min(dto.quantity, product.itemQuantity),
-              },
-            },
-          });
-          break;
+        // case ReturnCategory.NON_SALEABLE:
+        //   // Remove from inventory (already sold, now damaged)
+        //   await tx.products.update({
+        //     where: { id: dto.productId },
+        //     data: {
+        //       itemQuantity: {
+        //         decrement: Math.min(dto.quantity, product.itemQuantity),
+        //       },
+        //     },
+        //   });
+        //   break;
       }
 
       // Update customer balance sheet if sale was paid
@@ -481,7 +513,7 @@ export class SaleService {
 
       if (lastBalance && lastBalance.paymentStatus === PaymentStatus.PAID) {
         const returnAmount = dto.quantity * saleItem.sellingPrice;
-        
+
         await tx.balanceSheet.create({
           data: {
             customerId: sale.customerId,
@@ -525,7 +557,8 @@ export class SaleService {
           saleId: dto.saleId,
           remainingAmount: newBalance,
           amountPaid: dto.amountPaid,
-          paymentStatus: newBalance <= 0 ? PaymentStatus.PAID : PaymentStatus.PARTIAL,
+          paymentStatus:
+            newBalance <= 0 ? PaymentStatus.PAID : PaymentStatus.PARTIAL,
           description: dto.description || `Payment - ${dto.amountPaid}`,
         },
       });
@@ -550,7 +583,10 @@ export class SaleService {
     });
 
     const currentBalance = balanceSheets[0]?.remainingAmount || 0;
-    const totalPaid = balanceSheets.reduce((sum, sheet) => sum + sheet.amountPaid, 0);
+    const totalPaid = balanceSheets.reduce(
+      (sum, sheet) => sum + sheet.amountPaid,
+      0,
+    );
 
     return {
       customer,
@@ -566,9 +602,9 @@ export class SaleService {
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
-    
+
     const prefix = `INV-${year}${month}${day}`;
-    
+
     // Find the last invoice number for today
     const lastInvoice = await this.prisma.invoice.findFirst({
       where: {
@@ -583,10 +619,193 @@ export class SaleService {
 
     let sequence = 1;
     if (lastInvoice) {
-      const lastSequence = parseInt(lastInvoice.invoiceNumber.split('-').pop() || '0');
+      const lastSequence = parseInt(
+        lastInvoice.invoiceNumber.split('-').pop() || '0',
+      );
       sequence = lastSequence + 1;
     }
 
     return `${prefix}-${String(sequence).padStart(4, '0')}`;
+  }
+
+
+  async checkSalesFileHash(fileHash: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    return await prisma.fileUploadSales.findUnique({
+      where: { fileHash },
+    });
+  }
+
+  async checkSalesFileStatus(
+    file: Express.Multer.File,
+    user: any,
+  ): Promise<string> {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size exceeds 10MB limit');
+    }
+    const dataToHash = Buffer.concat([file.buffer, Buffer.from(user.id)]);
+    const fileHash = crypto
+      .createHash('sha256')
+      .update(dataToHash)
+      .digest('hex');
+    const existingFile = await this.checkSalesFileHash(fileHash);
+    if (existingFile) {
+      throw new ConflictException('This file has already been uploaded');
+    }
+    return fileHash;
+  }
+
+  async uploadSalesSheet(
+    user: any,
+    parsedData: ValidationResult,
+    file: Express.Multer.File,
+    fileHash: string,
+    storeId: string,
+  ) {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    // Validate that the store exists
+    const store = await prisma.stores.findFirst({
+      where: { id: storeId },
+    });
+    if (!store) {
+      throw new NotFoundException('Store not found for this user');
+    }
+
+    // Validate that the client exists
+    const client = await prisma.clients.findUnique({
+      where: { id: user.clientId },
+    });
+    if (!client) {
+      throw new BadRequestException(
+        'Invalid client - user client does not exist',
+      );
+    }
+
+    // Validate that the store belongs to the user's client
+    if (store.clientId !== user.clientId) {
+      throw new BadRequestException('Store does not belong to your client');
+    }
+
+    // Group data by customer (CustomerName and CustomerPhoneNumber)
+    const salesByCustomer = parsedData.data.reduce(
+      (acc, row) => {
+        const key = `${row.CustomerName}-${row.CustomerPhoneNumber}`;
+        if (!acc[key]) {
+          acc[key] = {
+            customerName: row.CustomerName,
+            customerPhoneNumber: row.CustomerPhoneNumber,
+            items: [],
+            totalAmount: 0,
+          };
+        }
+        acc[key].items.push(row);
+        acc[key].totalAmount += row.TotalPrice;
+        return acc;
+      },
+      {} as Record<
+        string,
+        {
+          customerName: string;
+          customerPhoneNumber: Number;
+          items: ProductExcelRow[];
+          totalAmount: number;
+        }
+      >,
+    );
+
+    // Start a transaction to ensure atomicity
+    await prisma.$transaction(async (prisma) => {
+      // Create FileUploadSales record
+      const fileUpload = await prisma.fileUploadSales.create({
+        data: {
+          fileHash,
+          storeId: store.id,
+          fileName: file.originalname,
+        },
+      });
+
+      // Process each customer sale
+      for (const customerSale of Object.values(salesByCustomer)) {
+        // Find or create customer
+        let customer = await prisma.customer.findFirst({
+          where: {
+            customerName: customerSale.customerName,
+            phoneNumber: String(customerSale.customerPhoneNumber),
+            clientId: user.clientId,
+          },
+        });
+
+        if (!customer) {
+          customer = await prisma.customer.create({
+            data: {
+              customerName: customerSale.customerName,
+              phoneNumber: String(customerSale.customerPhoneNumber),
+              clientId: user.clientId,
+              storeId: store.id,
+            },
+          });
+        }
+
+        // Create Sales record
+        const sale = await prisma.sales.create({
+          data: {
+            customerId: customer.id,
+            userId: user.id,
+            storeId: store.id,
+            clientId: user.clientId,
+            paymentMethod: PaymentMethod.CASH, // Adjust based on your requirements
+            totalAmount: customerSale.totalAmount,
+            tax: 0, // Adjust based on your requirements
+            status: 'PENDING',
+            generateInvoice: false,
+            cashierName: user.name || 'System',
+            fileUploadSalesId: fileUpload.id,
+          },
+        });
+
+        // Create SaleItem records
+        const saleItems = customerSale.items.map((item) => ({
+          saleId: sale.id,
+          productId: null, // Set to null if no product mapping is available
+          pluUpc: item['PLU/UPC'],
+          productName: item.ProductName,
+          quantity: item.IndividualItemQuantity || 0,
+          sellingPrice: item.IndividualItemSellingPrice || 0,
+          totalPrice: item.TotalPrice,
+        }));
+
+        // Batch create SaleItems
+        const batchSize = 500;
+        const itemBatches = chunk(saleItems, batchSize);
+        for (const batch of itemBatches) {
+          await prisma.saleItem.createMany({
+            data: batch,
+          });
+        }
+      }
+    }, {
+      timeout: 120000, // 120 seconds = 2 mins
+    });
+
+    return { success: true, message: 'Sales processed successfully' };
+  }
+
+  async addSales(user: any, file: Express.Multer.File, storeId: string) {
+    console.log('user', user, 'file', file);
+    const fileHash = await this.checkSalesFileStatus(file, user);
+    const parsedData = parseExcelOrHTML(file);
+    console.log('parsedData', parsedData);
+    return await this.uploadSalesSheet(
+      user,
+      parsedData,
+      file,
+      fileHash,
+      storeId,
+    );
   }
 }

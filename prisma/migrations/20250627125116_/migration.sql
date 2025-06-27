@@ -141,7 +141,7 @@ CREATE TABLE "Sales" (
     "cashierName" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "fileUploadSalesId" TEXT NOT NULL,
+    "fileUploadSalesId" TEXT,
 
     CONSTRAINT "Sales_pkey" PRIMARY KEY ("id")
 );
@@ -150,7 +150,8 @@ CREATE TABLE "Sales" (
 CREATE TABLE "SaleItem" (
     "id" TEXT NOT NULL,
     "saleId" TEXT NOT NULL,
-    "productId" TEXT NOT NULL,
+    "productId" TEXT,
+    "pluUpc" TEXT NOT NULL,
     "productName" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL,
     "sellingPrice" DOUBLE PRECISION NOT NULL,
@@ -205,7 +206,8 @@ CREATE TABLE "BalanceSheet" (
 CREATE TABLE "SaleReturn" (
     "id" TEXT NOT NULL,
     "saleId" TEXT NOT NULL,
-    "productId" TEXT NOT NULL,
+    "productId" TEXT,
+    "pluUpc" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL,
     "returnCategory" TEXT NOT NULL,
     "reason" TEXT,
@@ -556,9 +558,6 @@ CREATE UNIQUE INDEX "PasswordResetTokens_token_key" ON "PasswordResetTokens"("to
 CREATE UNIQUE INDEX "ProductSupplier_productId_supplierId_key" ON "ProductSupplier"("productId", "supplierId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Products_pluUpc_key" ON "Products"("pluUpc");
-
--- CreateIndex
 CREATE UNIQUE INDEX "FileUploadInventory_fileHash_key" ON "FileUploadInventory"("fileHash");
 
 -- CreateIndex
@@ -604,13 +603,13 @@ ALTER TABLE "Sales" ADD CONSTRAINT "Sales_storeId_fkey" FOREIGN KEY ("storeId") 
 ALTER TABLE "Sales" ADD CONSTRAINT "Sales_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Sales" ADD CONSTRAINT "Sales_fileUploadSalesId_fkey" FOREIGN KEY ("fileUploadSalesId") REFERENCES "FileUploadSales"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Sales" ADD CONSTRAINT "Sales_fileUploadSalesId_fkey" FOREIGN KEY ("fileUploadSalesId") REFERENCES "FileUploadSales"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SaleItem" ADD CONSTRAINT "SaleItem_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sales"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SaleItem" ADD CONSTRAINT "SaleItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "SaleItem" ADD CONSTRAINT "SaleItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sales"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -628,7 +627,7 @@ ALTER TABLE "BalanceSheet" ADD CONSTRAINT "BalanceSheet_saleId_fkey" FOREIGN KEY
 ALTER TABLE "SaleReturn" ADD CONSTRAINT "SaleReturn_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sales"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SaleReturn" ADD CONSTRAINT "SaleReturn_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "SaleReturn" ADD CONSTRAINT "SaleReturn_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Products"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SaleReturn" ADD CONSTRAINT "SaleReturn_processedBy_fkey" FOREIGN KEY ("processedBy") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
