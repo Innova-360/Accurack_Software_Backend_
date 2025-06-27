@@ -22,6 +22,16 @@ export class InviteEmployeeDto {
   @IsString()
   department: string;
 
+  @ApiProperty({
+    example: 'role-template-uuid-123',
+    description:
+      'Role template ID for the invited employee. Defaults to basic employee role template if not provided.',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  roleTemplateId?: string;
+
   @ApiProperty({ example: ['store-123'] })
   @IsString({ each: true })
   storeIds: string[];

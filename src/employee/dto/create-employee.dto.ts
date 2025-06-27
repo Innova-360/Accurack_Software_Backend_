@@ -7,6 +7,8 @@ import {
   IsOptional,
   IsDate,
   IsEnum,
+  MinLength,
+  Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { EmployeePermissionDto } from './employee-permission.dto';
@@ -15,11 +17,19 @@ export class CreateEmployeeDto {
   @ApiProperty({
     example: 'StrongPassword123!',
     description:
-      'Optional password for the employee account. If not provided, a random password may be generated.',
+      'Optional password for the employee account. If not provided, a random password will be generated. Must contain at least 8 characters, including uppercase, lowercase, number, and special character.',
     required: false,
   })
-  @IsString()
   @IsOptional()
+  @IsString({ message: 'Password must be a string' })
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  @Matches(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/,
+    {
+      message:
+        'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (!@#$%^&*)',
+    },
+  )
   password?: string;
 
   @ApiProperty({
@@ -75,11 +85,11 @@ export class CreateEmployeeDto {
   department: string;
 
   @ApiProperty({
-    example: 'employee',
-    description: 'Employee role in the system',
+    example: 'role-template-uuid-123',
+    description: 'Role template ID to assign to the employee',
   })
   @IsString()
-  role: string;
+  roleTemplateId: string;
 
   @ApiProperty({
     example: 'active',

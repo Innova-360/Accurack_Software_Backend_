@@ -113,7 +113,7 @@ model Users {
   otp          String?
   otpExpiresAt DateTime?
   isOtpUsed    Boolean?  @default(false)
-  role         Role
+  role         String?
   clientId     String
   status       Status   @default(active)
   createdAt    DateTime @default(now())
