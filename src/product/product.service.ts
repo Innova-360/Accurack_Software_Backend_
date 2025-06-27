@@ -1012,7 +1012,6 @@ export class ProductService {
     return fileHash;
   }
 
-  
   async uploadInventorySheet(
     user: any,
     parsedData: ValidationResult,
@@ -1043,17 +1042,17 @@ export class ProductService {
       throw new BadRequestException('Store does not belong to your client');
     }
     const batchSize = 500;
-    const errorLogs = parsedData.errors.map((err) => ({
-      fileUploadId: '', // Will be set after fileUpload creation
-      rowNumber: err.row,
-      error: err.errors.join('; '),
-    }));
+    // const errorLogs = parsedData.errors.map((err) => ({
+    //   fileUploadId: '', // Will be set after fileUpload creation
+    //   rowNumber: err.row,
+    //   error: err.errors.join('; '),
+    // }));
     try {
       const prisma = await this.tenantContext.getPrismaClient();
-      
+
       // Ensure fresh connection for large operations
       await prisma.$connect();
-      
+
       const result = await prisma.$transaction(
         async (prisma) => {
           const fileUpload = await prisma.fileUploadInventory.create({
@@ -1064,64 +1063,63 @@ export class ProductService {
               status: 'processing',
             },
           });
-          if (errorLogs.length > 0) {
-            await prisma.errorLog.createMany({
-              data: errorLogs.map((log) => ({
-                ...log,
-                fileUploadId: fileUpload.id,
-              })),
-            });
-          }
+          // if (errorLogs.length > 0) {
+          //   await prisma.errorLog.createMany({
+          //     data: errorLogs.map((log) => ({
+          //       ...log,
+          //       fileUploadId: fileUpload.id,
+          //     })),
+          //   });
+          // }
           let processedItems = 0;
           const validRows = parsedData.data.filter(
             (_, idx) => !parsedData.errors.some((err) => err.row === idx + 1),
           );
-          
-          // Pre-create suppliers to reduce queries in the loop
-          const supplierMap = new Map();
-          const uniqueSuppliers = new Map();
-          
-          // Collect unique suppliers first
-          for (const product of validRows) {
-            if (product.VendorName && product.VendorName.trim()) {
-              const supplierKey = `${product.VendorName}-${product.VendorPhone || ''}`;
-              if (!uniqueSuppliers.has(supplierKey)) {
-                uniqueSuppliers.set(supplierKey, {
-                  name: product.VendorName,
-                  phone: product.VendorPhone || '',
-                  email: '',
-                  storeId: store.id,
-                  status: 'active',
-                });
-              }
-            }
-          }
-          
-          // Create or find suppliers in bulk
-          for (const [key, supplierData] of uniqueSuppliers) {
-            let supplier = await prisma.suppliers.findFirst({
-              where: {
-                name: supplierData.name,
-                phone: supplierData.phone,
-                storeId: store.id,
-              },
-            });
-            
-            if (!supplier) {
-              supplier = await prisma.suppliers.create({
-                data: supplierData,
-              });
-            }
-            
-            supplierMap.set(key, supplier);
-          }
-          
+
           // Process each product individually to handle suppliers, variants, and packs
           if (
             parsedData.data &&
             parsedData.data.length > 0 &&
             parsedData.data[0].SKU !== 'undefined'
           ) {
+            // Pre-create suppliers to reduce queries in the loop
+            const supplierMap = new Map();
+            const uniqueSuppliers = new Map();
+
+            // Collect unique suppliers first
+            for (const product of validRows) {
+              if (product.VendorName && product.VendorName.trim()) {
+                const supplierKey = `${product.VendorName}-${product.VendorPhone || ''}`;
+                if (!uniqueSuppliers.has(supplierKey)) {
+                  uniqueSuppliers.set(supplierKey, {
+                    name: product.VendorName,
+                    phone: product.VendorPhone || '',
+                    email: '',
+                    storeId: store.id,
+                    status: 'active',
+                  });
+                }
+              }
+            }
+
+            // Create or find suppliers in bulk
+            for (const [key, supplierData] of uniqueSuppliers) {
+              let supplier = await prisma.suppliers.findFirst({
+                where: {
+                  name: supplierData.name,
+                  phone: supplierData.phone,
+                  storeId: store.id,
+                },
+              });
+
+              if (!supplier) {
+                supplier = await prisma.suppliers.create({
+                  data: supplierData,
+                });
+              }
+
+              supplierMap.set(key, supplier);
+            }
             for (const product of validRows) {
               // Get supplier from pre-created map
               let supplier: any = null;
@@ -1297,46 +1295,84 @@ export class ProductService {
               processedItems++;
             }
           } else {
-            for (const product of validRows) {
-              const productData: any = {
-                name: product.ProductName,
-                category: product.Category,
-                pluUpc:
-                  product['PLU/UPC'] && product['PLU/UPC'] !== 'undefined'
-                    ? product['PLU/UPC']
-                    : null,
-                sku:
-                  product.SKU && product.SKU !== 'undefined'
-                    ? product.SKU
-                    : null,
-                itemQuantity: product.IndividualItemQuantity || 0,
-                msrpPrice: isNaN(product.IndividualItemSellingPrice)
-                  ? 0
-                  : product.IndividualItemSellingPrice,
-                singleItemSellingPrice: isNaN(
-                  product.IndividualItemSellingPrice,
-                )
-                  ? 0
-                  : product.IndividualItemSellingPrice,
-                discountAmount: product.DiscountValue || 0,
-                percentDiscount: product.DiscountPercentage || 0,
-                hasVariants: false,
-                packIds: [],
-                variants: [],
-                client: {
-                  connect: { id: user.clientId },
-                },
-                store: {
-                  connect: { id: store.id },
-                },
-              };
+            const batches = chunk(parsedData.data, 500);
 
-              const createdProduct = await prisma.products.create({
-                data: productData,
-              });
+            await Promise.all(
+              batches.map(async (batch) => {
+                processedItems += batch.length;
+                await prisma.products.createMany({
+                  data: batch.map((product) => ({
+                    name: product.ProductName,
+                    category: product.Category,
+                    pluUpc:
+                      product['PLU/UPC'] && product['PLU/UPC'] !== 'undefined'
+                        ? product['PLU/UPC']
+                        : null,
+                    sku:
+                      product.SKU && product.SKU !== 'undefined'
+                        ? product.SKU
+                        : null,
+                    itemQuantity: product.IndividualItemQuantity || 0,
+                    msrpPrice: isNaN(product.IndividualItemSellingPrice)
+                      ? 0
+                      : product.IndividualItemSellingPrice,
+                    singleItemSellingPrice: isNaN(
+                      product.IndividualItemSellingPrice,
+                    )
+                      ? 0
+                      : product.IndividualItemSellingPrice,
+                    discountAmount: product.DiscountValue || 0,
+                    percentDiscount: product.DiscountPercentage || 0,
+                    hasVariants: false,
+                    packIds: [],
+                    variants: [],
+                    clientId: user.clientId,
+                    storeId: store.id,
+                  })),
+                });
+              })
+            );
 
-              processedItems++;
-            }
+            // for (const product of validRows) {
+            //   const productData: any = {
+            //     name: product.ProductName,
+            //     category: product.Category,
+            //     pluUpc:
+            //       product['PLU/UPC'] && product['PLU/UPC'] !== 'undefined'
+            //         ? product['PLU/UPC']
+            //         : null,
+            //     sku:
+            //       product.SKU && product.SKU !== 'undefined'
+            //         ? product.SKU
+            //         : null,
+            //     itemQuantity: product.IndividualItemQuantity || 0,
+            //     msrpPrice: isNaN(product.IndividualItemSellingPrice)
+            //       ? 0
+            //       : product.IndividualItemSellingPrice,
+            //     singleItemSellingPrice: isNaN(
+            //       product.IndividualItemSellingPrice,
+            //     )
+            //       ? 0
+            //       : product.IndividualItemSellingPrice,
+            //     discountAmount: product.DiscountValue || 0,
+            //     percentDiscount: product.DiscountPercentage || 0,
+            //     hasVariants: false,
+            //     packIds: [],
+            //     variants: [],
+            //     client: {
+            //       connect: { id: user.clientId },
+            //     },
+            //     store: {
+            //       connect: { id: store.id },
+            //     },
+            //   };
+
+            //   const createdProduct = await prisma.products.create({
+            //     data: productData,
+            //   });
+
+            //   processedItems++;
+            // }
           }
 
           await prisma.fileUploadInventory.update({
@@ -1379,25 +1415,26 @@ export class ProductService {
       } catch (updateError) {
         console.error('Failed to update file upload status:', updateError);
       }
-      
+
       if (error.code === 'P2002') {
         throw new ConflictException('Duplicate SKU or PLU found in database');
       }
-      
+
       // Handle specific transaction errors
-      if (error.message?.includes('Transaction not found') || 
-          error.message?.includes('Transaction already closed')) {
+      if (
+        error.message?.includes('Transaction not found') ||
+        error.message?.includes('Transaction already closed')
+      ) {
         throw new BadRequestException(
-          'Upload failed due to timeout. Please try uploading a smaller file or contact support for large file uploads.'
+          'Upload failed due to timeout. Please try uploading a smaller file or contact support for large file uploads.',
         );
       }
-      
+
       throw new BadRequestException(
         `Error while adding inventory: ${error.message}`,
       );
     }
   }
-
 
   async addInventory(user: any, file: Express.Multer.File, storeId: string) {
     console.log('user', user, 'file', file);
