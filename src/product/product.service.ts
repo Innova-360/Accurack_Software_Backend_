@@ -94,8 +94,7 @@ export class ProductService {
     productId?: string,
   ): Promise<void> {
     const prisma = await this.tenantContext.getPrismaClient();
-
-    // Collect all PLU/UPC values from variants (pluUpc is now required)
+    // Collect all PLU/UPC values from variants
     const variantPlus = variants
       .map((v) => v.pluUpc)
       .filter((plu) => plu && plu.trim()); // Only check non-empty PLUs
@@ -146,31 +145,6 @@ export class ProductService {
     const profitAmount = product.singleItemSellingPrice - costPrice;
     const profitMargin = costPrice > 0 ? (profitAmount / costPrice) * 100 : 0;
 
-    // For variants, ensure we preserve all dynamic properties while handling required fields
-    const variants = product.variants?.map((variant) => {
-      if (typeof variant !== 'object') return variant;
-
-      // Extract required fields and preserve everything else
-      const {
-        name,
-        price,
-        pluUpc,
-        discountAmount,
-        packIds,
-        ...dynamicProperties
-      } = variant;
-
-      // Return with required fields + all dynamic properties
-      return {
-        name,
-        price,
-        pluUpc,
-        discountAmount: discountAmount || 0,
-        packIds,
-        ...dynamicProperties, // Include all additional dynamic properties
-      };
-    });
-
     return {
       id: product.id,
       name: product.name,
@@ -190,7 +164,7 @@ export class ProductService {
       hasVariants: product.hasVariants,
       packIds: product.packIds,
       packs: product.packs || [],
-      variants: variants || [],
+      variants: product.variants || [],
       store: product.store,
       sales: product.sales,
       purchaseOrders: product.purchaseOrders,
@@ -287,15 +261,6 @@ export class ProductService {
           'At least one variant must be provided when hasVariants is true',
         );
       }
-
-      // Validate that each variant has required fields
-      createProductDto.variants.forEach((variant, index) => {
-        if (!variant.name || !variant.price || !variant.pluUpc) {
-          throw new BadRequestException(
-            `Variant at index ${index} is missing required fields. Each variant must have: name, price, and pluUpc`,
-          );
-        }
-      });
     } else {
       // For non-variant products, PLU/UPC is at product level (optional)
       // No additional validation needed as PLU/UPC is already optional
@@ -442,33 +407,16 @@ export class ProductService {
             );
             variantPackIds = createdPacks.map((pack) => pack.id);
           }
-
-          // Process variant with hybrid structure: required fields + dynamic properties
-          const {
-            name,
-            price,
-            pluUpc,
-            discountAmount,
-            packs,
-            packIds,
-            ...dynamicProperties
-          } = variant;
-
-          // Validate required fields
-          if (!name || !price || !pluUpc) {
-            throw new BadRequestException(
-              'Each variant must have name, price, and pluUpc fields',
-            );
-          }
-
-          // Return variant with both required fields and any dynamic properties
           return {
-            name,
-            price,
-            pluUpc,
-            discountAmount: discountAmount || 0,
+            name: variant.name,
+            price: variant.price,
+            pluUpc: variant.pluUpc,
             packIds: variantPackIds,
-            ...dynamicProperties, // Include all additional properties sent from frontend
+            quantity: variant.quantity || 0, // Ensure quantity is set
+            msrpPrice: variant.msrpPrice || 0,
+            supplierId: variant.supplierId || null, // Optional supplierId
+            discountAmount: Number(variant.discountAmount),
+            percentDiscount: Number(variant.percentDiscount),
           };
         }),
       );
@@ -490,8 +438,8 @@ export class ProductService {
               minimumSellingQuantity: pack.minimumSellingQuantity,
               totalPacksQuantity: pack.totalPacksQuantity,
               orderedPacksPrice: pack.orderedPacksPrice,
-              discountAmount: pack.discountAmount || 0,
-              percentDiscount: pack.percentDiscount || 0,
+              discountAmount: Number(pack.discountAmount),
+              percentDiscount: Number(pack.percentDiscount),
             },
             select: { id: true },
           }),
@@ -785,15 +733,6 @@ export class ProductService {
           'At least one variant must be provided when hasVariants is true',
         );
       }
-
-      // Validate that each variant has required fields
-      updateProductDto.variants.forEach((variant, index) => {
-        if (!variant.name || !variant.price || !variant.pluUpc) {
-          throw new BadRequestException(
-            `Variant at index ${index} is missing required fields. Each variant must have: name, price, and pluUpc`,
-          );
-        }
-      });
     }
 
     // Validate ProductSupplier relationships (optional - products can exist without suppliers)
@@ -846,8 +785,8 @@ export class ProductService {
                     minimumSellingQuantity: pack.minimumSellingQuantity,
                     totalPacksQuantity: pack.totalPacksQuantity,
                     orderedPacksPrice: pack.orderedPacksPrice,
-                    discountAmount: pack.discountAmount || 0,
-                    percentDiscount: pack.percentDiscount || 0,
+                    discountAmount: Number(pack.discountAmount),
+                    percentDiscount: Number(pack.percentDiscount),
                   },
                   select: { id: true },
                 }),
@@ -855,32 +794,11 @@ export class ProductService {
             );
             variantPackIds = createdPacks.map((pack) => pack.id);
           }
-
-          // Process variant with hybrid structure: required fields + dynamic properties
-          const {
-            name,
-            price,
-            pluUpc,
-            discountAmount,
-            packs,
-            packIds,
-            ...dynamicProperties
-          } = variant;
-
-          // Validate required fields
-          if (!name || !price || !pluUpc) {
-            throw new BadRequestException(
-              'Each variant must have name, price, and pluUpc fields',
-            );
-          }
-
           return {
-            name,
-            price,
-            pluUpc,
-            discountAmount: discountAmount || 0,
+            name: variant.name,
+            price: variant.price,
+            pluUpc: variant.pluUpc,
             packIds: variantPackIds,
-            ...dynamicProperties, // Include all additional properties from frontend
           };
         }),
       );
@@ -893,8 +811,8 @@ export class ProductService {
               minimumSellingQuantity: pack.minimumSellingQuantity,
               totalPacksQuantity: pack.totalPacksQuantity,
               orderedPacksPrice: pack.orderedPacksPrice,
-              discountAmount: pack.discountAmount || 0,
-              percentDiscount: pack.percentDiscount || 0,
+              discountAmount: Number(pack.discountAmount),
+              percentDiscount: Number(pack.percentDiscount),
             },
             select: { id: true },
           }),
@@ -1297,132 +1215,84 @@ export class ProductService {
                     percentDiscount: product.PercentDiscount || 0,
                   },
                 });
-
-
-                // Extract any additional columns as dynamic properties
-                const dynamicProperties = {};
-                Object.keys(product).forEach((key) => {
-                  // Skip known standard columns and empty values
-                  if (
-                    ![
-                      'ProductName',
-                      'Category',
-                      'EAN',
-                      'PLU/UPC',
-                      'SKU',
-                      'IndividualItemQuantity',
-                      'IndividualItemSellingPrice',
-                      'DiscountValue',
-                      'DiscountPercentage',
-                      'VendorName',
-                      'VendorPhone',
-                      'VendorPrice',
-                      'MinimumSellingQuantity',
-                      'PackOf',
-                      'PackOfPrice',
-                      'PriceDiscountAmount',
-                      'PercentDiscount',
-                      'MatrixAttributes',
-                      'Attribute1',
-                      'Attribute2',
-                    ].includes(key) &&
-                    product[key] !== null &&
-                    product[key] !== undefined &&
-                    product[key] !== ''
-                  ) {
-                    dynamicProperties[key] = product[key];
-                  }
+                // Update product with pack reference
+                await prisma.products.update({
+                  where: { id: createdProduct.id },
+                  data: {
+                    packIds: [pack.id],
+                  },
                 });
-
-                // Include the attribute name as a property
-                const attributeName =
-                  matrixAttributeNames.length > 0
-                    ? matrixAttributeNames[0]
-                    : 'variant';
-                dynamicProperties[attributeName] = attributeValue
-                  .toString()
-                  .trim();
-
-                variants.push({
-                  // Required fields
-                  name: attributeValue.toString().trim(),
-                  price: product.IndividualItemSellingPrice,
-                  pluUpc:
-                    `${product['PLU/UPC'] || ''}-${attributeValue.toString().replace(/\s+/g, '').toUpperCase()}`.slice(
-                      0,
-                      50,
-                    ),
-                  // Optional field
-                  discountAmount: product.PriceDiscountAmount || 0,
-                  // Pack reference
-                  packIds: [pack.id],
-                  // Dynamic properties including attribute name as property
-                  [attributeName]: attributeValue.toString().trim(),
-                  ...dynamicProperties, // Include any additional dynamic properties
+              } else {
+                // Has variants - create variant and pack record for each variant
+                const matrixAttributeNames =
+                  product.MatrixAttributes?.split(/[\/,]/).map((attr) =>
+                    attr.trim(),
+                  ) || [];
+                const attributeValues = [
+                  product.Attribute1,
+                  product.Attribute2,
+                ].filter(Boolean);
+                const variants: any[] = [];
+                // If we have attribute values, create variants for each
+                if (attributeValues.length > 0) {
+                  for (const attributeValue of attributeValues) {
+                    if (!attributeValue) continue; // Skip undefined/null values
+                    // Create pack for this variant
+                    const pack = await prisma.pack.create({
+                      data: {
+                        productId: createdProduct.id,
+                        minimumSellingQuantity:
+                          product.MinimumSellingQuantity || 1,
+                        totalPacksQuantity: product.PackOf || 1,
+                        orderedPacksPrice:
+                          product.PackOfPrice ||
+                          product.IndividualItemSellingPrice,
+                        discountAmount: product.PriceDiscountAmount || 0,
+                        percentDiscount: product.PercentDiscount || 0,
+                      },
+                    });
+                    variants.push({
+                      name: attributeValue.toString().trim(),
+                      price: product.IndividualItemSellingPrice,
+                      pluUpc:
+                        `${product['PLU/UPC'] || ''}-${attributeValue.toString().replace(/\s+/g, '').toUpperCase()}`.slice(
+                          0,
+                          50,
+                        ), // Generate variant-specific PLU/UPC
+                      packIds: [pack.id],
+                    });
+                  }
+                } else {
+                  // If no attribute values but MatrixAttributes exists, create a default variant
+                  const pack = await prisma.pack.create({
+                    data: {
+                      productId: createdProduct.id,
+                      minimumSellingQuantity:
+                        product.MinimumSellingQuantity || 1,
+                      totalPacksQuantity: product.PackOf || 1,
+                      orderedPacksPrice:
+                        product.PackOfPrice ||
+                        product.IndividualItemSellingPrice,
+                      discountAmount: product.PriceDiscountAmount || 0,
+                      percentDiscount: product.PercentDiscount || 0,
+                    },
+                  });
+                  variants.push({
+                    name: 'Default Variant',
+                    price: product.IndividualItemSellingPrice,
+                    pluUpc: product['PLU/UPC'] || null, // Use the product's PLU/UPC for the default variant
+                    packIds: [pack.id],
+                  });
+                }
+                // Update product with variants
+                await prisma.products.update({
+                  where: { id: createdProduct.id },
+                  data: {
+                    variants: variants,
+                  },
                 });
               }
-            } else {
-              // If no attribute values but MatrixAttributes exists, create a default variant
-              const pack = await prisma.pack.create({
-                data: {
-                  productId: createdProduct.id,
-                  minimumSellingQuantity: product.MinimumSellingQuantity || 1,
-                  totalPacksQuantity: product.PackOf || 1,
-                  orderedPacksPrice:
-                    product.PackOfPrice || product.IndividualItemSellingPrice,
-                  discountAmount: product.PriceDiscountAmount || 0,
-                  percentDiscount: product.PercentDiscount || 0,
-                },
-              });
-
-              // Extract any additional columns as dynamic properties
-              const dynamicProperties = {};
-              Object.keys(product).forEach((key) => {
-                // Skip known standard columns and empty values
-                if (
-                  ![
-                    'ProductName',
-                    'Category',
-                    'EAN',
-                    'PLU/UPC',
-                    'SKU',
-                    'IndividualItemQuantity',
-                    'IndividualItemSellingPrice',
-                    'DiscountValue',
-                    'DiscountPercentage',
-                    'VendorName',
-                    'VendorPhone',
-                    'VendorPrice',
-                    'MinimumSellingQuantity',
-                    'PackOf',
-                    'PackOfPrice',
-                    'PriceDiscountAmount',
-                    'PercentDiscount',
-                    'MatrixAttributes',
-                    'Attribute1',
-                    'Attribute2',
-                  ].includes(key) &&
-                  product[key] !== null &&
-                  product[key] !== undefined &&
-                  product[key] !== ''
-                ) {
-                  dynamicProperties[key] = product[key];
-                }
-              });
-
-              variants.push({
-                // Required fields
-                name: 'Default Variant',
-                price: product.IndividualItemSellingPrice,
-                pluUpc: product['PLU/UPC'] || null,
-                // Optional field
-                discountAmount: product.PriceDiscountAmount || 0,
-                // Pack reference
-                packIds: [pack.id],
-                // Dynamic properties
-                ...dynamicProperties, // Include any additional dynamic properties
-              });
-
+              processedItems++;
             }
           } else {
             const batches = chunk(parsedData.data, 500);
@@ -1460,7 +1330,7 @@ export class ProductService {
                     storeId: store.id,
                   })),
                 });
-              })
+              }),
             );
 
             // for (const product of validRows) {
