@@ -1,17 +1,21 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaClientService } from '../prisma-client/prisma-client.service';
-import { 
-  CreateSaleDto, 
-  UpdateSaleDto, 
-  CreateSaleReturnDto, 
-  CreatePaymentDto, 
+import {
+  CreateSaleDto,
+  UpdateSaleDto,
+  CreateSaleReturnDto,
+  CreatePaymentDto,
   SaleQueryDto,
   CreateCustomerDto,
   UpdateCustomerDto,
   PaymentMethod,
   SaleStatus,
   ReturnCategory,
-  PaymentStatus
+  PaymentStatus,
 } from './dto/sale.dto';
 
 @Injectable()
@@ -26,7 +30,9 @@ export class SaleService {
     });
 
     if (existingCustomer) {
-      throw new BadRequestException('Customer with this phone number already exists');
+      throw new BadRequestException(
+        'Customer with this phone number already exists',
+      );
     }
 
     return await this.prisma.$transaction(async (tx) => {
@@ -122,9 +128,11 @@ export class SaleService {
         customer = existingCustomer;
       } else {
         if (!dto.customerData) {
-          throw new BadRequestException('Customer data required for new customer');
+          throw new BadRequestException(
+            'Customer data required for new customer',
+          );
         }
-        
+
         customer = await tx.customer.create({
           data: dto.customerData,
         });
@@ -144,20 +152,24 @@ export class SaleService {
       // Validate products and update inventory
       for (const item of dto.saleItems) {
         const product = await tx.products.findUnique({
-          where: { id: item.pluUpc },
+          where: { id: item.productId },
         });
 
         if (!product) {
-          throw new NotFoundException(`Product with ID ${item.pluUpc} not found`);
+          throw new NotFoundException(
+            `Product with ID ${item.pluUpc} not found`,
+          );
         }
 
         if (product.itemQuantity < item.quantity) {
-          throw new BadRequestException(`Insufficient inventory for product ${product.name}`);
+          throw new BadRequestException(
+            `Insufficient inventory for product ${product.name}`,
+          );
         }
 
         // Update product inventory
         await tx.products.update({
-          where: { id: item.pluUpc },
+          where: { id: item.productId },
           data: {
             itemQuantity: {
               decrement: item.quantity,
@@ -187,6 +199,7 @@ export class SaleService {
         await tx.saleItem.create({
           data: {
             saleId: sale.id,
+            productId: item.productId,
             pluUpc: item.pluUpc,
             productName: item.productName,
             quantity: item.quantity,
@@ -200,7 +213,7 @@ export class SaleService {
       let invoice: any = null;
       if (dto.generateInvoice) {
         const invoiceNumber = await this.generateInvoiceNumber();
-        
+
         invoice = await tx.invoice.create({
           data: {
             saleId: sale.id,
@@ -244,7 +257,15 @@ export class SaleService {
   }
 
   async getSales(query: SaleQueryDto, storeId: string) {
-    const { page = 1, limit = 20, customerId, status, paymentMethod, dateFrom, dateTo } = query;
+    const {
+      page = 1,
+      limit = 20,
+      customerId,
+      status,
+      paymentMethod,
+      dateFrom,
+      dateTo,
+    } = query;
     const skip = (page - 1) * limit;
 
     const where: any = { storeId };
@@ -252,7 +273,7 @@ export class SaleService {
     if (customerId) where.customerId = customerId;
     if (status) where.status = status;
     if (paymentMethod) where.paymentMethod = paymentMethod;
-    
+
     if (dateFrom || dateTo) {
       where.createdAt = {};
       if (dateFrom) where.createdAt.gte = new Date(dateFrom);
@@ -407,7 +428,7 @@ export class SaleService {
         where: { id: dto.saleId },
         include: {
           saleItems: {
-            where: { pluUpc: dto.pluUpc },
+            where: { productId: dto.productId },
           },
           customer: true,
         },
@@ -423,13 +444,16 @@ export class SaleService {
       }
 
       if (dto.quantity > saleItem.quantity) {
-        throw new BadRequestException('Return quantity cannot exceed purchased quantity');
+        throw new BadRequestException(
+          'Return quantity cannot exceed purchased quantity',
+        );
       }
 
       // Create return record
       const returnRecord = await tx.saleReturn.create({
         data: {
           saleId: dto.saleId,
+          productId: dto.productId,
           pluUpc: dto.pluUpc,
           quantity: dto.quantity,
           returnCategory: dto.returnCategory,
@@ -440,7 +464,7 @@ export class SaleService {
 
       // Update inventory based on return category
       const product = await tx.products.findUnique({
-        where: { id: dto.pluUpc },
+        where: { id: dto.productId },
       });
 
       if (!product) {
@@ -452,7 +476,7 @@ export class SaleService {
         case ReturnCategory.SCRAP:
           // Add back to inventory
           await tx.products.update({
-            where: { id: dto.pluUpc },
+            where: { id: dto.productId },
             data: {
               itemQuantity: {
                 increment: dto.quantity,
@@ -460,17 +484,17 @@ export class SaleService {
             },
           });
           break;
-        case ReturnCategory.NON_SALEABLE:
-          // Remove from inventory (already sold, now damaged)
-          await tx.products.update({
-            where: { id: dto.pluUpc },
-            data: {
-              itemQuantity: {
-                decrement: Math.min(dto.quantity, product.itemQuantity),
-              },
-            },
-          });
-          break;
+        // case ReturnCategory.NON_SALEABLE:
+        //   // Remove from inventory (already sold, now damaged)
+        //   await tx.products.update({
+        //     where: { id: dto.productId },
+        //     data: {
+        //       itemQuantity: {
+        //         decrement: Math.min(dto.quantity, product.itemQuantity),
+        //       },
+        //     },
+        //   });
+        //   break;
       }
 
       // Update customer balance sheet if sale was paid
@@ -481,7 +505,7 @@ export class SaleService {
 
       if (lastBalance && lastBalance.paymentStatus === PaymentStatus.PAID) {
         const returnAmount = dto.quantity * saleItem.sellingPrice;
-        
+
         await tx.balanceSheet.create({
           data: {
             customerId: sale.customerId,
@@ -525,7 +549,8 @@ export class SaleService {
           saleId: dto.saleId,
           remainingAmount: newBalance,
           amountPaid: dto.amountPaid,
-          paymentStatus: newBalance <= 0 ? PaymentStatus.PAID : PaymentStatus.PARTIAL,
+          paymentStatus:
+            newBalance <= 0 ? PaymentStatus.PAID : PaymentStatus.PARTIAL,
           description: dto.description || `Payment - ${dto.amountPaid}`,
         },
       });
@@ -550,7 +575,10 @@ export class SaleService {
     });
 
     const currentBalance = balanceSheets[0]?.remainingAmount || 0;
-    const totalPaid = balanceSheets.reduce((sum, sheet) => sum + sheet.amountPaid, 0);
+    const totalPaid = balanceSheets.reduce(
+      (sum, sheet) => sum + sheet.amountPaid,
+      0,
+    );
 
     return {
       customer,
@@ -566,9 +594,9 @@ export class SaleService {
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
-    
+
     const prefix = `INV-${year}${month}${day}`;
-    
+
     // Find the last invoice number for today
     const lastInvoice = await this.prisma.invoice.findFirst({
       where: {
@@ -583,7 +611,9 @@ export class SaleService {
 
     let sequence = 1;
     if (lastInvoice) {
-      const lastSequence = parseInt(lastInvoice.invoiceNumber.split('-').pop() || '0');
+      const lastSequence = parseInt(
+        lastInvoice.invoiceNumber.split('-').pop() || '0',
+      );
       sequence = lastSequence + 1;
     }
 

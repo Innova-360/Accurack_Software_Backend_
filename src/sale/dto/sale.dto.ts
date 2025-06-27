@@ -92,7 +92,6 @@ export class SaleItemDto {
   productId?: string;
 
   @ApiProperty({ description: 'Product PLU/UPC' })
-  @IsUUID()
   pluUpc: string;
 
   @ApiProperty({ description: 'Product name' })
@@ -228,7 +227,6 @@ export class CreateSaleReturnDto {
   productId?: string;
 
   @ApiProperty({ description: 'Product PLU/UPC' })
-  @IsUUID()
   pluUpc: string;
 
   @ApiProperty({ description: 'Quantity to return' })
