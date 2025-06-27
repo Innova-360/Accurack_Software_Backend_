@@ -13,7 +13,7 @@ import {
   parseExcel,
   ValidationResult,
   ProductExcelRow,
-} from '../utils/fileParser';
+} from '../utils/productsFileParser';
 import * as crypto from 'crypto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { TenantContextService } from '../tenant/tenant-context.service';

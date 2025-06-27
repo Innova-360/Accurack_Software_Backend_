@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaClientService } from '../prisma-client/prisma-client.service';
 import {
@@ -17,10 +18,17 @@ import {
   ReturnCategory,
   PaymentStatus,
 } from './dto/sale.dto';
+import { TenantContextService } from '../tenant/tenant-context.service';
+import { parseExcelOrHTML, ProductExcelRow, ValidationResult } from 'src/utils/salesFileParser';
+import * as crypto from 'crypto';
+import { chunk } from 'lodash';
 
 @Injectable()
 export class SaleService {
-  constructor(private prisma: PrismaClientService) {}
+  constructor(
+    private prisma: PrismaClientService,
+    private readonly tenantContext: TenantContextService, // Add tenant context
+  ) {}
 
   // Customer Management
   async createCustomer(dto: CreateCustomerDto) {
@@ -618,5 +626,186 @@ export class SaleService {
     }
 
     return `${prefix}-${String(sequence).padStart(4, '0')}`;
+  }
+
+
+  async checkSalesFileHash(fileHash: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    return await prisma.fileUploadSales.findUnique({
+      where: { fileHash },
+    });
+  }
+
+  async checkSalesFileStatus(
+    file: Express.Multer.File,
+    user: any,
+  ): Promise<string> {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size exceeds 10MB limit');
+    }
+    const dataToHash = Buffer.concat([file.buffer, Buffer.from(user.id)]);
+    const fileHash = crypto
+      .createHash('sha256')
+      .update(dataToHash)
+      .digest('hex');
+    const existingFile = await this.checkSalesFileHash(fileHash);
+    if (existingFile) {
+      throw new ConflictException('This file has already been uploaded');
+    }
+    return fileHash;
+  }
+
+  async uploadSalesSheet(
+    user: any,
+    parsedData: ValidationResult,
+    file: Express.Multer.File,
+    fileHash: string,
+    storeId: string,
+  ) {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    // Validate that the store exists
+    const store = await prisma.stores.findFirst({
+      where: { id: storeId },
+    });
+    if (!store) {
+      throw new NotFoundException('Store not found for this user');
+    }
+
+    // Validate that the client exists
+    const client = await prisma.clients.findUnique({
+      where: { id: user.clientId },
+    });
+    if (!client) {
+      throw new BadRequestException(
+        'Invalid client - user client does not exist',
+      );
+    }
+
+    // Validate that the store belongs to the user's client
+    if (store.clientId !== user.clientId) {
+      throw new BadRequestException('Store does not belong to your client');
+    }
+
+    // Group data by customer (CustomerName and CustomerPhoneNumber)
+    const salesByCustomer = parsedData.data.reduce(
+      (acc, row) => {
+        const key = `${row.CustomerName}-${row.CustomerPhoneNumber}`;
+        if (!acc[key]) {
+          acc[key] = {
+            customerName: row.CustomerName,
+            customerPhoneNumber: row.CustomerPhoneNumber,
+            items: [],
+            totalAmount: 0,
+          };
+        }
+        acc[key].items.push(row);
+        acc[key].totalAmount += row.TotalPrice;
+        return acc;
+      },
+      {} as Record<
+        string,
+        {
+          customerName: string;
+          customerPhoneNumber: Number;
+          items: ProductExcelRow[];
+          totalAmount: number;
+        }
+      >,
+    );
+
+    // Start a transaction to ensure atomicity
+    await prisma.$transaction(async (prisma) => {
+      // Create FileUploadSales record
+      const fileUpload = await prisma.fileUploadSales.create({
+        data: {
+          fileHash,
+          storeId: store.id,
+          fileName: file.originalname,
+        },
+      });
+
+      // Process each customer sale
+      for (const customerSale of Object.values(salesByCustomer)) {
+        // Find or create customer
+        let customer = await prisma.customer.findFirst({
+          where: {
+            customerName: customerSale.customerName,
+            phoneNumber: String(customerSale.customerPhoneNumber),
+            clientId: user.clientId,
+          },
+        });
+
+        if (!customer) {
+          customer = await prisma.customer.create({
+            data: {
+              customerName: customerSale.customerName,
+              phoneNumber: String(customerSale.customerPhoneNumber),
+              clientId: user.clientId,
+              storeId: store.id,
+            },
+          });
+        }
+
+        // Create Sales record
+        const sale = await prisma.sales.create({
+          data: {
+            customerId: customer.id,
+            userId: user.id,
+            storeId: store.id,
+            clientId: user.clientId,
+            paymentMethod: PaymentMethod.CASH, // Adjust based on your requirements
+            totalAmount: customerSale.totalAmount,
+            tax: 0, // Adjust based on your requirements
+            status: 'PENDING',
+            generateInvoice: false,
+            cashierName: user.name || 'System',
+            fileUploadSalesId: fileUpload.id,
+          },
+        });
+
+        // Create SaleItem records
+        const saleItems = customerSale.items.map((item) => ({
+          saleId: sale.id,
+          productId: null, // Set to null if no product mapping is available
+          pluUpc: item['PLU/UPC'],
+          productName: item.ProductName,
+          quantity: item.IndividualItemQuantity || 0,
+          sellingPrice: item.IndividualItemSellingPrice || 0,
+          totalPrice: item.TotalPrice,
+        }));
+
+        // Batch create SaleItems
+        const batchSize = 500;
+        const itemBatches = chunk(saleItems, batchSize);
+        for (const batch of itemBatches) {
+          await prisma.saleItem.createMany({
+            data: batch,
+          });
+        }
+      }
+    }, {
+      timeout: 120000, // 120 seconds = 2 mins
+    });
+
+    return { success: true, message: 'Sales processed successfully' };
+  }
+
+  async addSales(user: any, file: Express.Multer.File, storeId: string) {
+    console.log('user', user, 'file', file);
+    const fileHash = await this.checkSalesFileStatus(file, user);
+    const parsedData = parseExcelOrHTML(file);
+    console.log('parsedData', parsedData);
+    return await this.uploadSalesSheet(
+      user,
+      parsedData,
+      file,
+      fileHash,
+      storeId,
+    );
   }
 }
