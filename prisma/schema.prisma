@@ -80,6 +80,7 @@ enum PaymentStatus {
   OVERDUE
 }
 
+
 model Clients {
   id           String   @id @default(uuid())
   name         String
@@ -312,7 +313,6 @@ model SaleReturn {
   processedByUser Users         @relation(fields: [processedBy], references: [id])
 }
 
-// Other models (StoreSettings, UserStoreMap, InviteLinks, etc.) remain unchanged
 model StoreSettings {
   id                String   @id @default(uuid())
   storeId          String   @unique
@@ -545,7 +545,7 @@ model Products {
   name                  String
   category              String
   ean                   String?
-  pluUpc                String?  
+  pluUpc                String?   
   sku                   String?
   itemQuantity          Int
   msrpPrice             Float
@@ -615,4 +615,83 @@ model FileUploadSales {
   storeId    String?
   Store      Stores?   @relation(fields: [storeId], references: [id])
   Sale       Sales[]
+}
+
+// --- Tax System Enums ---
+enum PayerType {
+  SUPPLIER
+  STORE_OWNER
+  CUSTOMER
+}
+
+enum EntityType {
+  PRODUCT
+  CATEGORY
+  SUPPLIER
+  STORE
+}
+
+// --- Tax System Models ---
+model TaxCode {
+  id          String     @id @default(uuid())
+  code        String     @unique
+  description String
+  taxTypeId   String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  taxType     TaxType    @relation(fields: [taxTypeId], references: [id])
+  taxRates    TaxRate[]
+}
+
+model TaxType {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  description String
+  payer       PayerType
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  taxCodes    TaxCode[]
+  taxRates    TaxRate[]
+}
+
+model Region {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  code        String     @unique
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  taxRates    TaxRate[]
+}
+
+model TaxRate {
+  id          String     @id @default(uuid())
+  rate        Float
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  regionId    String
+  taxTypeId   String
+  taxCodeId   String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  region      Region     @relation(fields: [regionId], references: [id])
+  taxType     TaxType    @relation(fields: [taxTypeId], references: [id])
+  taxCode     TaxCode    @relation(fields: [taxCodeId], references: [id])
+  assignments TaxAssignment[]
+}
+
+model TaxAssignment {
+  id            String     @id @default(uuid())
+  entityId      String
+  entityType    EntityType
+  taxRateId     String
+  assignedAt    DateTime   @default(now())
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  taxRate       TaxRate    @relation(fields: [taxRateId], references: [id])
 }
