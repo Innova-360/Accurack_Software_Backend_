@@ -26,18 +26,21 @@ import {
 } from 'src/utils/salesFileParser';
 import * as crypto from 'crypto';
 import { chunk } from 'lodash';
+import { InvoiceService } from 'src/invoice/invoice.service';
 
 @Injectable()
 export class SaleService {
   constructor(
     private prisma: PrismaClientService,
+    private invoiceService: InvoiceService,
     private readonly tenantContext: TenantContextService, // Add tenant context
   ) {}
 
   // Customer Management
   async createCustomer(dto: CreateCustomerDto) {
+    const prisma = await this.tenantContext.getPrismaClient();
     // Check if customer already exists
-    const existingCustomer = await this.prisma.customer.findUnique({
+    const existingCustomer = await prisma.customer.findUnique({
       where: { phoneNumber: dto.phoneNumber },
     });
 
@@ -47,7 +50,7 @@ export class SaleService {
       );
     }
 
-    return await this.prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx) => {
       // Create customer
       const customer = await tx.customer.create({
         data: dto,
@@ -69,7 +72,8 @@ export class SaleService {
   }
 
   async findCustomerByPhone(phoneNumber: string) {
-    return await this.prisma.customer.findUnique({
+    const prisma = await this.tenantContext.getPrismaClient();
+    return await prisma.customer.findUnique({
       where: { phoneNumber },
       include: {
         balanceSheets: {
@@ -81,7 +85,8 @@ export class SaleService {
   }
 
   async updateCustomer(customerId: string, dto: UpdateCustomerDto) {
-    const customer = await this.prisma.customer.findUnique({
+    const prisma = await this.tenantContext.getPrismaClient();
+    const customer = await prisma.customer.findUnique({
       where: { id: customerId },
     });
 
@@ -96,6 +101,7 @@ export class SaleService {
   }
 
   async getCustomers(storeId: string, page: number = 1, limit: number = 20) {
+    const prisma = await this.tenantContext.getPrismaClient();
     const skip = (page - 1) * limit;
 
     const [customers, total] = await Promise.all([
@@ -114,7 +120,7 @@ export class SaleService {
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.customer.count({ where: { storeId } }),
+      prisma.customer.count({ where: { storeId } }),
     ]);
 
     return {
@@ -128,7 +134,9 @@ export class SaleService {
 
   // Sale Management
   async createSale(dto: CreateSaleDto, userId: string) {
-    return await this.prisma.$transaction(async (tx) => {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    return await prisma.$transaction(async (tx) => {
       let customer;
 
       // Find or create customer
@@ -223,28 +231,13 @@ export class SaleService {
 
       // Generate invoice if requested
       let invoice: any = null;
+
       if (dto.generateInvoice) {
         const invoiceNumber = await this.generateInvoiceNumber();
 
-        invoice = await tx.invoice.create({
-          data: {
-            saleId: sale.id,
-            customerId: customer.id,
-            invoiceNumber,
-            customerName: customer.customerName,
-            customerPhone: customer.phoneNumber,
-            customerMail: customer.customerMail || dto.companyMail,
-            companyName: dto.companyName,
-            companyMail: dto.companyMail,
-            companyAddress: dto.companyAddress,
-            companyNo: dto.companyNo,
-            shippingAddress: dto.shippingAddress,
-            paymentMethod: dto.paymentMethod,
-            totalAmount: dto.totalAmount,
-            tax: dto.tax || 0,
-            status: SaleStatus.COMPLETED,
-            cashierName: dto.cashierName,
-          },
+        invoice = await this.invoiceService.createInvoice({
+          saleId: sale.id,
+          businessId: sale.storeId,
         });
       }
 
@@ -269,6 +262,7 @@ export class SaleService {
   }
 
   async getSales(query: SaleQueryDto, storeId: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
     const {
       page = 1,
       limit = 20,
@@ -326,7 +320,7 @@ export class SaleService {
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.sales.count({ where }),
+      prisma.sales.count({ where }),
     ]);
 
     return {
@@ -339,7 +333,8 @@ export class SaleService {
   }
 
   async getSaleById(saleId: string) {
-    const sale = await this.prisma.sales.findUnique({
+    const prisma = await this.tenantContext.getPrismaClient();
+    const sale = await prisma.sales.findUnique({
       where: { id: saleId },
       include: {
         customer: true,
@@ -385,7 +380,8 @@ export class SaleService {
   }
 
   async updateSale(saleId: string, dto: UpdateSaleDto) {
-    const sale = await this.prisma.sales.findUnique({
+    const prisma = await this.tenantContext.getPrismaClient();
+    const sale = await prisma.sales.findUnique({
       where: { id: saleId },
     });
 
@@ -400,7 +396,8 @@ export class SaleService {
   }
 
   async deleteSale(saleId: string) {
-    const sale = await this.prisma.sales.findUnique({
+    const prisma = await this.tenantContext.getPrismaClient();
+    const sale = await prisma.sales.findUnique({
       where: { id: saleId },
       include: { saleItems: true },
     });
@@ -409,7 +406,7 @@ export class SaleService {
       throw new NotFoundException('Sale not found');
     }
 
-    return await this.prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx) => {
       // Restore inventory
       for (const item of sale.saleItems) {
         await tx.products.update({
@@ -434,7 +431,8 @@ export class SaleService {
 
   // Sale Returns
   async createSaleReturn(dto: CreateSaleReturnDto, userId: string) {
-    return await this.prisma.$transaction(async (tx) => {
+    const prisma = await this.tenantContext.getPrismaClient();
+    return await prisma.$transaction(async (tx) => {
       // Verify sale and sale item exist
       const sale = await tx.sales.findUnique({
         where: { id: dto.saleId },
@@ -539,7 +537,8 @@ export class SaleService {
 
   // Payment Management
   async createPayment(dto: CreatePaymentDto) {
-    return await this.prisma.$transaction(async (tx) => {
+    const prisma = await this.tenantContext.getPrismaClient();
+    return await prisma.$transaction(async (tx) => {
       const customer = await tx.customer.findUnique({
         where: { id: dto.customerId },
       });
@@ -575,7 +574,8 @@ export class SaleService {
   }
 
   async getCustomerBalance(customerId: string) {
-    const customer = await this.prisma.customer.findUnique({
+    const prisma = await this.tenantContext.getPrismaClient();
+    const customer = await prisma.customer.findUnique({
       where: { id: customerId },
     });
 
@@ -583,7 +583,7 @@ export class SaleService {
       throw new NotFoundException('Customer not found');
     }
 
-    const balanceSheets = await this.prisma.balanceSheet.findMany({
+    const balanceSheets = await prisma.balanceSheet.findMany({
       where: { customerId },
       orderBy: { createdAt: 'desc' },
       take: 10,
@@ -605,6 +605,7 @@ export class SaleService {
 
   // Utility methods
   private async generateInvoiceNumber(): Promise<string> {
+    const prisma = await this.tenantContext.getPrismaClient();
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -613,7 +614,7 @@ export class SaleService {
     const prefix = `INV-${year}${month}${day}`;
 
     // Find the last invoice number for today
-    const lastInvoice = await this.prisma.invoice.findFirst({
+    const lastInvoice = await prisma.invoice.findFirst({
       where: {
         invoiceNumber: {
           startsWith: prefix,
@@ -731,7 +732,7 @@ export class SaleService {
         // Step 3: Decrement stock for valid products
         for (const [plu, quantity] of productSalesCount.entries()) {
           const product = inventoryMap.get(plu);
-          console.log("product", product);
+          console.log('product', product);
           if (product && product.quantity >= quantity) {
             await prisma.products.update({
               where: { id: product.id },

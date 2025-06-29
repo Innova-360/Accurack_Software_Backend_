@@ -58,7 +58,7 @@ export class ProductController extends BaseProductController {
     @Req() req,
     @Query('storeId') storeId?: string,
     @Query('page') page: number = 1,
-    @Query('limit') limit: number = 1000,
+    @Query('limit') limit: number = 15000,
   ) {
     const user = req.user;
     return this.handleProductOperation(
@@ -97,6 +97,16 @@ export class ProductController extends BaseProductController {
     const user = req.user;
     return this.handleProductOperation(
       () => this.productService.deleteProduct(user, id),
+      'Product deleted successfully',
+    );
+  }
+
+  @ProductEndpoint.DeleteAllProduct()
+  @Delete('delete/all')
+  async deleteAllProduct(@Req() req, @Param('storeId') storeId: string) {
+    const user = req.user;
+    return this.handleProductOperation(
+      () => this.productService.deleteAllProduct(user, storeId),
       'Product deleted successfully',
     );
   }

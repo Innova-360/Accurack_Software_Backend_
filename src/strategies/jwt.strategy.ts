@@ -5,7 +5,7 @@ import { PrismaClientService } from '../prisma-client/prisma-client.service';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 
-// Interface for JWT payload
+// JWT payload structure
 interface JwtPayload {
   id: string;
   email: string;
@@ -16,19 +16,27 @@ interface JwtPayload {
   exp?: number;
 }
 
-// Interface for validated user
+// Validated user shape
 interface ValidatedUser {
   id: string;
   firstName: string;
   lastName: string;
-  role: string;
   email: string;
+  role: string | null;
   clientId: string;
   googleId: string | null;
   status: string;
-  stores: string[];
+  businessId?: string;
+  stores: string[]; // Array of Store IDs (storeId)
   createdAt: Date;
   updatedAt: Date;
+  business?: {
+    id: string;
+    businessName: string;
+    contactNo: string;
+    website?: string;
+    logoUrl?: string;
+  };
 }
 
 @Injectable()
@@ -39,20 +47,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
-        (request: Request) => {
-          // Extract JWT from cookies
-          const accessToken =
-            request?.cookies?.['accessToken'] ||
-            request?.cookies?.['access_token'];
-          const refreshToken =
-            request?.cookies?.['refreshToken'] ||
-            request?.cookies?.['refresh_token'];
-
-          // Prefer access token, fallback to refresh token
-          const token = accessToken || refreshToken;
-          return token || null;
-        },
-        ExtractJwt.fromAuthHeaderAsBearerToken(), // Fallback to Bearer token
+        (req: Request) =>
+          req?.cookies?.['accessToken'] ||
+          req?.cookies?.['access_token'] ||
+          req?.cookies?.['refreshToken'] ||
+          req?.cookies?.['refresh_token'] ||
+          null,
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
       ]),
       ignoreExpiration: false,
       secretOrKey: process.env.JWT_SECRET || 'fallback-secret',
@@ -67,51 +68,63 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           id: true,
           firstName: true,
           lastName: true,
-          role: true,
           email: true,
+          role: true,
           clientId: true,
           googleId: true,
           status: true,
+          businessId: true,
+          createdAt: true,
+          updatedAt: true,
           stores: {
             select: {
               storeId: true,
             },
           },
-          createdAt: true,
-          updatedAt: true,
+          business: {
+            select: {
+              id: true,
+              businessName: true,
+              contactNo: true,
+              website: true,
+              logoUrl: true,
+            },
+          },
         },
       });
+
       if (!user) {
-        throw new UnauthorizedException(
-          'User not found or has been deactivated',
-        );
+        throw new UnauthorizedException('User not found or inactive.');
       }
 
-      const mappedStores = user.stores.map(
-        (store: { storeId: string }) => store.storeId,
-      );
+      const storeIds = user.stores.map(s => s.storeId);
 
-      const validatedUser = {
+      return {
         id: user.id,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: user.role || '',
         email: user.email,
+        role: user.role ?? null,
         clientId: user.clientId,
-        googleId: user.googleId,
+        googleId: user.googleId ?? null,
         status: user.status,
-        stores: mappedStores,
+        businessId: user.businessId ?? undefined,
+        stores: storeIds,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        ...(user.business && {
+          business: {
+            id: user.business.id,
+            businessName: user.business.businessName,
+            contactNo: user.business.contactNo,
+            website: user.business.website ?? undefined,
+            logoUrl: user.business.logoUrl ?? undefined,
+          },
+        }),
       };
-      return validatedUser;
-    } catch (error) {
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      throw new UnauthorizedException(
-        'Invalid token or user validation failed',
-      );
+    } catch (err) {
+      if (err instanceof UnauthorizedException) throw err;
+      throw new UnauthorizedException('JWT validation failed.');
     }
   }
 }
