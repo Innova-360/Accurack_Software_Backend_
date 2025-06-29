@@ -31,6 +31,9 @@ CREATE TYPE "SaleStatus" AS ENUM ('PENDING', 'COMPLETED', 'CANCELLED', 'REFUNDED
 -- CreateEnum
 CREATE TYPE "PaymentStatus" AS ENUM ('PAID', 'PARTIAL', 'UNPAID', 'OVERDUE');
 
+-- CreateEnum
+CREATE TYPE "InvoiceSource" AS ENUM ('manual', 'system');
+
 -- CreateTable
 CREATE TABLE "Clients" (
     "id" TEXT NOT NULL,
@@ -43,6 +46,7 @@ CREATE TABLE "Clients" (
     "databaseName" TEXT,
     "tier" "Tier" NOT NULL,
     "dataSizeMB" TEXT,
+    "businessId" TEXT,
     "status" "Status" NOT NULL DEFAULT 'active',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -62,7 +66,7 @@ CREATE TABLE "Users" (
     "otp" TEXT,
     "otpExpiresAt" TIMESTAMP(3),
     "isOtpUsed" BOOLEAN DEFAULT false,
-    "role" "Role" NOT NULL,
+    "role" TEXT,
     "clientId" TEXT NOT NULL,
     "status" "Status" NOT NULL DEFAULT 'active',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -82,12 +86,29 @@ CREATE TABLE "Stores" (
     "address" TEXT,
     "phone" TEXT,
     "email" TEXT,
+    "logoUrl" TEXT,
     "clientId" TEXT NOT NULL,
     "status" "Status" NOT NULL DEFAULT 'active',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "businessId" TEXT,
 
     CONSTRAINT "Stores_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Business" (
+    "id" TEXT NOT NULL,
+    "clientId" TEXT NOT NULL,
+    "businessName" TEXT NOT NULL,
+    "contactNo" TEXT NOT NULL,
+    "website" TEXT,
+    "address" TEXT,
+    "logoUrl" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Business_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -105,6 +126,7 @@ CREATE TABLE "SaleAdjustment" (
     "addToInventory" BOOLEAN,
     "replacementProductId" TEXT,
     "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "SaleAdjustment_pkey" PRIMARY KEY ("id")
@@ -118,6 +140,8 @@ CREATE TABLE "Customer" (
     "phoneNumber" TEXT NOT NULL,
     "telephoneNumber" TEXT,
     "customerMail" TEXT,
+    "website" TEXT,
+    "threshold" DOUBLE PRECISION DEFAULT 0,
     "storeId" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -135,6 +159,8 @@ CREATE TABLE "Sales" (
     "clientId" TEXT NOT NULL,
     "paymentMethod" "PaymentMethod" NOT NULL,
     "totalAmount" DOUBLE PRECISION NOT NULL,
+    "allowance" DOUBLE PRECISION DEFAULT 0,
+    "source" "InvoiceSource" NOT NULL DEFAULT 'manual',
     "tax" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "status" "SaleStatus" NOT NULL DEFAULT 'PENDING',
     "generateInvoice" BOOLEAN NOT NULL DEFAULT true,
@@ -167,24 +193,42 @@ CREATE TABLE "Invoice" (
     "id" TEXT NOT NULL,
     "saleId" TEXT NOT NULL,
     "customerId" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
     "invoiceNumber" TEXT NOT NULL,
     "customerName" TEXT NOT NULL,
     "customerPhone" TEXT NOT NULL,
     "customerMail" TEXT,
-    "companyName" TEXT,
-    "companyMail" TEXT,
-    "companyAddress" TEXT,
-    "companyNo" TEXT,
+    "customerWebsite" TEXT,
+    "customerAddress" TEXT,
+    "businessName" TEXT NOT NULL,
+    "businessContact" TEXT NOT NULL,
+    "businessWebsite" TEXT,
+    "businessAddress" TEXT,
     "shippingAddress" TEXT,
     "paymentMethod" "PaymentMethod" NOT NULL,
     "totalAmount" DOUBLE PRECISION NOT NULL,
+    "netAmount" DOUBLE PRECISION NOT NULL,
     "tax" DOUBLE PRECISION NOT NULL,
     "status" "SaleStatus" NOT NULL,
     "cashierName" TEXT NOT NULL,
+    "logoUrl" TEXT,
+    "qrCode" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Invoice_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CustomField" (
+    "id" TEXT NOT NULL,
+    "invoiceId" TEXT NOT NULL,
+    "fieldName" TEXT NOT NULL,
+    "fieldValue" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CustomField_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -254,7 +298,7 @@ CREATE TABLE "InviteLinks" (
     "userId" TEXT NOT NULL,
     "status" "Status" NOT NULL DEFAULT 'pending',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "InviteLinks_pkey" PRIMARY KEY ("id")
 );
@@ -519,6 +563,9 @@ CREATE UNIQUE INDEX "Users_email_key" ON "Users"("email");
 CREATE UNIQUE INDEX "Users_employeeCode_key" ON "Users"("employeeCode");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Business_clientId_key" ON "Business"("clientId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Customer_phoneNumber_key" ON "Customer"("phoneNumber");
 
 -- CreateIndex
@@ -570,6 +617,12 @@ ALTER TABLE "Users" ADD CONSTRAINT "Users_clientId_fkey" FOREIGN KEY ("clientId"
 ALTER TABLE "Stores" ADD CONSTRAINT "Stores_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Stores" ADD CONSTRAINT "Stores_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Business" ADD CONSTRAINT "Business_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "SaleAdjustment" ADD CONSTRAINT "SaleAdjustment_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sales"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -616,6 +669,12 @@ ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_saleId_fkey" FOREIGN KEY ("saleId"
 
 -- AddForeignKey
 ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CustomField" ADD CONSTRAINT "CustomField_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "Invoice"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "BalanceSheet" ADD CONSTRAINT "BalanceSheet_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
