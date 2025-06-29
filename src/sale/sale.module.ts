@@ -9,6 +9,7 @@ import { MultiTenantService } from 'src/database/multi-tenant.service';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { InvoiceService } from 'src/invoice/invoice.service';
 import { PermissionsService, ResponseService } from 'src/common';
 
 @Module({
@@ -30,7 +31,8 @@ import { PermissionsService, ResponseService } from 'src/common';
     PrismaService,
     JwtService,
     PermissionsService,
-    ResponseService
+    ResponseService,
+    InvoiceService
   ],
 })
 export class SaleModule {}

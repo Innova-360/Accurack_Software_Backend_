@@ -537,7 +537,7 @@ export class ProductService {
     user: any,
     storeId?: string,
     page: number = 1,
-    limit: number = 1000,
+    limit: number = 15000,
   ) {
     this.validateProductAccess(user, storeId);
 
@@ -981,6 +981,55 @@ export class ProductService {
 
     // Return void as the global response interceptor will handle the response format
     return;
+  }
+
+  async deleteAllProduct(user: any, storeId: string): Promise<void> {
+    this.validateProductOperationPermissions(user, 'delete');
+
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    const products = await prisma.products.findMany({
+      where: { storeId },
+      select: { id: true },
+    });
+
+    if (!products || products.length === 0) {
+      throw new NotFoundException('No products found for this store.');
+    }
+
+    const productIds = products.map((p) => p.id);
+
+    // Delete associated packs
+    await Promise.all(
+      productIds.map((productId) =>
+        prisma.pack.deleteMany({ where: { productId } }),
+      ),
+    );
+
+    // Perform hard delete (current behavior)
+    await Promise.all(
+      productIds.map((productId) =>
+        prisma.products.delete({ where: { id: productId } }),
+      ),
+    );
+
+    return;
+    // 📌 Future: Soft delete alternative (uncomment when needed)
+    /*
+  await Promise.all(
+    productIds.map(productId =>
+      prisma.products.update({
+        where: { id: productId },
+        data: {
+          updatedAt: new Date(), // Marker for soft delete
+          // If you add a `deleted` or `isDeleted` field later, you can set it here
+        },
+      }),
+    ),
+  );
+  */
+
+    // No return value; global interceptor can format response
   }
 
   async checkInventoryFileHash(fileHash: string) {

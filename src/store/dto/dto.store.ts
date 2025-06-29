@@ -43,6 +43,13 @@ export class CreateStoreDto {
   @IsString()
   @IsOptional()
   timezone?: string;
+
+  @ApiPropertyOptional({
+    description: 'Store Logo',
+  })
+  @IsString()
+  @IsOptional()
+  logoUrl?: string;
 }
 
 export class UpdateStoreDto {

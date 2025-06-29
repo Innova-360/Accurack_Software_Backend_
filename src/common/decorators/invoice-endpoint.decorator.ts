@@ -1,0 +1,80 @@
+import { applyDecorators } from '@nestjs/common';
+import {
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiParam,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import { Version } from '@nestjs/common';
+
+// Standard response schemas for Swagger
+const successResponseSchema = (message: string, dataExample?: any) => ({
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    message: { type: 'string', example: message },
+    data: dataExample ? { type: 'object', example: dataExample } : { type: 'object' },
+    status: { type: 'number', example: 200 },
+    timestamp: { type: 'string', example: '2025-06-18T10:30:00.000Z' },
+  },
+});
+
+const createdResponseSchema = (message: string, dataExample?: any) => ({
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    message: { type: 'string', example: message },
+    data: dataExample ? { type: 'object', example: dataExample } : { type: 'object' },
+    status: { type: 'number', example: 201 },
+    timestamp: { type: 'string', example: '2025-06-18T10:30:00.000Z' },
+  },
+});
+
+const errorResponseSchema = (status: number, message: string) => ({
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: false },
+    message: { type: 'string', example: message },
+    data: { type: 'null' },
+    status: { type: 'number', example: status },
+    timestamp: { type: 'string', example: '2025-06-18T10:30:00.000Z' },
+  },
+});
+
+const standardErrorResponses = () => [
+  ApiResponse({ status: 400, description: 'Bad request', schema: errorResponseSchema(400, 'Bad request') }),
+  ApiResponse({ status: 401, description: 'Unauthorized', schema: errorResponseSchema(401, 'Unauthorized') }),
+  ApiResponse({ status: 404, description: 'Not found', schema: errorResponseSchema(404, 'Not found') }),
+  ApiResponse({ status: 500, description: 'Internal server error', schema: errorResponseSchema(500, 'Internal server error') }),
+];
+
+export const InvoiceEndpoint = {
+  CreateInvoice: (dtoType: any) =>
+    applyDecorators(
+      ApiOperation({ summary: 'Create a new invoice' }),
+      ApiBody({ type: dtoType }),
+      ApiResponse({ status: 201, description: 'Invoice created successfully', schema: createdResponseSchema('Invoice created successfully') }),
+      ApiResponse({ status: 400, description: 'Bad request - validation failed', schema: errorResponseSchema(400, 'Bad request - validation failed') }),
+      ApiResponse({ status: 404, description: 'Sale or Business not found', schema: errorResponseSchema(404, 'Sale or Business not found') }),
+      ...standardErrorResponses(),
+      Version('1'),
+    ),
+  GetInvoice: () =>
+    applyDecorators(
+      ApiOperation({ summary: 'Get invoice by ID' }),
+      ApiParam({ name: 'id', required: true, description: 'Invoice ID', example: 'invoice-uuid-123' }),
+      ApiResponse({ status: 200, description: 'Invoice retrieved successfully', schema: successResponseSchema('Invoice retrieved successfully') }),
+      ApiResponse({ status: 404, description: 'Invoice not found', schema: errorResponseSchema(404, 'Invoice not found') }),
+      ...standardErrorResponses(),
+      Version('1'),
+    ),
+  GetInvoicesByStore: () =>
+    applyDecorators(
+      ApiOperation({ summary: 'Get all invoices for a store' }),
+      ApiParam({ name: 'storeId', required: true, description: 'Store ID', example: 'store-uuid-789' }),
+      ApiResponse({ status: 200, description: 'Invoices retrieved successfully', schema: successResponseSchema('Invoices retrieved successfully') }),
+      ...standardErrorResponses(),
+      Version('1'),
+    ),
+};

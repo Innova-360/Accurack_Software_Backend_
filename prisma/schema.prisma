@@ -80,6 +80,11 @@ enum PaymentStatus {
   OVERDUE
 }
 
+enum InvoiceSource {
+  manual
+  system
+}
+
 model Clients {
   id           String   @id @default(uuid())
   name         String
@@ -91,6 +96,7 @@ model Clients {
   databaseName String?
   tier         Tier
   dataSizeMB   String?
+  businessId   String?
   status       Status   @default(active)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -100,6 +106,7 @@ model Clients {
   products     Products[]
   customers    Customer[]
   sales        Sales[]
+  business     Business?
 }
 
 model Users {
@@ -118,6 +125,7 @@ model Users {
   status       Status   @default(active)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  businessId   String?
 
   employeeCode String?  @unique
   position     String?
@@ -141,6 +149,7 @@ model Users {
   passwordResetTokens PasswordResetTokens[]
   saleAdjustments SaleAdjustment[]
   processedReturns SaleReturn[]
+  business        Business?         @relation(fields: [businessId], references: [id])
 }
 
 model Stores {
@@ -149,10 +158,12 @@ model Stores {
   address     String?
   phone       String?
   email       String?
+  logoUrl     String?
   clientId    String
   status      Status   @default(active)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  businessId  String?
 
   client          Clients           @relation(fields: [clientId], references: [id])
   settings        StoreSettings?
@@ -168,6 +179,24 @@ model Stores {
   FileUploadSales     FileUploadSales[]
   saleAdjustments SaleAdjustment[]
   customers       Customer[]
+  business        Business?         @relation(fields: [businessId], references: [id])
+}
+
+model Business {
+  id           String   @id @default(uuid())
+  clientId     String   @unique
+  businessName String
+  contactNo    String
+  website      String?
+  address      String?
+  logoUrl      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client       Clients  @relation(fields: [clientId], references: [id])
+  stores       Stores[]
+  invoices     Invoice[]
+  users        Users[]
 }
 
 model SaleAdjustment {
@@ -177,13 +206,14 @@ model SaleAdjustment {
   userId            String
   storeId           String
   adjustmentType    AdjustmentType
-  damageSubCategory DamageSubCategory? // Only for DAMAGE type
+  damageSubCategory DamageSubCategory?
   quantity          Int
-  amount            Float            // Amount affected (e.g., refund amount, damage cost)
-  addToRevenue      Boolean?         // For REFUND: whether to add to revenue
-  addToInventory    Boolean?         // For RETURN: whether to add to inventory
-  replacementProductId String?       // For EXCHANGE: ID of replacement product
-  reason            String?          // Optional reason for adjustment  createdAt         DateTime         @default(now())
+  amount            Float
+  addToRevenue      Boolean?
+  addToInventory    Boolean?
+  replacementProductId String?
+  reason            String?
+  createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
   sale              Sales            @relation(fields: [saleId], references: [id], onDelete: Cascade)
   product           Products         @relation("ProductAdjustments", fields: [productId], references: [id])
@@ -199,6 +229,8 @@ model Customer {
   phoneNumber     String   @unique
   telephoneNumber String?
   customerMail    String?
+  website         String?
+  threshold       Float?   @default(0)
   storeId         String
   clientId        String
   createdAt       DateTime @default(now())
@@ -219,6 +251,8 @@ model Sales {
   clientId        String
   paymentMethod   PaymentMethod
   totalAmount     Float
+  allowance       Float?        @default(0)
+  source          InvoiceSource @default(manual)
   tax             Float         @default(0)
   status          SaleStatus    @default(PENDING)
   generateInvoice Boolean       @default(true)
@@ -231,7 +265,7 @@ model Sales {
   user            Users         @relation(fields: [userId], references: [id])
   store           Stores        @relation(fields: [storeId], references: [id])
   client          Clients       @relation(fields: [clientId], references: [id])
-  fileUploadSales          FileUploadSales?       @relation(fields: [fileUploadSalesId], references: [id])
+  fileUploadSales FileUploadSales? @relation(fields: [fileUploadSalesId], references: [id])
   saleItems       SaleItem[]
   saleAdjustments SaleAdjustment[]
   invoices        Invoice[]
@@ -256,28 +290,47 @@ model SaleItem {
 }
 
 model Invoice {
-  id              String   @id @default(uuid())
+  id              String            @id @default(uuid())
   saleId          String
   customerId      String
-  invoiceNumber   String   @unique
+  businessId      String
+  invoiceNumber   String            @unique
   customerName    String
   customerPhone   String
   customerMail    String?
-  companyName     String?
-  companyMail     String?
-  companyAddress  String?
-  companyNo       String?
+  customerWebsite String?
+  customerAddress String?
+  businessName    String
+  businessContact String
+  businessWebsite String?
+  businessAddress String?
   shippingAddress String?
   paymentMethod   PaymentMethod
   totalAmount     Float
+  netAmount       Float
   tax             Float
   status          SaleStatus
   cashierName     String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  logoUrl         String?
+  qrCode          String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
-  sale            Sales    @relation(fields: [saleId], references: [id])
-  customer        Customer @relation(fields: [customerId], references: [id])
+  sale            Sales             @relation(fields: [saleId], references: [id])
+  customer        Customer          @relation(fields: [customerId], references: [id])
+  business        Business          @relation(fields: [businessId], references: [id])
+  customFields    CustomField[]
+}
+
+model CustomField {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  fieldName   String
+  fieldValue  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }
 
 model BalanceSheet {
@@ -312,7 +365,6 @@ model SaleReturn {
   processedByUser Users         @relation(fields: [processedBy], references: [id])
 }
 
-// Other models (StoreSettings, UserStoreMap, InviteLinks, etc.) remain unchanged
 model StoreSettings {
   id                String   @id @default(uuid())
   storeId          String   @unique
@@ -349,7 +401,7 @@ model InviteLinks {
   userId    String
   status    Status   @default(pending)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now())
 
   user      Users    @relation(fields: [userId], references: [id])
 }
