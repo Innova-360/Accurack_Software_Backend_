@@ -388,7 +388,7 @@ export class EmployeeService {
         // Update the Users.role field with the new role template name
         updated = await prisma.users.update({
           where: { id },
-          data: { role: newRoleTemplate.name },
+          data: { position: newRoleTemplate.name },
         });
 
         // Update UserRole record (delete existing and create new to handle unique constraint)
@@ -779,7 +779,7 @@ export class EmployeeService {
     return this.findOne(id);
   }
 
-  async invite(inviteDto: InviteEmployeeDto, userId: string) {
+  async invite(inviteDto: InviteEmployeeDto, req: any) {
     const {
       email,
       firstName,
@@ -838,9 +838,9 @@ export class EmployeeService {
           lastName,
           position,
           department,
-          role: roleTemplate.name, // Store role template name for compatibility
+          role: 'employee', // Store role template name for compatibility
           status: 'pending',
-          clientId: userId.split('-')[0], // Get clientId from the user's ID
+          clientId: req.user.clientId as string, // Get clientId from the user's ID
         },
       });
 
@@ -849,7 +849,7 @@ export class EmployeeService {
         data: {
           userId: newUser.id,
           roleTemplateId: roleTemplate.id,
-          assignedBy: userId,
+          assignedBy: req.user.id,
         },
       });
 
@@ -908,7 +908,7 @@ export class EmployeeService {
         actions: [permission.action],
         storeId: permission.storeId || null,
         granted: true,
-        grantedBy: userId,
+        grantedBy: req.user.id,
       }));
 
       await clientdb.permission.createMany({

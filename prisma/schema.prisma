@@ -540,10 +540,24 @@ model ProductSupplier {
   @@unique([productId, supplierId])
 }
 
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  code        String?   @unique
+  description String?
+  parentId    String?
+  parent      Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  products    Products[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
 model Products {
   id                    String    @id @default(uuid())
   name                  String
-  category              String
+  categoryId            String?
+  category              Category? @relation(fields: [categoryId], references: [id])
   ean                   String?
   pluUpc                String?   
   sku                   String?
