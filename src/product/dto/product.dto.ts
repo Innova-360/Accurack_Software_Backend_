@@ -206,7 +206,7 @@ export class CreateProductDto {
 
   @ApiProperty({ example: 'Beverages', description: 'Category of the product' })
   @IsString()
-  category: string;
+  categoryId: string;
 
   @ApiProperty({
     example: '1234567890123',

@@ -293,7 +293,7 @@ export class ProductService {
       // Prepare create data with proper typing
       const createData: any = {
         name: createProductDto.name,
-        category: createProductDto.category,
+        categoryId: createProductDto.categoryId,
         ean: createProductDto.ean || null,
         sku: createProductDto.sku || null,
         itemQuantity: createProductDto.itemQuantity,
