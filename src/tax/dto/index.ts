@@ -10,3 +10,4 @@ export * from './create-tax-assignment.dto';
 export * from './update-tax-assignment.dto';
 export * from './create-tax-bundle.dto';
 export * from './assign-tax.dto';
+export * from './calculate-tax.dto';

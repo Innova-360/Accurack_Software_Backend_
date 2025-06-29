@@ -7,7 +7,9 @@ import {
   Delete,
   Param,
 } from '@nestjs/common';
+import { EntityType } from '@prisma/client';
 import { TaxService } from './tax.service';
+import { TaxCalculationService } from './services/tax-calculation.service';
 import {
   CreateTaxTypeDto,
   UpdateTaxTypeDto,
@@ -22,15 +24,18 @@ import {
   CreateTaxBundleDto,
 } from './dto';
 import { UpdateTaxBundleDto } from './dto/update-tax-bundle.dto';
+import { CalculateTaxByEntityDto, CalculateComprehensiveTaxDto } from './dto/calculate-tax.dto';
 import { ResponseService, BaseAuthController } from '../common';
 import { ApiTags } from '@nestjs/swagger';
 import { BulkAssignTaxDto } from './dto';
+import { TaxEndpoint } from './decorators/tax-endpoint.decorator';
 
 @ApiTags('tax')
 @Controller('tax')
 export class TaxController extends BaseAuthController {
   constructor(
     private readonly taxService: TaxService,
+    private readonly taxCalculationService: TaxCalculationService,
     responseService: ResponseService,
   ) {
     super(responseService);
@@ -287,6 +292,37 @@ export class TaxController extends BaseAuthController {
       () => this.taxService.bulkAssignTaxes(dto.assignments),
       'Taxes assigned successfully',
       201,
+    );
+  }
+
+  // --- Tax Calculation Endpoints ---
+  @TaxEndpoint.CalculateByEntity(CalculateTaxByEntityDto)
+  @Post('calculate/entity')
+  async calculateTaxByEntity(@Body() dto: CalculateTaxByEntityDto) {
+    return this.handleServiceOperation(
+      () => this.taxCalculationService.calculateTaxByEntity(dto),
+      'Tax calculated successfully',
+    );
+  }
+
+  @TaxEndpoint.CalculateComprehensive(CalculateComprehensiveTaxDto)
+  @Post('calculate/comprehensive')
+  async calculateComprehensiveTax(@Body() dto: CalculateComprehensiveTaxDto) {
+    return this.handleServiceOperation(
+      () => this.taxCalculationService.calculateComprehensiveTax(dto),
+      'Tax calculated successfully',
+    );
+  }
+
+  @TaxEndpoint.GetTaxAssignments()
+  @Get('assignments/:entityType/:entityId')
+  async getTaxAssignmentsByEntity(
+    @Param('entityType') entityType: EntityType,
+    @Param('entityId') entityId: string,
+  ) {
+    return this.handleServiceOperation(
+      () => this.taxCalculationService.getTaxAssignmentsByEntity(entityType, entityId),
+      'Tax assignments retrieved successfully',
     );
   }
 }
