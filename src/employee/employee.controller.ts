@@ -104,7 +104,7 @@ export class EmployeeController extends BaseEmployeeController {
   @EmployeeEndpoint.InviteEmployee(InviteEmployeeDto)
   inviteEmployee(@Body() inviteDto: InviteEmployeeDto, @Request() req: any) {
     return this.handleEmployeeInvitation(() =>
-      this.employeeService.invite(inviteDto, req.user.id),
+      this.employeeService.invite(inviteDto, req),
     );
   }
 
