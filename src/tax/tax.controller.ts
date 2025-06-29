@@ -24,6 +24,7 @@ import {
 import { UpdateTaxBundleDto } from './dto/update-tax-bundle.dto';
 import { ResponseService, BaseAuthController } from '../common';
 import { ApiTags } from '@nestjs/swagger';
+import { BulkAssignTaxDto } from './dto';
 
 @ApiTags('tax')
 @Controller('tax')
@@ -274,6 +275,18 @@ export class TaxController extends BaseAuthController {
     return this.handleServiceOperation(
       () => this.taxService.deleteTaxBundle(taxCodeId),
       'Tax bundle deleted successfully',
+    );
+  }
+
+  /**
+   * Bulk assign taxes to multiple entities (product, category, store, supplier) in one call.
+   */
+  @Post('assign/bulk')
+  async bulkAssignTaxes(@Body() dto: BulkAssignTaxDto) {
+    return this.handleServiceOperation(
+      () => this.taxService.bulkAssignTaxes(dto.assignments),
+      'Taxes assigned successfully',
+      201,
     );
   }
 }

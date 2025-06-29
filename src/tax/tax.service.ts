@@ -16,6 +16,8 @@ import {
   CreateTaxAssignmentDto,
   UpdateTaxAssignmentDto,
   CreateTaxBundleDto,
+  BulkAssignTaxDto,
+  AssignTaxDto,
 } from './dto';
 import { UpdateTaxBundleDto } from './dto/update-tax-bundle.dto';
 
@@ -269,5 +271,29 @@ export class TaxService {
         'Failed to delete tax bundle: ' + err.message,
       );
     }
+  }
+
+  /**
+   * Bulk assign taxes to multiple entities (product, category, store, supplier) in one call.
+   */
+  async bulkAssignTaxes(assignments: AssignTaxDto[]) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    // Validate input: ensure all required fields are present
+    if (
+      !assignments ||
+      !Array.isArray(assignments) ||
+      assignments.length === 0
+    ) {
+      throw new BadRequestException('No assignments provided');
+    }
+    // Create all assignments in a single transaction
+    return prisma.taxAssignment.createMany({
+      data: assignments.map((a) => ({
+        entityType: a.entityType,
+        entityId: a.entityId,
+        taxRateId: a.taxRateId,
+        assignedAt: new Date(),
+      })),
+    });
   }
 }
