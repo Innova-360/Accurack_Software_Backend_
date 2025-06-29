@@ -697,6 +697,11 @@ enum EntityType {
   STORE
 }
 
+enum TaxRateType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
 // --- Tax System Models ---
 model TaxCode {
   id          String     @id @default(uuid())
@@ -734,15 +739,16 @@ model Region {
 }
 
 model TaxRate {
-  id          String     @id @default(uuid())
+  id          String      @id @default(uuid())
   rate        Float
+  rateType    TaxRateType @default(PERCENTAGE)
   effectiveFrom DateTime
   effectiveTo   DateTime?
   regionId    String
   taxTypeId   String
   taxCodeId   String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   region      Region     @relation(fields: [regionId], references: [id])
   taxType     TaxType    @relation(fields: [taxTypeId], references: [id])

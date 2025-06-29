@@ -75,6 +75,7 @@ export class TaxCalculationResponseDto {
     entityType: EntityType;
     entityId: string;
     rate: number;
+    rateType: string;
     taxAmount: number;
     taxCode: string;
     taxType: string;

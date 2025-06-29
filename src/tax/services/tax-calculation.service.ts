@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { EntityType } from '@prisma/client';
+import { EntityType, TaxRateType } from '@prisma/client';
 import { TenantContextService } from '../../tenant/tenant-context.service';
 import {
   CalculateTaxByEntityDto,
@@ -43,28 +43,38 @@ export class TaxCalculationService {
       };
     }
 
-    const totalRate = taxAssignments.reduce(
-      (sum, assignment) => sum + assignment.taxRate.rate,
-      0,
+    const { totalTaxAmount, effectiveRate } = this.calculateTaxAmount(
+      taxAssignments,
+      dto.amount,
+      dto.quantity || 1
     );
-    const taxAmount = dto.amount * totalRate * (dto.quantity || 1);
 
+    const subtotal = dto.amount * (dto.quantity || 1);
+    
     return {
-      subtotal: dto.amount * (dto.quantity || 1),
-      taxAmount,
-      total: dto.amount * (dto.quantity || 1) + taxAmount,
-      effectiveRate: totalRate,
+      subtotal,
+      taxAmount: totalTaxAmount,
+      total: subtotal + totalTaxAmount,
+      effectiveRate,
       entityType: dto.entityType,
       entityId: dto.entityId,
-      appliedTaxes: taxAssignments.map((assignment) => ({
-        id: assignment.id,
-        entityType: assignment.entityType,
-        entityId: assignment.entityId,
-        rate: assignment.taxRate.rate,
-        taxAmount: dto.amount * assignment.taxRate.rate * (dto.quantity || 1),
-        taxCode: assignment.taxRate.taxCode.code,
-        taxType: assignment.taxRate.taxType.name,
-      })),
+      appliedTaxes: taxAssignments.map((assignment) => {
+        const individualTaxAmount = this.calculateIndividualTaxAmount(
+          assignment.taxRate,
+          dto.amount,
+          dto.quantity || 1
+        );
+        return {
+          id: assignment.id,
+          entityType: assignment.entityType,
+          entityId: assignment.entityId,
+          rate: assignment.taxRate.rate,
+          rateType: assignment.taxRate.rateType,
+          taxAmount: individualTaxAmount,
+          taxCode: assignment.taxRate.taxCode.code,
+          taxType: assignment.taxRate.taxType.name,
+        };
+      }),
     };
   }
 
@@ -145,28 +155,71 @@ export class TaxCalculationService {
       precedenceOrder,
     );
 
-    const totalRate = applicableTaxes.reduce(
-      (sum, assignment) => sum + assignment.taxRate.rate,
-      0,
-    );
     const lineTotal = dto.amount * (dto.quantity || 1);
-    const taxAmount = lineTotal * totalRate;
+    const { totalTaxAmount, effectiveRate } = this.calculateTaxAmount(
+      applicableTaxes,
+      dto.amount,
+      dto.quantity || 1
+    );
 
     return {
       subtotal: lineTotal,
-      taxAmount,
-      total: lineTotal + taxAmount,
-      effectiveRate: totalRate,
-      appliedTaxes: applicableTaxes.map((assignment) => ({
-        id: assignment.id,
-        entityType: assignment.entityType,
-        entityId: assignment.entityId,
-        rate: assignment.taxRate.rate,
-        taxAmount: lineTotal * assignment.taxRate.rate,
-        taxCode: assignment.taxRate.taxCode.code,
-        taxType: assignment.taxRate.taxType.name,
-      })),
+      taxAmount: totalTaxAmount,
+      total: lineTotal + totalTaxAmount,
+      effectiveRate,
+      appliedTaxes: applicableTaxes.map((assignment) => {
+        const individualTaxAmount = this.calculateIndividualTaxAmount(
+          assignment.taxRate,
+          dto.amount,
+          dto.quantity || 1
+        );
+        return {
+          id: assignment.id,
+          entityType: assignment.entityType,
+          entityId: assignment.entityId,
+          rate: assignment.taxRate.rate,
+          rateType: assignment.taxRate.rateType,
+          taxAmount: individualTaxAmount,
+          taxCode: assignment.taxRate.taxCode.code,
+          taxType: assignment.taxRate.taxType.name,
+        };
+      }),
     };
+  }
+
+  private calculateTaxAmount(taxAssignments: any[], amount: number, quantity: number) {
+    let totalTaxAmount = 0;
+    let totalPercentageRate = 0;
+    
+    for (const assignment of taxAssignments) {
+      const taxRate = assignment.taxRate;
+      const individualTaxAmount = this.calculateIndividualTaxAmount(taxRate, amount, quantity);
+      totalTaxAmount += individualTaxAmount;
+      
+      // For effective rate calculation, convert fixed amounts to percentage equivalent
+      if (taxRate.rateType === TaxRateType.PERCENTAGE) {
+        totalPercentageRate += taxRate.rate;
+      } else {
+        // Convert fixed amount to percentage for display purposes
+        const lineTotal = amount * quantity;
+        totalPercentageRate += lineTotal > 0 ? (individualTaxAmount / lineTotal) : 0;
+      }
+    }
+    
+    return {
+      totalTaxAmount,
+      effectiveRate: totalPercentageRate,
+    };
+  }
+
+  private calculateIndividualTaxAmount(taxRate: any, amount: number, quantity: number): number {
+    if (taxRate.rateType === TaxRateType.PERCENTAGE) {
+      // For percentage: rate is already in decimal form (e.g., 0.08 for 8%)
+      return amount * quantity * taxRate.rate;
+    } else {
+      // For fixed amount: rate is the fixed amount per item
+      return taxRate.rate * quantity;
+    }
   }
 
   private applyTaxPrecedence(
