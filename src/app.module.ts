@@ -12,6 +12,7 @@ import { DatabaseModule } from './database/database.module';
 import { EmployeeModule } from './employee/employee.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 import { SaleModule } from './sale/sale.module';
+import { TaxModule } from './tax/tax.module';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { SaleModule } from './sale/sale.module';
     DatabaseModule,
     SaleModule,
     EmployeeModule,
-
+    TaxModule,
   ],
   providers: [
     {
@@ -34,5 +35,6 @@ import { SaleModule } from './sale/sale.module';
       useClass: TenantContextInterceptor,
     },
   ],
+  controllers: [],
 })
 export class AppModule {}

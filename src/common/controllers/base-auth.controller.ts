@@ -132,19 +132,30 @@ export abstract class BaseAuthController {
   }
   /**
    * Extract user data for response (removes sensitive fields)
-   */ protected extractUserData(user: any): any {
+   */
+  protected extractUserData(user: any): any {
     return {
       id: user.id,
-      email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      role: user.role,
+      email: user.email,
+      role: user.role ?? null,
       clientId: user.clientId,
+      googleId: user.googleId ?? null,
       status: user.status,
-      ...(user.googleId && { googleId: user.googleId }),
-      stores: user.stores || [],
+      businessId: user.businessId ?? undefined,
+      stores: user.stores || [], // Array of storeId strings
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      ...(user.business && {
+        business: {
+          id: user.business.id,
+          businessName: user.business.businessName,
+          contactNo: user.business.contactNo,
+          website: user.business.website ?? undefined,
+          logoUrl: user.business.logoUrl ?? undefined,
+        },
+      }),
     };
   }
 }

@@ -525,4 +525,75 @@ export const ProductEndpoint = {
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
     ),
+
+
+  DeleteAllProduct: () =>
+    applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.DELETE,
+        PermissionScope.STORE,
+      ),
+      ApiOperation({
+        summary: 'Delete all product',
+        description:
+          'Soft deletes a product by setting its status to inactive. Requires product deletion permissions.',
+      }),
+      // ApiResponse({
+      //   status: 200,
+      //   description: 'Products deleted successfully',
+      //   type: ProductResponseDto,
+      //   schema: successResponseSchema('Products deleted successfully', {
+      //     id: 'uuid-product-id',
+      //     name: 'Premium Coffee Beans',
+      //     category: 'Beverages',
+      //     ean: '1234567890123',
+      //     pluUpc: 'UPC123456',
+      //     supplierId: 'uuid-supplier-id',
+      //     sku: 'COFFEE-001',
+      //     singleItemCostPrice: 19.99,
+      //     itemQuantity: 100,
+      //     msrpPrice: 29.99,
+      //     singleItemSellingPrice: 25.99,
+      //     clientId: 'uuid-client-id',
+      //     storeId: 'uuid-store-id',
+      //     hasVariants: false,
+      //     packIds: [],
+      //     packs: [],
+      //     variants: [],
+      //     createdAt: '2025-06-20T22:39:00.000Z',
+      //     updatedAt: '2025-06-20T22:39:00.000Z',
+      //     profitAmount: 6.0,
+      //     profitMargin: 30.02,
+      //     supplier: {
+      //       id: 'uuid-supplier-id',
+      //       name: 'ABC Suppliers Ltd',
+      //       email: 'contact@abcsuppliers.com',
+      //       phone: '123-456-7890',
+      //     },
+      //     store: {
+      //       id: 'uuid-store-id',
+      //       name: 'Main Store',
+      //     },
+      //     sales: [],
+      //     purchaseOrders: [],
+      //     status: 'inactive',
+      //   }),
+      // }),
+      ApiResponse({
+        status: 403,
+        description: 'Forbidden - insufficient permissions',
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to delete products',
+        ),
+      }),
+      ApiResponse({
+        status: 404,
+        description: 'Products not found',
+        schema: errorResponseSchema(404, 'Products not found'),
+      }),
+      ...standardErrorResponses(),
+      ApiBearerAuth('JWT-auth'),
+    ),
 };

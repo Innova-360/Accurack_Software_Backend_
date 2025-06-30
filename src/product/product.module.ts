@@ -10,6 +10,8 @@ import { PermissionsService } from 'src/common';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { MultiTenantService } from '../database/multi-tenant.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CategoryController } from './category.controller';
+import { CategoryService } from './category.service';
 
 @Module({
   imports: [
@@ -20,15 +22,16 @@ import { PrismaService } from '../prisma/prisma.service';
     }),
     PrismaClientModule,
   ],
-  controllers: [ProductController],
+  controllers: [ProductController, CategoryController],
   providers: [
-    ProductService, 
-    JwtStrategy, 
-    ResponseService, 
+    ProductService,
+    CategoryService,
+    JwtStrategy,
+    ResponseService,
     PermissionsService,
     TenantContextService, // Add tenant context
-    MultiTenantService,   // Required by TenantContextService
-    PrismaService,        // Required by TenantContextService
+    MultiTenantService, // Required by TenantContextService
+    PrismaService, // Required by TenantContextService
   ],
 })
 export class ProductModule {}
