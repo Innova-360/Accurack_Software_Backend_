@@ -149,6 +149,7 @@ model Stores {
   address     String?
   phone       String?
   email       String?
+  logo        String?
   clientId    String
   status      Status   @default(active)
   createdAt   DateTime @default(now())

@@ -104,8 +104,8 @@ export class CreateEmployeeDto {
     description: 'Employee joining date',
     required: true,
   })
-  @IsDate()
   @Type(() => Date)
+  @IsOptional()
   joiningDate?: Date;
 
   @ApiProperty({
