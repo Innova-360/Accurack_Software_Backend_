@@ -1112,7 +1112,7 @@ export class AuthService {
             lastName,
             email,
             passwordHash,
-            role: Role.super_admin,
+            role: 'super_admin',
             clientId: client.id,
             status: Status.active,
             otp,
@@ -1235,7 +1235,7 @@ export class AuthService {
         throw new NotFoundException('User not found');
       }
 
-      if (user.role !== Role.super_admin) {
+      if (user.role !== 'super_admin') {
         throw new BadRequestException('User is not a super admin');
       }
 

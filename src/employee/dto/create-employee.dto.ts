@@ -104,7 +104,7 @@ export class CreateEmployeeDto {
     description: 'Employee joining date',
     required: true,
   })
-  @IsDate()
+  @IsOptional()
   @Type(() => Date)
   joiningDate?: Date;
 

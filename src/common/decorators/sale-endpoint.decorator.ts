@@ -85,11 +85,12 @@ export const SaleEndpoint = {
   // Customer Management Endpoints
   CreateCustomer: (dtoType: any) =>
     applyDecorators(
-      ApiTags('Sales - Customers'),
+      ApiTags('Sales'),
       ApiBearerAuth(),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Create a new customer',
-        description: 'Creates a new customer record with automatic balance sheet initialization'
+        description:
+          'Creates a new customer record with automatic balance sheet initialization',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({
@@ -102,20 +103,24 @@ export const SaleEndpoint = {
           customerAddress: '123 Main St',
           storeId: 'store-uuid',
           clientId: 'client-uuid',
-          createdAt: '2025-06-25T10:20:00.000Z'
+          createdAt: '2025-06-25T10:20:00.000Z',
         }),
       }),
       ...standardErrorResponses(),
-      RequirePermissions(PermissionResource.TRANSACTION, PermissionAction.CREATE),
+      RequirePermissions(
+        PermissionResource.TRANSACTION,
+        PermissionAction.CREATE,
+      ),
     ),
 
   FindCustomerByPhone: () =>
     applyDecorators(
-      ApiTags('Sales - Customers'),
+      ApiTags('Sales'),
       ApiBearerAuth(),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Find customer by phone number',
-        description: 'Retrieves customer information and current balance by phone number'
+        description:
+          'Retrieves customer information and current balance by phone number',
       }),
       ApiParam({ name: 'phoneNumber', description: 'Customer phone number' }),
       ApiResponse({
@@ -125,7 +130,7 @@ export const SaleEndpoint = {
           id: 'uuid',
           customerName: 'John Doe',
           phoneNumber: '+1234567890',
-          balanceSheets: [{ remainingAmount: 150.00 }]
+          balanceSheets: [{ remainingAmount: 150.0 }],
         }),
       }),
       ...standardErrorResponses(),
@@ -134,11 +139,11 @@ export const SaleEndpoint = {
 
   UpdateCustomer: (dtoType: any) =>
     applyDecorators(
-      ApiTags('Sales - Customers'),
+      ApiTags('Sales'),
       ApiBearerAuth(),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Update customer information',
-        description: 'Updates customer details (name, address, contact info)'
+        description: 'Updates customer details (name, address, contact info)',
       }),
       ApiParam({ name: 'customerId', description: 'Customer ID' }),
       ApiBody({ type: dtoType }),
@@ -148,20 +153,28 @@ export const SaleEndpoint = {
         schema: successResponseSchema('Customer updated successfully'),
       }),
       ...standardErrorResponses(),
-      RequirePermissions(PermissionResource.TRANSACTION, PermissionAction.UPDATE),
+      RequirePermissions(
+        PermissionResource.TRANSACTION,
+        PermissionAction.UPDATE,
+      ),
     ),
 
   GetCustomers: () =>
     applyDecorators(
-      ApiTags('Sales - Customers'),
+      ApiTags('Sales'),
       ApiBearerAuth(),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Get all customers for a store',
-        description: 'Retrieves paginated list of customers with balance information'
+        description:
+          'Retrieves paginated list of customers with balance information',
       }),
       ApiQuery({ name: 'storeId', description: 'Store ID' }),
       ApiQuery({ name: 'page', description: 'Page number', required: false }),
-      ApiQuery({ name: 'limit', description: 'Items per page', required: false }),
+      ApiQuery({
+        name: 'limit',
+        description: 'Items per page',
+        required: false,
+      }),
       ApiResponse({
         status: 200,
         description: 'Customers retrieved successfully',
@@ -170,7 +183,7 @@ export const SaleEndpoint = {
           total: 0,
           page: 1,
           limit: 20,
-          totalPages: 1
+          totalPages: 1,
         }),
       }),
       ...standardErrorResponses(),
@@ -179,11 +192,11 @@ export const SaleEndpoint = {
 
   GetCustomerBalance: () =>
     applyDecorators(
-      ApiTags('Sales - Customers'),
+      ApiTags('Sales'),
       ApiBearerAuth(),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Get customer balance and payment history',
-        description: 'Retrieves customer balance sheet and payment history'
+        description: 'Retrieves customer balance sheet and payment history',
       }),
       ApiParam({ name: 'customerId', description: 'Customer ID' }),
       ApiResponse({
@@ -191,9 +204,9 @@ export const SaleEndpoint = {
         description: 'Balance retrieved successfully',
         schema: successResponseSchema('Balance retrieved successfully', {
           customer: { id: 'uuid', customerName: 'John Doe' },
-          currentBalance: 150.00,
-          totalPaid: 850.00,
-          balanceHistory: []
+          currentBalance: 150.0,
+          totalPaid: 850.0,
+          balanceHistory: [],
         }),
       }),
       ...standardErrorResponses(),
@@ -203,42 +216,71 @@ export const SaleEndpoint = {
   // Sale Management Endpoints
   CreateSale: (dtoType: any) =>
     applyDecorators(
-      ApiTags('Sales - Transactions'),
+      ApiTags('Sales'),
       ApiBearerAuth(),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Create a new sale',
-        description: 'Creates a new sale with automatic inventory updates, customer creation/lookup, and invoice generation'
+        description:
+          'Creates a new sale with automatic inventory updates, customer creation/lookup, and invoice generation',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({
         status: 201,
         description: 'Sale created successfully',
         schema: createdResponseSchema('Sale created successfully', {
-          sale: { id: 'uuid', totalAmount: 250.00, status: 'COMPLETED' },
+          sale: { id: 'uuid', totalAmount: 250.0, status: 'COMPLETED' },
           customer: { id: 'uuid', customerName: 'John Doe' },
-          invoice: { id: 'uuid', invoiceNumber: 'INV-20250625-0001' }
+          invoice: { id: 'uuid', invoiceNumber: 'INV-20250625-0001' },
         }),
       }),
       ...standardErrorResponses(),
-      RequirePermissions(PermissionResource.TRANSACTION, PermissionAction.CREATE),
+      RequirePermissions(
+        PermissionResource.TRANSACTION,
+        PermissionAction.CREATE,
+      ),
     ),
 
   GetSales: () =>
     applyDecorators(
-      ApiTags('Sales - Transactions'),
+      ApiTags('Sales'),
       ApiBearerAuth(),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Get all sales with filtering options',
-        description: 'Retrieves paginated list of sales with various filtering options'
+        description:
+          'Retrieves paginated list of sales with various filtering options',
       }),
       ApiQuery({ name: 'storeId', description: 'Store ID' }),
       ApiQuery({ name: 'page', description: 'Page number', required: false }),
-      ApiQuery({ name: 'limit', description: 'Items per page', required: false }),
-      ApiQuery({ name: 'customerId', description: 'Filter by customer ID', required: false }),
-      ApiQuery({ name: 'status', description: 'Filter by sale status', required: false }),
-      ApiQuery({ name: 'paymentMethod', description: 'Filter by payment method', required: false }),
-      ApiQuery({ name: 'dateFrom', description: 'Filter from date (ISO string)', required: false }),
-      ApiQuery({ name: 'dateTo', description: 'Filter to date (ISO string)', required: false }),
+      ApiQuery({
+        name: 'limit',
+        description: 'Items per page',
+        required: false,
+      }),
+      ApiQuery({
+        name: 'customerId',
+        description: 'Filter by customer ID',
+        required: false,
+      }),
+      ApiQuery({
+        name: 'status',
+        description: 'Filter by sale status',
+        required: false,
+      }),
+      ApiQuery({
+        name: 'paymentMethod',
+        description: 'Filter by payment method',
+        required: false,
+      }),
+      ApiQuery({
+        name: 'dateFrom',
+        description: 'Filter from date (ISO string)',
+        required: false,
+      }),
+      ApiQuery({
+        name: 'dateTo',
+        description: 'Filter to date (ISO string)',
+        required: false,
+      }),
       ApiResponse({
         status: 200,
         description: 'Sales retrieved successfully',
@@ -247,7 +289,7 @@ export const SaleEndpoint = {
           total: 0,
           page: 1,
           limit: 20,
-          totalPages: 1
+          totalPages: 1,
         }),
       }),
       ...standardErrorResponses(),
@@ -256,11 +298,12 @@ export const SaleEndpoint = {
 
   GetSaleById: () =>
     applyDecorators(
-      ApiTags('Sales - Transactions'),
+      ApiTags('Sales'),
       ApiBearerAuth(),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Get sale by ID with full details',
-        description: 'Retrieves complete sale information including customer, items, invoices, and returns'
+        description:
+          'Retrieves complete sale information including customer, items, invoices, and returns',
       }),
       ApiParam({ name: 'saleId', description: 'Sale ID' }),
       ApiResponse({
@@ -271,7 +314,7 @@ export const SaleEndpoint = {
           customer: { customerName: 'John Doe' },
           saleItems: [],
           invoices: [],
-          returns: []
+          returns: [],
         }),
       }),
       ...standardErrorResponses(),
@@ -280,11 +323,12 @@ export const SaleEndpoint = {
 
   UpdateSale: (dtoType: any) =>
     applyDecorators(
-      ApiTags('Sales - Transactions'),
+      ApiTags('Sales'),
       ApiBearerAuth(),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Update sale information',
-        description: 'Updates sale details such as status, payment method, or amounts'
+        description:
+          'Updates sale details such as status, payment method, or amounts',
       }),
       ApiParam({ name: 'saleId', description: 'Sale ID' }),
       ApiBody({ type: dtoType }),
@@ -294,16 +338,20 @@ export const SaleEndpoint = {
         schema: successResponseSchema('Sale updated successfully'),
       }),
       ...standardErrorResponses(),
-      RequirePermissions(PermissionResource.TRANSACTION, PermissionAction.UPDATE),
+      RequirePermissions(
+        PermissionResource.TRANSACTION,
+        PermissionAction.UPDATE,
+      ),
     ),
 
   DeleteSale: () =>
     applyDecorators(
-      ApiTags('Sales - Transactions'),
+      ApiTags('Sales'),
       ApiBearerAuth(),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Delete sale and restore inventory',
-        description: 'Deletes a sale and automatically restores inventory quantities'
+        description:
+          'Deletes a sale and automatically restores inventory quantities',
       }),
       ApiParam({ name: 'saleId', description: 'Sale ID' }),
       ApiResponse({
@@ -312,17 +360,21 @@ export const SaleEndpoint = {
         schema: successResponseSchema('Sale deleted successfully'),
       }),
       ...standardErrorResponses(),
-      RequirePermissions(PermissionResource.TRANSACTION, PermissionAction.DELETE),
+      RequirePermissions(
+        PermissionResource.TRANSACTION,
+        PermissionAction.DELETE,
+      ),
     ),
 
   // Return Management Endpoints
   CreateSaleReturn: (dtoType: any) =>
     applyDecorators(
-      ApiTags('Sales - Returns'),
+      ApiTags('Sales'),
       ApiBearerAuth(),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Process a sale return',
-        description: 'Processes returns with automatic inventory adjustment based on return category (SALEABLE, NON_SALEABLE, SCRAP)'
+        description:
+          'Processes returns with automatic inventory adjustment based on return category (SALEABLE, NON_SALEABLE, SCRAP)',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({
@@ -333,21 +385,25 @@ export const SaleEndpoint = {
           saleId: 'sale-uuid',
           productId: 'product-uuid',
           quantity: 2,
-          returnCategory: 'SALEABLE'
+          returnCategory: 'SALEABLE',
         }),
       }),
       ...standardErrorResponses(),
-      RequirePermissions(PermissionResource.TRANSACTION, PermissionAction.CREATE),
+      RequirePermissions(
+        PermissionResource.TRANSACTION,
+        PermissionAction.CREATE,
+      ),
     ),
 
   // Payment Management Endpoints
   CreatePayment: (dtoType: any) =>
     applyDecorators(
-      ApiTags('Sales - Payments'),
+      ApiTags('Sales'),
       ApiBearerAuth(),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Record a customer payment',
-        description: 'Records customer payment and updates balance sheet automatically'
+        description:
+          'Records customer payment and updates balance sheet automatically',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({
@@ -356,12 +412,15 @@ export const SaleEndpoint = {
         schema: createdResponseSchema('Payment recorded successfully', {
           id: 'uuid',
           customerId: 'customer-uuid',
-          amountPaid: 100.00,
-          remainingAmount: 50.00,
-          paymentStatus: 'PARTIAL'
+          amountPaid: 100.0,
+          remainingAmount: 50.0,
+          paymentStatus: 'PARTIAL',
         }),
       }),
       ...standardErrorResponses(),
-      RequirePermissions(PermissionResource.TRANSACTION, PermissionAction.CREATE),
+      RequirePermissions(
+        PermissionResource.TRANSACTION,
+        PermissionAction.CREATE,
+      ),
     ),
 };

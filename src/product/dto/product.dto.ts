@@ -9,6 +9,7 @@ import {
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { CreateCategoryDto } from './create-category.dto';
 
 enum SupplierState {
   primary = 'primary',
@@ -206,7 +207,7 @@ export class CreateProductDto {
 
   @ApiProperty({ example: 'Beverages', description: 'Category of the product' })
   @IsString()
-  category: string;
+  categoryId: string;
 
   @ApiProperty({
     example: '1234567890123',
@@ -408,7 +409,7 @@ export class UpdateProductDto {
   })
   @IsString()
   @IsOptional()
-  category?: string;
+  categoryId?: string;
 
   @ApiProperty({
     example: '1234567890123',
@@ -634,7 +635,21 @@ export class ProductResponseDto {
   name: string;
 
   @ApiProperty({ example: 'Beverages', description: 'Category of the product' })
-  category: string;
+  categoryId: string;
+
+  @ApiProperty({
+    type: CreateCategoryDto,
+    example: {
+      id: '8bb688a6-9759-434a-90c9-83f8f8e196e3',
+      name: 'Electronics',
+      code: 'ELEC',
+      description: 'All electronic items',
+      parentId: 'uuid-parent-category-id',
+    },
+    description: 'Category of the product',
+    required: false,
+  })
+  category?: CreateCategoryDto | CreateCategoryDto | { [key: string]: any };
 
   @ApiProperty({
     example: '1234567890123',

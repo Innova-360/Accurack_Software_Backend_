@@ -103,7 +103,7 @@ export class ProductController extends BaseProductController {
 
   @ProductEndpoint.DeleteAllProduct()
   @Delete('delete/all')
-  async deleteAllProduct(@Req() req, @Param('storeId') storeId: string) {
+  async deleteAllProduct(@Req() req, @Query('storeId') storeId: string) {
     const user = req.user;
     return this.handleProductOperation(
       () => this.productService.deleteAllProduct(user, storeId),
