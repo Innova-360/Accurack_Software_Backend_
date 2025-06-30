@@ -13,8 +13,7 @@ export class FuzzyMatcher {
       threshold,
       includeScore: true,
       minMatchCharLength: 2,
-    };
-    this.fuse = new Fuse(items, options);
+    };   this.fuse = new Fuse(items, options);
   }
 
   search(query: string, maxResults: number = 3): FuzzyMatchResult[] {

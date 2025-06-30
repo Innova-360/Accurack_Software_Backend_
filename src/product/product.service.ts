@@ -8,6 +8,7 @@ import {
   CreateProductDto,
   UpdateProductDto,
   ProductResponseDto,
+  AssignSupplierDto,
 } from './dto/product.dto';
 import {
   parseExcel,
@@ -1048,6 +1049,76 @@ export class ProductService {
   */
 
     // No return value; global interceptor can format response
+  }
+
+  async assignSupplier(dto: AssignSupplierDto) {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    const { supplierId, storeId, products } = dto;
+
+    // Validate input
+    if (!products || (!Array.isArray(products) && !products.productId)) {
+      throw new BadRequestException('At least one product must be provided');
+    }
+
+    // Normalize products to always be an array
+    const productArray = Array.isArray(products) ? products : [products];
+
+    // Fetch and validate store
+    const store = await prisma.stores.findUnique({
+      where: { id: storeId },
+    });
+
+    if (!store) {
+      throw new NotFoundException('Store not found');
+    }
+
+    // Fetch and validate supplier
+    const supplier = await prisma.suppliers.findUnique({
+      where: { id: supplierId },
+      include: { productSuppliers: true },
+    });
+
+    if (!supplier) {
+      throw new NotFoundException('Supplier not found');
+    }
+
+    // Process each product
+    const productSuppliers = await Promise.all(
+      productArray.map(async (product) => {
+        const { productId, costPrice } = product;
+
+        // Validate product
+        const existingProduct = await prisma.products.findUnique({
+          where: { id: productId },
+          include: { productSuppliers: true },
+        });
+
+        if (!existingProduct) {
+          throw new NotFoundException(`Product with ID ${productId} not found`);
+        }
+
+        // Determine supplier state
+        const hasSuppliers = existingProduct.productSuppliers.length > 0;
+        const state = hasSuppliers ? 'secondary' : 'primary';
+
+        // Create product-supplier relation
+        return prisma.productSupplier.create({
+          data: {
+            productId,
+            supplierId,
+            costPrice,
+            state,
+            category: product.category || 'default',
+          },
+        });
+      }),
+    );
+
+    return {
+      message: 'Supplier has been added to products',
+      data: { productSuppliers },
+    };
   }
 
   private async resolveCategoriesFromFile(

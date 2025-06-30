@@ -1,4 +1,4 @@
-import { applyDecorators } from '@nestjs/common';
+import { applyDecorators, HttpStatus } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -596,4 +596,45 @@ export const ProductEndpoint = {
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
     ),
+
+
+  AssignSupplier() {
+    return applyDecorators(
+      ApiTags('Products'),
+      ApiOperation({ 
+        summary: 'Assign supplier to products',
+        description: 'Assigns a supplier to one or more products with specified cost price and state (primary/secondary).'
+      }),
+      ApiResponse({ 
+        status: HttpStatus.OK, 
+        description: 'Supplier successfully assigned to products',
+        schema: {
+          example: {
+            message: 'Supplier has been added on product',
+            data: {
+              productSuppliers: [
+                {
+                  id: 'uuid',
+                  productId: 'uuid',
+                  supplierId: 'uuid',
+                  costPrice: 19.99,
+                  state: 'primary',
+                  createdAt: '2025-06-30T20:43:00.000Z',
+                  updatedAt: '2025-06-30T20:43:00.000Z'
+                }
+              ]
+            }
+          }
+        }
+      }),
+      ApiResponse({ 
+        status: HttpStatus.NOT_FOUND, 
+        description: 'Store or supplier not found'
+      }),
+      ApiResponse({ 
+        status: HttpStatus.BAD_REQUEST, 
+        description: 'Invalid input data or product not found'
+      })
+    );
+  }
 };

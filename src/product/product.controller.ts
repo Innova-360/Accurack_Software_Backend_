@@ -14,6 +14,7 @@ import {
   HttpStatus,
   UseGuards,
   BadRequestException,
+  Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags,ApiConsumes, ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -26,6 +27,7 @@ import {
   CreateProductDto,
   UpdateProductDto,
   ProductResponseDto,
+  AssignSupplierDto,
 } from './dto/product.dto';
 
 import { PermissionsGuard } from '../guards/permissions.guard';
@@ -109,6 +111,15 @@ export class ProductController extends BaseProductController {
       () => this.productService.deleteAllProduct(user, storeId),
       'Product deleted successfully',
     );
+  }
+
+  @ProductEndpoint.AssignSupplier() // product-endpoint.decorator contains swagger doc tags and api responses. 
+  @Post('assign-supplier')
+  async assignSupplier(@Req() req, dto: AssignSupplierDto){
+    return this.handleProductOperation(
+      () => this.productService.assignSupplier(dto),
+      'Supplier has been added on product'
+    )
   }
 
   @Post('uploadsheet')  @ApiOperation({

@@ -21,6 +21,52 @@ class DynamicProperties {
   [key: string]: any;
 }
 
+class AssignSupplierProduct{
+   @ApiProperty({
+    example: 'uuid-product-id',
+    description: 'ID of the product',
+  })
+  @IsString()
+  productId: string;
+
+  @ApiProperty({ example: 19.99, description: 'Cost price from this supplier' })
+  @Transform(({ value }) => {
+    if (value === null || value === undefined || value === '') return undefined;
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    return isNaN(num) ? undefined : num;
+  })
+  @IsNumber()
+  costPrice: number;
+
+
+  @ApiProperty({
+    example: 'primary',
+    description: 'State for this supplier',
+  })
+  @IsString()
+  state: string;
+}
+
+export class AssignSupplierDto {
+  @ApiProperty({ example: 'uuid-supplier-id', description: 'ID of the supplier' })
+  supplierId: string;
+
+  @ApiProperty({ example: 'uuid-store-id', description: 'ID of the store' })
+  storeId: string;
+
+  @ApiProperty({
+    type: AssignSupplierProduct,
+    example: {
+      productId: '8bb688a6-9759-434a-90c9-83f8f8e196e3',
+      costPrice: '56.9',
+      state: 'primary'
+    }
+  })
+  products?: AssignSupplierProduct | { [key: string]: any };
+ 
+}
+
+
 class ProductSupplierDto {
   @ApiProperty({
     example: 'uuid-supplier-id',
@@ -840,3 +886,5 @@ export class ProductResponseDto {
   })
   purchaseOrders?: any[];
 }
+
+
