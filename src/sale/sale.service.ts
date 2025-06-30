@@ -210,7 +210,7 @@ export class SaleService {
           tax: dto.tax || 0,
           status: SaleStatus.COMPLETED,
           generateInvoice: dto.generateInvoice ?? true,
-          cashierName: dto.cashierName,
+          cashierName: dto.cashierName || "nan",
         },
       });
 

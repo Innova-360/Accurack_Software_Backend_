@@ -149,7 +149,7 @@ export class CreateSaleDto {
 
   @ApiProperty({ description: 'Cashier name' })
   @IsString()
-  cashierName: string;
+  cashierName?: string;
 
   @ApiPropertyOptional({ description: 'Generate invoice', default: true })
   @IsOptional()
