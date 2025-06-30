@@ -582,6 +582,7 @@ export class ProductService {
         where,
         include: {
           packs: true,
+          category: true,
           productSuppliers: {
             include: {
               supplier: true,
@@ -1467,38 +1468,54 @@ export class ProductService {
           } else {
             const batches = chunk(parsedData.data, 500);
 
+            // Resolve categories for batch insert
+            const validRows = parsedData.data.filter(
+              (_, idx) => !parsedData.errors.some((err) => err.row === idx + 1),
+            );
+            const categoryMap = await this.resolveCategoriesFromFile(validRows);
+
             await Promise.all(
               batches.map(async (batch) => {
                 processedItems += batch.length;
                 await prisma.products.createMany({
-                  data: batch.map((product) => ({
-                    name: product.ProductName,
-                    category: product.Category,
-                    pluUpc:
-                      product['PLU/UPC'] && product['PLU/UPC'] !== 'undefined'
-                        ? product['PLU/UPC']
-                        : null,
-                    sku:
-                      product.SKU && product.SKU !== 'undefined'
-                        ? product.SKU
-                        : null,
-                    itemQuantity: product.IndividualItemQuantity || 0,
-                    msrpPrice: isNaN(product.IndividualItemSellingPrice)
-                      ? 0
-                      : product.IndividualItemSellingPrice,
-                    singleItemSellingPrice: isNaN(
-                      product.IndividualItemSellingPrice,
-                    )
-                      ? 0
-                      : product.IndividualItemSellingPrice,
-                    discountAmount: product.DiscountValue || 0,
-                    percentDiscount: product.DiscountPercentage || 0,
-                    hasVariants: false,
-                    packIds: [],
-                    variants: [],
-                    clientId: user.clientId,
-                    storeId: store.id,
-                  })),
+                  data: batch.map((product) => {
+                    let categoryId: string | undefined = undefined;
+                    if (
+                      product.Category &&
+                      categoryMap &&
+                      categoryMap.has(product.Category)
+                    ) {
+                      categoryId = categoryMap.get(product.Category)?.id;
+                    }
+                    return {
+                      name: product.ProductName,
+                      categoryId: categoryId ?? null,
+                      pluUpc:
+                        product['PLU/UPC'] && product['PLU/UPC'] !== 'undefined'
+                          ? product['PLU/UPC']
+                          : null,
+                      sku:
+                        product.SKU && product.SKU !== 'undefined'
+                          ? product.SKU
+                          : null,
+                      itemQuantity: product.IndividualItemQuantity || 0,
+                      msrpPrice: isNaN(product.IndividualItemSellingPrice)
+                        ? 0
+                        : product.IndividualItemSellingPrice,
+                      singleItemSellingPrice: isNaN(
+                        product.IndividualItemSellingPrice,
+                      )
+                        ? 0
+                        : product.IndividualItemSellingPrice,
+                      discountAmount: product.DiscountValue || 0,
+                      percentDiscount: product.DiscountPercentage || 0,
+                      hasVariants: false,
+                      packIds: [],
+                      variants: [],
+                      clientId: user.clientId,
+                      storeId: store.id,
+                    };
+                  }),
                 });
               }),
             );
@@ -1620,6 +1637,41 @@ export class ProductService {
       fileHash,
       storeId,
     );
+  }
+
+  async searchProducts(user: any, query: string, storeId?: string) {
+    this.validateProductAccess(user, storeId);
+    const prisma = await this.tenantContext.getPrismaClient();
+    let where: any = {
+      OR: [
+        { name: { contains: query, mode: 'insensitive' } },
+        { sku: { contains: query, mode: 'insensitive' } },
+        { pluUpc: { contains: query, mode: 'insensitive' } },
+        { ean: { contains: query, mode: 'insensitive' } },
+      ],
+    };
+    if (user.role !== 'super_admin') {
+      if (storeId) {
+        where.storeId = storeId;
+      } else if (user.storeId) {
+        where.storeId = user.storeId;
+      }
+      where.clientId = user.clientId;
+    } else if (storeId) {
+      where.storeId = storeId;
+    }
+    const products = await prisma.products.findMany({
+      where,
+      include: {
+        packs: true,
+        productSuppliers: { include: { supplier: true } },
+        store: { select: { id: true, name: true } },
+        saleItems: true,
+        purchaseOrders: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return products.map((product) => this.formatProductResponse(product));
   }
 
   async getUploadStatus(fileUploadId: string) {
