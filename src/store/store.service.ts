@@ -29,6 +29,7 @@ export class StoreService {
       phone,
       currency = 'USD',
       timezone = 'UTC',
+      logo,
     } = dto;
 
     try {
@@ -50,6 +51,7 @@ export class StoreService {
             email,
             address,
             phone,
+            logo,
             clientId: user.clientId,
             status: Status.active,
           },
@@ -59,6 +61,7 @@ export class StoreService {
             email: true,
             address: true,
             phone: true,
+            logo: true,
             clientId: true,
             status: true,
             createdAt: true,
@@ -140,6 +143,7 @@ export class StoreService {
           email: true,
           address: true,
           phone: true,
+          logo: true,
           status: true,
           createdAt: true,
           settings: {
@@ -190,6 +194,7 @@ export class StoreService {
           email: true,
           address: true,
           phone: true,
+          logo: true,
           status: true,
           createdAt: true,
           settings: {
