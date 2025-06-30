@@ -85,10 +85,16 @@ export class SaleController extends BaseSaleController {
     @Query('storeId') storeId: string,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
+    @Query('search') search?: string,
   ) {
     return this.handleSaleOperation(
       () =>
-        this.saleService.getCustomers(storeId, parseInt(page), parseInt(limit)),
+        this.saleService.getCustomers(
+          storeId,
+          parseInt(page),
+          parseInt(limit),
+          search
+        ),
       'Customers retrieved successfully',
     );
   }
