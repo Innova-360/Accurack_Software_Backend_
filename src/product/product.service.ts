@@ -581,6 +581,7 @@ export class ProductService {
         where,
         include: {
           packs: true,
+          category: true,
           productSuppliers: {
             include: {
               supplier: true,
