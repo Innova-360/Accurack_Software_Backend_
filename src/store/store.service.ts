@@ -52,7 +52,6 @@ export class StoreService {
             email,
             address,
             phone,
-            logo,
             clientId: user.clientId,
             status: Status.active,
             logoUrl

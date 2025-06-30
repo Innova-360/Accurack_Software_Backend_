@@ -50,7 +50,7 @@ export class CreateStoreDto {
   })
   @IsString()
   @IsOptional()
-  logo?: string;
+  logoUrl?: string;
 }
 
 export class UpdateStoreDto {
