@@ -15,7 +15,61 @@ export class SupplierService {
     private readonly prisma: PrismaClientService, // Keep for fallback/master DB operations
     private readonly tenantContext: TenantContextService, // Add tenant context
   ) {}
-  
+
+  // ...existing code...
+
+  async searchSuppliers(user: any, query: string, storeId?: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    let whereClause: any = {
+      status: Status.active,
+      OR: [
+        { name: { contains: query, mode: 'insensitive' } },
+        { email: { contains: query, mode: 'insensitive' } },
+        { phone: { contains: query, mode: 'insensitive' } },
+        { address: { contains: query, mode: 'insensitive' } },
+      ],
+    };
+    if (user.role === Role.super_admin) {
+      if (storeId) {
+        whereClause.storeId = storeId;
+      }
+    } else {
+      const accessibleStoreIds =
+        user.stores?.map((store) => store.storeId) || [];
+      if (storeId) {
+        if (!accessibleStoreIds.includes(storeId)) {
+          throw new ForbiddenException('No access to this store');
+        }
+        whereClause.storeId = storeId;
+      } else {
+        whereClause.storeId = { in: accessibleStoreIds };
+      }
+    }
+    return prisma.suppliers.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        address: true,
+        storeId: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
   async createSupplier(user: any, createSupplierDto: CreateSupplierDto) {
     // Check permissions - only super_admin, admin, and manager can create suppliers
     if (![Role.super_admin, Role.admin, Role.manager].includes(user.role)) {
@@ -324,7 +378,7 @@ export class SupplierService {
 
       if (!existingSupplier) {
         throw new NotFoundException('Supplier not found');
-      } 
+      }
 
       // If storeId is being updated, validate the new store
       if (
@@ -463,7 +517,7 @@ export class SupplierService {
       );
     }
   }
-  
+
   private async validateStoreAccess(user: any, storeId: string): Promise<any> {
     if (!storeId) {
       throw new BadRequestException('Store ID is required');

@@ -13,6 +13,22 @@ import { FuzzyMatcher } from '../utils/fuzzy-matcher';
 export class CategoryService {
   constructor(private readonly tenantContext: TenantContextService) {}
 
+  async searchCategories(query: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    if (!query || query.trim() === '') {
+      return [];
+    }
+    return prisma.category.findMany({
+      where: {
+        OR: [
+          { name: { contains: query, mode: 'insensitive' } },
+          { code: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async createCategory(dto: CreateCategoryDto) {
     const prisma = await this.tenantContext.getPrismaClient();
     // Check for duplicate name or code

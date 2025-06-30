@@ -7,12 +7,13 @@ import {
   Delete,
   Param,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ResponseService, BaseAuthController } from '../common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 
@@ -25,6 +26,21 @@ export class CategoryController extends BaseAuthController {
     responseService: ResponseService,
   ) {
     super(responseService);
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search categories by query' })
+  @ApiQuery({
+    name: 'q',
+    required: true,
+    type: String,
+    description: 'Search term (category name or code)',
+  })
+  async searchCategories(@Query('q') q: string) {
+    return this.handleServiceOperation(
+      () => this.categoryService.searchCategories(q),
+      'Categories search results',
+    );
   }
 
   @Post()

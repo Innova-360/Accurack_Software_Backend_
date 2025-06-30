@@ -101,13 +101,51 @@ export class SaleService {
     });
   }
 
-  async getCustomers(storeId: string, page: number = 1, limit: number = 20) {
+  async getCustomers(
+    storeId: string,
+    page: number = 1,
+    limit: number = 20,
+    search?: string
+  ) {
     const prisma = await this.tenantContext.getPrismaClient();
-    const skip = (page - 1) * limit;
 
+    // If search is provided, ignore pagination and return all matches
+    if (search && search.trim() !== '') {
+      const where: any = {
+        storeId,
+        OR: [
+          { customerName: { contains: search, mode: 'insensitive' } },
+          { phoneNumber: { contains: search, mode: 'insensitive' } },
+        ],
+      };
+      const customers = await prisma.customer.findMany({
+        where,
+        include: {
+          balanceSheets: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+          _count: {
+            select: { sales: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      return {
+        customers,
+        total: customers.length,
+        page: 1,
+        limit: customers.length,
+        totalPages: 1,
+      };
+    }
+
+    // Default: paginated fetch
+    const skip = (page - 1) * limit;
+    const where: any = { storeId };
     const [customers, total] = await Promise.all([
-      this.prisma.customer.findMany({
-        where: { storeId },
+      prisma.customer.findMany({
+        where,
         include: {
           balanceSheets: {
             orderBy: { createdAt: 'desc' },
@@ -121,7 +159,7 @@ export class SaleService {
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      prisma.customer.count({ where: { storeId } }),
+      prisma.customer.count({ where }),
     ]);
 
     return {
