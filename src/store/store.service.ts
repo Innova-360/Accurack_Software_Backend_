@@ -289,4 +289,61 @@ export class StoreService {
       throw new BadRequestException('Failed to validate user record');
     }
   }
+  async searchStores(user: any, query: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    if (!query || query.trim() === '') {
+      return [];
+    }
+    // Build base where clause based on user role
+    let where: any = {
+      ...(user.role === Role.super_admin
+        ? {}
+        : user.role === Role.employee
+          ? {
+              users: {
+                some: {
+                  userId: user.id,
+                },
+              },
+            }
+          : {
+              clientId: user.clientId,
+              users: {
+                some: {
+                  userId: user.id,
+                },
+              },
+            }),
+      OR: [
+        { name: { contains: query, mode: 'insensitive' } },
+        { email: { contains: query, mode: 'insensitive' } },
+        { address: { contains: query, mode: 'insensitive' } },
+        { phone: { contains: query, mode: 'insensitive' } },
+      ],
+    };
+    return prisma.stores.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        address: true,
+        phone: true,
+        logoUrl: true,
+        status: true,
+        createdAt: true,
+        settings: {
+          select: {
+            currency: true,
+            timezone: true,
+            taxRate: true,
+            taxMode: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
 }
