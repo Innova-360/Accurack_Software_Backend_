@@ -6,15 +6,19 @@ import {
   Put,
   Delete,
   Param,
+  UseGuards,
 } from '@nestjs/common';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ResponseService, BaseAuthController } from '../common';
 import { ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { PermissionsGuard } from '../guards/permissions.guard';
 
 @ApiTags('product-category')
-@Controller('product/category')
+@Controller('product-category')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class CategoryController extends BaseAuthController {
   constructor(
     private readonly categoryService: CategoryService,

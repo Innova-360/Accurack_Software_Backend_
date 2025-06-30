@@ -17,6 +17,7 @@ import {
 import * as crypto from 'crypto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
+import { CategoryService } from './category.service';
 import { chunk } from 'lodash';
 
 interface UploadedFile {
@@ -39,6 +40,7 @@ export class ProductService {
   constructor(
     private readonly prisma: PrismaClientService, // Keep for fallback/master DB operations
     private readonly tenantContext: TenantContextService, // Add tenant context
+    private readonly categoryService: CategoryService, // Add category service
   ) {}
 
   private validateProductOperationPermissions(
@@ -148,11 +150,10 @@ export class ProductService {
     return {
       id: product.id,
       name: product.name,
-      category: product.category,
+      categoryId: product.categoryId,
       ean: product.ean,
       pluUpc: product.pluUpc,
       sku: product.sku,
-      productSuppliers: product.productSuppliers || [],
       singleItemCostPrice: costPrice,
       itemQuantity: product.itemQuantity,
       msrpPrice: product.msrpPrice,
@@ -162,9 +163,6 @@ export class ProductService {
       clientId: product.clientId,
       storeId: product.storeId,
       hasVariants: product.hasVariants,
-      packIds: product.packIds,
-      packs: product.packs || [],
-      variants: product.variants || [],
       store: product.store,
       sales: product.sales,
       purchaseOrders: product.purchaseOrders,
@@ -172,6 +170,11 @@ export class ProductService {
       updatedAt: product.updatedAt,
       profitAmount: parseFloat(profitAmount.toFixed(2)),
       profitMargin: parseFloat(profitMargin.toFixed(2)),
+      category: product.category || [],
+      productSuppliers: product.productSuppliers || [],
+      packIds: product.packIds,
+      packs: product.packs || [],
+      variants: product.variants || [],
     };
   }
   async createProduct(
@@ -219,6 +222,15 @@ export class ProductService {
     if (store.clientId !== createProductDto.clientId) {
       throw new BadRequestException(
         'Store does not belong to the specified client',
+      );
+    }
+    const existingCategory = await prisma.category.findFirst({
+      where: { id: createProductDto.categoryId },
+    });
+
+    if (!existingCategory) {
+      throw new BadRequestException(
+        'Invalid categoryId - category does not exist',
       );
     }
 
@@ -317,6 +329,7 @@ export class ProductService {
         data: createData,
         include: {
           packs: true,
+          category: true,
           productSuppliers: {
             include: {
               supplier: true,
@@ -334,6 +347,7 @@ export class ProductService {
       });
     } catch (error: any) {
       // Handle foreign key constraint violations
+      console.log('Error creating product:', error);
       if (error.code === 'P2003') {
         throw new BadRequestException(
           'Invalid clientId or storeId - referenced record does not exist',
@@ -364,6 +378,9 @@ export class ProductService {
           `Invalid supplier IDs: ${missingSupplierIds.join(', ')} - suppliers do not exist or do not belong to this store`,
         );
       }
+
+      // Always set the category field in productSupplier to the actual category name from the product's category
+      // const categoryName = existingCategory?.name || '';
 
       await Promise.all(
         createProductDto.productSuppliers.map((supplierData) =>
@@ -461,6 +478,7 @@ export class ProductService {
       where: { id: product.id },
       include: {
         packs: true,
+        category: true, // Ensure category is included in the response
         productSuppliers: {
           include: {
             supplier: true,
@@ -826,8 +844,8 @@ export class ProductService {
 
     if (updateProductDto.name !== undefined)
       updateData.name = updateProductDto.name;
-    if (updateProductDto.category !== undefined)
-      updateData.category = updateProductDto.category;
+    if (updateProductDto.categoryId !== undefined)
+      updateData.categoryId = updateProductDto.categoryId;
     if (updateProductDto.ean !== undefined)
       updateData.ean = updateProductDto.ean;
     if (updateProductDto.sku !== undefined)
@@ -1032,6 +1050,34 @@ export class ProductService {
     // No return value; global interceptor can format response
   }
 
+  private async resolveCategoriesFromFile(
+    validRows: ProductExcelRow[],
+  ): Promise<Map<string, { id: string; name: string }>> {
+    const categoryMap = new Map<string, { id: string; name: string }>();
+    const uniqueCategories = new Set<string>();
+
+    // Collect unique category names
+    for (const product of validRows) {
+      if (product.Category && product.Category.trim()) {
+        uniqueCategories.add(product.Category.trim());
+      }
+    }
+
+    // Resolve each category
+    for (const categoryName of uniqueCategories) {
+      try {
+        const resolvedCategory =
+          await this.categoryService.findOrCreateCategory(categoryName);
+        categoryMap.set(categoryName, resolvedCategory);
+      } catch (error) {
+        // Re-throw category validation errors
+        throw error;
+      }
+    }
+
+    return categoryMap;
+  }
+
   async checkInventoryFileHash(fileHash: string) {
     const prisma = await this.tenantContext.getPrismaClient();
     return await prisma.fileUploadInventory.findUnique({
@@ -1131,6 +1177,9 @@ export class ProductService {
             parsedData.data.length > 0 &&
             parsedData.data[0].SKU !== 'undefined'
           ) {
+            // Resolve categories first - this will throw error if fuzzy matches found
+            const categoryMap = await this.resolveCategoriesFromFile(validRows);
+
             // Pre-create suppliers to reduce queries in the loop
             const supplierMap = new Map();
             const uniqueSuppliers = new Map();
@@ -1196,9 +1245,10 @@ export class ProductService {
                   );
                 }
               } // Create the product (without supplier reference for now)
+              const resolvedCategory = categoryMap.get(product.Category);
               const productData: any = {
                 name: product.ProductName,
-                category: product.Category,
+                categoryId: resolvedCategory?.id || null,
                 ean: product.EAN || '',
                 // Only set pluUpc if product doesn't have variants
                 pluUpc: hasVariants
@@ -1246,7 +1296,7 @@ export class ProductService {
                     productId: createdProduct.id,
                     supplierId: supplier.id,
                     costPrice: product.VendorPrice || 0,
-                    category: product.Category,
+                    category: resolvedCategory?.name || product.Category,
                     state: 'primary', // Default to primary for uploaded products
                   },
                 });
@@ -1385,7 +1435,9 @@ export class ProductService {
             // for (const product of validRows) {
             //   const productData: any = {
             //     name: product.ProductName,
-            //     category: product.Category,
+            //     category: product
+            //
+            // ,
             //     pluUpc:
             //       product['PLU/UPC'] && product['PLU/UPC'] !== 'undefined'
             //         ? product['PLU/UPC']
