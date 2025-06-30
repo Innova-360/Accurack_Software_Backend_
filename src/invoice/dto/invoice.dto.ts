@@ -17,14 +17,14 @@ export class CreateInvoiceDto {
   @IsString()
   saleId: string;
 
-  @ApiProperty({ example: 'business-uuid-456', description: 'Business ID for the invoice' })
-  @IsString()
-  businessId: string;
+  // @ApiProperty({ example: 'business-uuid-456', description: 'Business ID for the invoice' })
+  // @IsString()
+  // businessId: string;
 
-  @ApiPropertyOptional({ example: 'https://example.com/logo.png', description: 'Optional logo URL for the invoice' })
-  @IsOptional()
-  @IsString()
-  logoUrl?: string;
+  // @ApiPropertyOptional({ example: 'https://example.com/logo.png', description: 'Optional logo URL for the invoice' })
+  // @IsOptional()
+  // @IsString()
+  // logoUrl?: string;
 
   @ApiPropertyOptional({
     type: [CustomFieldDto],
