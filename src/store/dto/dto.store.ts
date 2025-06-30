@@ -105,5 +105,5 @@ export class UpdateStoreDto {
   })
   @IsString()
   @IsOptional()
-  logo?: string;
+  logoUrl?: string;
 }

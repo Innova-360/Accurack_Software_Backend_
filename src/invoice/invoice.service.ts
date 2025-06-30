@@ -88,7 +88,7 @@ export class InvoiceService {
         netAmount,
         tax: sale.tax,
         status: sale.status,
-        cashierName: sale.cashierName,
+        cashierName: sale.cashierName || "nan",
         logoUrl: logoUrl || business.logoUrl || undefined,
         qrCode,
         customFields: {

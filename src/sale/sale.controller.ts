@@ -122,8 +122,6 @@ export class SaleController extends BaseSaleController {
   }
 
 
-  
-
 
   @SaleEndpoint.GetSales()
   @Get('list')
