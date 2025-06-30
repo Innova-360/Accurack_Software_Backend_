@@ -32,7 +32,10 @@ CREATE TYPE "SaleStatus" AS ENUM ('PENDING', 'COMPLETED', 'CANCELLED', 'REFUNDED
 CREATE TYPE "PaymentStatus" AS ENUM ('PAID', 'PARTIAL', 'UNPAID', 'OVERDUE');
 
 -- CreateEnum
-CREATE TYPE "InvoiceSource" AS ENUM ('manual', 'system');
+CREATE TYPE "InvoiceSource" AS ENUM ('manual', 'website');
+
+-- CreateEnum
+CREATE TYPE "SaleConfirmation" AS ENUM ('CONFIRMED', 'NOT_CONFIRMED', 'CANCELLED');
 
 -- CreateEnum
 CREATE TYPE "PayerType" AS ENUM ('SUPPLIER', 'STORE_OWNER', 'CUSTOMER');
@@ -169,12 +172,14 @@ CREATE TABLE "Sales" (
     "clientId" TEXT NOT NULL,
     "paymentMethod" "PaymentMethod" NOT NULL,
     "totalAmount" DOUBLE PRECISION NOT NULL,
+    "confirmation" "SaleConfirmation" NOT NULL DEFAULT 'NOT_CONFIRMED',
+    "quantitySend" INTEGER NOT NULL,
     "allowance" DOUBLE PRECISION DEFAULT 0,
     "source" "InvoiceSource" NOT NULL DEFAULT 'manual',
     "tax" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "status" "SaleStatus" NOT NULL DEFAULT 'PENDING',
     "generateInvoice" BOOLEAN NOT NULL DEFAULT true,
-    "cashierName" TEXT NOT NULL,
+    "cashierName" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "fileUploadSalesId" TEXT,
