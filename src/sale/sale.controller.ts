@@ -107,7 +107,7 @@ export class SaleController extends BaseSaleController {
   @Post('create')
   async createSale(@Body() dto: CreateSaleDto, @Request() req: any) {
     return this.handleSaleCreation(
-      () => this.saleService.createSale(dto, req.user.id),
+      () => this.saleService.createSale(dto, req.user),
       'Sale created successfully',
     );
   }

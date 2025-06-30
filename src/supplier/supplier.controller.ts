@@ -32,6 +32,7 @@ export class SupplierController extends BaseSupplierController {
   ) {
     super(responseService);
   }
+
   @SupplierEndpoint.CreateSupplier(CreateSupplierDto)
   @Post('create')
   async createSupplier(
@@ -62,6 +63,7 @@ export class SupplierController extends BaseSupplierController {
       'Suppliers retrieved successfully',
     );
   }
+
   @SupplierEndpoint.GetSupplierById()
   @Get(':id')
   async getSupplierById(@Req() req, @Param('id') supplierId: string) {
@@ -71,6 +73,7 @@ export class SupplierController extends BaseSupplierController {
       'Supplier retrieved successfully',
     );
   }
+
   @SupplierEndpoint.GetSupplierBySupplierId()
   @Get('by-supplier-id/:supplierId')
   async getSupplierBySupplierId(
@@ -83,6 +86,7 @@ export class SupplierController extends BaseSupplierController {
       'Supplier retrieved successfully',
     );
   }
+  
   @SupplierEndpoint.UpdateSupplier(UpdateSupplierDto)
   @Put(':id')
   async updateSupplier(

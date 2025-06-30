@@ -14,6 +14,7 @@ import {
   HttpStatus,
   UseGuards,
   BadRequestException,
+  Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -32,6 +33,7 @@ import {
   CreateProductDto,
   UpdateProductDto,
   ProductResponseDto,
+  AssignSupplierDto,
 } from './dto/product.dto';
 
 import { PermissionsGuard } from '../guards/permissions.guard';

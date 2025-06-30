@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, UseGuards, Req } from '@nestjs/common';
 import { InvoiceService } from './invoice.service';
 import { CreateInvoiceDto } from './dto/invoice.dto';
 import { Invoice } from '@prisma/client';
@@ -23,9 +23,10 @@ export class InvoiceController extends BaseInvoiceController {
  
   @InvoiceEndpoint.CreateInvoice(CreateInvoiceDto)
   @Post()
-  async createInvoice(@Body() dto: CreateInvoiceDto): Promise<Invoice> {
+  async createInvoice(@Body() dto: CreateInvoiceDto, @Req() req: any): Promise<Invoice> {
+    const user = req.user
     return this.handleServiceOperation(
-      () => this.invoiceService.createInvoice(dto),
+      () => this.invoiceService.createInvoice(dto, user),
       'Invoice created successfully',
       201,
     );

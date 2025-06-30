@@ -10,15 +10,25 @@ import { CreateInvoiceDto } from './dto/invoice.dto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { TenantContextService } from 'src/tenant/tenant-context.service';
 
+
+interface User {
+  businessId: string;
+  business: {
+    logoUrl?: string;
+  };
+}
+
 export class InvoiceService {
   constructor(
     private readonly prisma: PrismaClientService, // Keep for fallback/master DB operations
     private readonly tenantContext: TenantContextService, // Add tenant context
   ) {}
 
-  async createInvoice(dto: CreateInvoiceDto): Promise<Invoice> {
+  async createInvoice(dto: CreateInvoiceDto, user: User): Promise<Invoice> {
     const prisma = await this.tenantContext.getPrismaClient();
-    const { saleId, customFields, logoUrl, businessId } = dto;
+    const { saleId, customFields } = dto;
+    const { businessId } = user; 
+    const { logoUrl } = user.business;
 
     // Fetch sale with related data
     const sale = await prisma.sales.findUnique({

@@ -133,7 +133,7 @@ export class SaleService {
   }
 
   // Sale Management
-  async createSale(dto: CreateSaleDto, userId: string) {
+  async createSale(dto: CreateSaleDto, user: any) {
     const prisma = await this.tenantContext.getPrismaClient();
 
     return await prisma.$transaction(async (tx) => {
@@ -202,7 +202,7 @@ export class SaleService {
       const sale = await tx.sales.create({
         data: {
           customerId: customer.id,
-          userId,
+          userId: user.id,
           storeId: dto.storeId,
           clientId: dto.clientId,
           paymentMethod: dto.paymentMethod,
@@ -237,8 +237,7 @@ export class SaleService {
 
         invoice = await this.invoiceService.createInvoice({
           saleId: sale.id,
-          businessId: sale.storeId,
-        });
+        }, user);
       }
 
       // Update customer balance sheet

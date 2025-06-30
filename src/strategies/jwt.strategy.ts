@@ -110,7 +110,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         status: user.status,
         businessId: user.businessId ?? undefined,
         stores: storeIds,
-        createdAt: user.createdAt,
+        createdAt: user.createdAt, 
         updatedAt: user.updatedAt,
         ...(user.business && {
           business: {
