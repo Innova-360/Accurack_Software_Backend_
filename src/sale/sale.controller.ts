@@ -118,6 +118,19 @@ export class SaleController extends BaseSaleController {
     );
   }
 
+  @SaleEndpoint.SetSaleConfirmation(CreateSaleDto)
+  @Post('saleConfirmation')
+  async setSaleConfirmation(@Body() sale: CreateSaleDto, setStatus: 'CONFIRMED' | 'CANCELLED', @Req() req: any){
+    return this.handleSaleCreation(
+      () => this.saleService.setSaleConfirmation(setStatus, sale , req.user),
+      'Sale created successfully',
+    );
+  }
+
+
+  
+
+
   @SaleEndpoint.GetSales()
   @Get('list')
   async getSales(

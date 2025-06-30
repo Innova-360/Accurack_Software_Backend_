@@ -240,6 +240,100 @@ export const SaleEndpoint = {
       ),
     ),
 
+  SetSaleConfirmation: (dtoType: any) =>
+    applyDecorators(
+    ApiTags('Sales'), // Tags the endpoint under "Sales" in Swagger UI
+    ApiOperation({ summary: 'Set sale confirmation status', description: 'Confirms or cancels a sale, updating its status and related data.' }),
+    ApiBody({ type: dtoType }),
+    ApiResponse({
+      status: 200,
+      description: 'Sale confirmation status updated successfully',
+      schema: {
+        type: 'object',
+        properties: {
+          sale: { type: 'object', description: 'Updated sale details' },
+          invoice: { type: 'object', nullable: true, description: 'Generated invoice (if confirmed)' },
+        },
+      },
+    }),
+    ApiResponse({
+      status: 400,
+      description: 'Bad Request - Invalid input data',
+    }),
+    ApiResponse({
+      status: 404,
+      description: 'Not Found - Sale or related resources not found',
+    }),
+    ApiResponse({
+      status: 500,
+      description: 'Internal Server Error',
+    }),
+    ApiBody({
+      description: 'Request body for setting sale confirmation status',
+      type: 'object',
+      examples: {
+        confirmSale: {
+          summary: 'Confirm Sale Example',
+          description: 'Example for confirming a sale',
+          value: {
+            setStatus: 'CONFIRMED',
+            sale: {
+              id: 'sale_123',
+              customerId: 'cust_456',
+              storeId: 'store_789',
+              clientId: 'client_101',
+              paymentMethod: 'CREDIT_CARD',
+              source: 'website',
+              allowance: 10.0,
+              tax: 5.0,
+              totalAmount: 100.0,
+              cashierName: 'John Doe',
+              saleItems: [
+                {
+                  productId: 'prod_001',
+                  pluUpc: '123456789',
+                  productName: 'Sample Product',
+                  quantity: 2,
+                  sellingPrice: 40.0,
+                  totalPrice: 80.0,
+                },
+              ],
+            },
+          },
+        },
+        cancelSale: {
+          summary: 'Cancel Sale Example',
+          description: 'Example for cancelling a sale',
+          value: {
+            setStatus: 'CANCELLED',
+            sale: {
+              id: 'sale_123',
+              customerId: 'cust_456',
+              storeId: 'store_789',
+              clientId: 'client_101',
+              paymentMethod: 'CREDIT_CARD',
+              source: 'website',
+              allowance: 10.0,
+              tax: 5.0,
+              totalAmount: 100.0,
+              cashierName: 'John Doe',
+              saleItems: [
+                {
+                  productId: 'prod_001',
+                  pluUpc: '123456789',
+                  productName: 'Sample Product',
+                  quantity: 2,
+                  sellingPrice: 40.0,
+                  totalPrice: 80.0,
+                },
+              ],
+            },
+          },
+        },
+      },
+    }),
+  ),
+
   GetSales: () =>
     applyDecorators(
       ApiTags('Sales'),

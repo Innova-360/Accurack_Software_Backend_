@@ -27,6 +27,7 @@ import {
 import * as crypto from 'crypto';
 import { chunk } from 'lodash';
 import { InvoiceService } from 'src/invoice/invoice.service';
+import { InvoiceSource, SaleConfirmation } from "@prisma/client"
 
 @Injectable()
 export class SaleService {
@@ -170,133 +171,161 @@ export class SaleService {
     };
   }
 
-  // Sale Management
-  async createSale(dto: CreateSaleDto, user: any) {
-    const prisma = await this.tenantContext.getPrismaClient();
+async createSale(dto: CreateSaleDto, user: any) {
+  const prisma = await this.tenantContext.getPrismaClient();
 
-    return await prisma.$transaction(async (tx) => {
-      let customer;
+  return await prisma.$transaction(async (tx) => {
+    // Find or create customer
+    let customer = await tx.customer.findUnique({
+      where: { phoneNumber: dto.customerPhone },
+    });
 
-      // Find or create customer
-      const existingCustomer = await tx.customer.findUnique({
-        where: { phoneNumber: dto.customerPhone },
-      });
-
-      if (existingCustomer) {
-        customer = existingCustomer;
-      } else {
-        if (!dto.customerData) {
-          throw new BadRequestException(
-            'Customer data required for new customer',
-          );
-        }
-
-        customer = await tx.customer.create({
-          data: dto.customerData,
-        });
-
-        // Create initial balance sheet
-        await tx.balanceSheet.create({
-          data: {
-            customerId: customer.id,
-            remainingAmount: 0,
-            amountPaid: 0,
-            paymentStatus: PaymentStatus.PAID,
-            description: 'Initial balance sheet created',
-          },
-        });
+    if (!customer) {
+      if (!dto.customerData) {
+        throw new BadRequestException('Customer data required for new customer');
       }
-
-      // Validate products and update inventory
-      for (const item of dto.saleItems) {
-        const product = await tx.products.findUnique({
-          where: { id: item.productId },
-        });
-
-        if (!product) {
-          throw new NotFoundException(
-            `Product with ID ${item.pluUpc} not found`,
-          );
-        }
-
-        if (product.itemQuantity < item.quantity) {
-          throw new BadRequestException(
-            `Insufficient inventory for product ${product.name}`,
-          );
-        }
-
-        // Update product inventory
-        await tx.products.update({
-          where: { id: item.productId },
-          data: {
-            itemQuantity: {
-              decrement: item.quantity,
-            },
-          },
-        });
-      }
-
-      // Create sale
-      const sale = await tx.sales.create({
-        data: {
-          customerId: customer.id,
-          userId: user.id,
-          storeId: dto.storeId,
-          clientId: dto.clientId,
-          paymentMethod: dto.paymentMethod,
-          totalAmount: dto.totalAmount,
-          tax: dto.tax || 0,
-          status: SaleStatus.COMPLETED,
-          generateInvoice: dto.generateInvoice ?? true,
-          cashierName: dto.cashierName || "nan",
-        },
-      });
-
-      // Create sale items
-      for (const item of dto.saleItems) {
-        await tx.saleItem.create({
-          data: {
-            saleId: sale.id,
-            productId: item.productId,
-            pluUpc: item.pluUpc,
-            productName: item.productName,
-            quantity: item.quantity,
-            sellingPrice: item.sellingPrice,
-            totalPrice: item.totalPrice,
-          },
-        });
-      }
-
-      // Generate invoice if requested
-      let invoice: any = null;
-
-      if (dto.generateInvoice) {
-        const invoiceNumber = await this.generateInvoiceNumber();
-
-        invoice = await this.invoiceService.createInvoice({
-          saleId: sale.id,
-        }, user);
-      }
-
-      // Update customer balance sheet
+      customer = await tx.customer.create({ data: dto.customerData });
       await tx.balanceSheet.create({
         data: {
           customerId: customer.id,
-          saleId: sale.id,
-          remainingAmount: dto.totalAmount,
+          remainingAmount: 0,
           amountPaid: 0,
-          paymentStatus: PaymentStatus.UNPAID,
-          description: `Sale #${sale.id} - ${dto.totalAmount}`,
+          paymentStatus: PaymentStatus.PAID,
+          description: 'Initial balance sheet created',
+        },
+      });
+    }
+
+    // Validate products and update inventory
+    for (const item of dto.saleItems) {
+      const product = await tx.products.findUnique({ where: { id: item.productId } });
+      if (!product) {
+        throw new NotFoundException(`Product with ID ${item.pluUpc} not found`);
+      }
+      if (product.itemQuantity < item.quantity) {
+        throw new BadRequestException(`Insufficient inventory for product ${product.name}`);
+      }
+      await tx.products.update({
+        where: { id: item.productId },
+        data: { itemQuantity: { decrement: item.quantity } },
+      });
+    }
+
+    // Set sale properties based on source
+    const isWebsite = dto.source === InvoiceSource.website;
+    const saleData = {
+      customerId: customer.id,
+      userId: user.id,
+      storeId: dto.storeId,
+      clientId: dto.clientId,
+      paymentMethod: dto.paymentMethod,
+      confirmation: isWebsite ? SaleConfirmation.NOT_CONFIRMED : SaleConfirmation.CONFIRMED,
+      source: dto.source as InvoiceSource | undefined,
+      allowance: dto.allowance,
+      quantitySend: isWebsite ? 0 : dto.saleItems.length,
+      totalAmount: dto.totalAmount - (dto.allowance ?? 0) + (dto.tax || 0),
+      tax: dto.tax || 0,
+      status: isWebsite ? SaleStatus.PENDING : SaleStatus.COMPLETED,
+      generateInvoice: false,
+      cashierName: dto.cashierName || 'nan',
+    };
+
+    // Create sale
+    const sale = await tx.sales.create({ data: saleData });
+
+    // Create sale items
+    await Promise.all(dto.saleItems.map(item =>
+      tx.saleItem.create({
+        data: {
+          saleId: sale.id,
+          productId: item.productId,
+          pluUpc: item.pluUpc,
+          productName: item.productName,
+          quantity: item.quantity,
+          sellingPrice: item.sellingPrice,
+          totalPrice: item.totalPrice,
+        },
+      })
+    ));
+
+    // Generate invoice if requested
+    let invoice: any = null;
+    if (dto.generateInvoice && !isWebsite) {
+      const invoiceNumber = await this.generateInvoiceNumber();
+      invoice = await this.invoiceService.createInvoice({ saleId: sale.id }, user);
+    }
+
+    // Update customer balance sheet
+    await tx.balanceSheet.create({
+      data: {
+        customerId: customer.id,
+        saleId: sale.id,
+        remainingAmount: saleData.totalAmount,
+        amountPaid: 0,
+        paymentStatus: PaymentStatus.UNPAID,
+        description: `Sale #${sale.id} - ${saleData.totalAmount}`,
+      },
+    });
+
+    return { sale, invoice, customer };
+  });
+}
+
+async setSaleConfirmation(setStatus: 'CONFIRMED' | 'CANCELLED', sale: any, user: any) {
+  const prisma = await this.tenantContext.getPrismaClient();
+
+  return await prisma.$transaction(async (tx) => {
+    if (setStatus === 'CONFIRMED') {
+      // Update sale status
+      const updatedSale = await tx.sales.update({
+        where: { id: sale.id },
+        data: {
+          confirmation: SaleConfirmation.CONFIRMED,
+          status: SaleStatus.COMPLETED,
+          quantitySend: sale.saleItems.length,
+          generateInvoice: true,
+        },
+        include: { saleItems: true },
+      });
+
+      // Generate invoice
+      const invoiceNumber = await this.generateInvoiceNumber();
+      const invoice = await this.invoiceService.createInvoice({ saleId: sale.id }, user);
+
+
+      return { sale: updatedSale, invoice };
+    } else {
+      // Rollback inventory
+      await Promise.all(sale.saleItems.map(item =>
+        tx.products.update({
+          where: { id: item.productId },
+          data: { itemQuantity: { increment: item.quantity } },
+        })
+      ));
+
+      // Update sale status
+      const updatedSale = await tx.sales.update({
+        where: { id: sale.id },
+        data: {
+          confirmation: SaleConfirmation.CANCELLED,
+          status: SaleStatus.CANCELLED,
         },
       });
 
-      return {
-        sale,
-        customer,
-        invoice,
-      };
-    });
-  }
+      // Update balance sheet
+      await tx.balanceSheet.updateMany({
+        where: { saleId: sale.id },
+        data: {
+          remainingAmount: 0,
+          paymentStatus: PaymentStatus.UNPAID,
+          description: `Sale #${sale.id} cancelled`,
+        },
+      });
+
+      return { sale: updatedSale };
+    }
+  });
+}
 
   async getSales(query: SaleQueryDto, storeId: string) {
     const prisma = await this.tenantContext.getPrismaClient();
@@ -861,11 +890,15 @@ export class SaleService {
               storeId: store.id,
               clientId: user.clientId,
               paymentMethod: PaymentMethod.CASH, // Adjust based on your requirements
-              totalAmount: customerSale.totalAmount,
+              totalAmount: customerSale.totalAmount ,
+              confirmation: SaleConfirmation.CONFIRMED,
+              source: InvoiceSource.manual,
+              quantitySend: customerSale.items?.length,
+              allowance: 0,
               tax: 0, // Adjust based on your requirements
               status: 'PENDING',
               generateInvoice: false,
-              cashierName: user.name || 'System',
+              cashierName: user.name || 'nan',
               fileUploadSalesId: fileUpload.id,
             },
           });
