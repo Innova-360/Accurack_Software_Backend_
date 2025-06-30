@@ -1551,6 +1551,41 @@ export class ProductService {
     );
   }
 
+  async searchProducts(user: any, query: string, storeId?: string) {
+    this.validateProductAccess(user, storeId);
+    const prisma = await this.tenantContext.getPrismaClient();
+    let where: any = {
+      OR: [
+        { name: { contains: query, mode: 'insensitive' } },
+        { sku: { contains: query, mode: 'insensitive' } },
+        { pluUpc: { contains: query, mode: 'insensitive' } },
+        { ean: { contains: query, mode: 'insensitive' } },
+      ],
+    };
+    if (user.role !== 'super_admin') {
+      if (storeId) {
+        where.storeId = storeId;
+      } else if (user.storeId) {
+        where.storeId = user.storeId;
+      }
+      where.clientId = user.clientId;
+    } else if (storeId) {
+      where.storeId = storeId;
+    }
+    const products = await prisma.products.findMany({
+      where,
+      include: {
+        packs: true,
+        productSuppliers: { include: { supplier: true } },
+        store: { select: { id: true, name: true } },
+        saleItems: true,
+        purchaseOrders: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return products.map((product) => this.formatProductResponse(product));
+  }
+
   async getUploadStatus(fileUploadId: string) {
     const prisma = await this.tenantContext.getPrismaClient();
     const fileUpload = await prisma.fileUploadInventory.findUnique({

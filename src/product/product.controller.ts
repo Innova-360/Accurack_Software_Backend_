@@ -16,7 +16,13 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags,ApiConsumes, ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiConsumes,
+  ApiBody,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { ProductService } from './product.service';
 import { BaseProductController } from '../common/controllers/base-product.controller';
 import { ProductEndpoint } from '../common/decorators/product-endpoint.decorator';
@@ -30,7 +36,6 @@ import {
 
 import { PermissionsGuard } from '../guards/permissions.guard';
 
-
 @ApiTags('Products')
 @Controller({ path: 'product', version: '1' })
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -40,6 +45,39 @@ export class ProductController extends BaseProductController {
     responseService: ResponseService,
   ) {
     super(responseService);
+  }
+
+  @Get('search')
+  @ApiOperation({
+    summary: 'Search products',
+    description: 'Search products by name, SKU, PLU/UPC, or EAN',
+  })
+  async searchProducts(
+    @Req() req,
+    @Query('q') query: string,
+    @Query('storeId') storeId?: string,
+  ) {
+    try {
+      if (!query || query.trim() === '') {
+        throw new BadRequestException('Query parameter q is required');
+      }
+      if (!storeId || storeId.trim() === '') {
+        throw new BadRequestException('Query parameter storeId is required');
+      }
+      const user = req.user;
+      return await this.handleProductOperation(
+        () => this.productService.searchProducts(user, query, storeId),
+        'Products search results',
+      );
+    } catch (error) {
+      // You can customize error handling/logging here
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        'An error occurred while searching for products.',
+      );
+    }
   }
 
   @Post('create')
@@ -111,9 +149,11 @@ export class ProductController extends BaseProductController {
     );
   }
 
-  @Post('uploadsheet')  @ApiOperation({
+  @Post('uploadsheet')
+  @ApiOperation({
     summary: 'Upload inventory from Excel or CSV file',
-    description: 'Upload products inventory data from an Excel file (.xlsx, .xls) or CSV file (.csv)',
+    description:
+      'Upload products inventory data from an Excel file (.xlsx, .xls) or CSV file (.csv)',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -123,14 +163,25 @@ export class ProductController extends BaseProductController {
         file: {
           type: 'string',
           format: 'binary',
-          description: 'Excel (.xlsx, .xls) or CSV (.csv) file containing inventory data',
+          description:
+            'Excel (.xlsx, .xls) or CSV (.csv) file containing inventory data',
         },
       },
     },
   })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Inventory uploaded successfully' })
-  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Invalid file format or data' })
-  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'File already uploaded' })  @UseInterceptors(FileInterceptor('file'))
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Inventory uploaded successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid file format or data',
+  })
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description: 'File already uploaded',
+  })
+  @UseInterceptors(FileInterceptor('file'))
   async uploadInventory(
     @Req() req,
     @UploadedFile()
@@ -145,16 +196,16 @@ export class ProductController extends BaseProductController {
     const allowedMimeTypes = [
       'text/csv',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel'
+      'application/vnd.ms-excel',
     ];
-    
+
     const allowedExtensions = /\.(xlsx|xls|csv)$/i;
     const isValidMimeType = allowedMimeTypes.includes(file.mimetype);
     const isValidExtension = allowedExtensions.test(file.originalname);
 
     if (!isValidMimeType && !isValidExtension) {
       throw new BadRequestException(
-        `Invalid file type. Expected Excel (.xlsx, .xls) or CSV (.csv) file. Received: ${file.mimetype}`
+        `Invalid file type. Expected Excel (.xlsx, .xls) or CSV (.csv) file. Received: ${file.mimetype}`,
       );
     }
 
