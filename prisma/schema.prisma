@@ -520,7 +520,6 @@ model Suppliers {
   id          String          @id @default(uuid())
   name        String
   email       String?
-  category    String
   phone       String
   address     String?
   storeId     String
