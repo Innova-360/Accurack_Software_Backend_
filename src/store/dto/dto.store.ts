@@ -46,11 +46,12 @@ export class CreateStoreDto {
 
   @ApiPropertyOptional({
     description: 'Store logo URL',
-    example: 'https://res.cloudinary.com/example/image/upload/v1234567890/logo.png',
+    example:
+      'https://res.cloudinary.com/example/image/upload/v1234567890/logo.png',
   })
   @IsString()
   @IsOptional()
-  logo?: string;
+  logoUrl?: string;
 }
 
 export class UpdateStoreDto {
@@ -101,7 +102,8 @@ export class UpdateStoreDto {
 
   @ApiPropertyOptional({
     description: 'Store logo URL',
-    example: 'https://res.cloudinary.com/example/image/upload/v1234567890/updated-logo.png',
+    example:
+      'https://res.cloudinary.com/example/image/upload/v1234567890/updated-logo.png',
   })
   @IsString()
   @IsOptional()

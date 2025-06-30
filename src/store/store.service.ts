@@ -29,8 +29,7 @@ export class StoreService {
       phone,
       currency = 'USD',
       timezone = 'UTC',
-      logoUrl
-
+      logoUrl,
     } = dto;
 
     try {
@@ -52,10 +51,9 @@ export class StoreService {
             email,
             address,
             phone,
-            logo,
             clientId: user.clientId,
             status: Status.active,
-            logoUrl
+            logoUrl,
           },
           select: {
             id: true,
@@ -130,7 +128,7 @@ export class StoreService {
                     },
                   },
                 }
-              : { 
+              : {
                   clientId: user.clientId,
                   users: {
                     some: {
@@ -229,21 +227,27 @@ export class StoreService {
   private async validateClientExists(clientId: string): Promise<void> {
     try {
       const tenantInfo = this.tenantContext.getTenantInfo();
-      
+
       if (!tenantInfo.clientId) {
         throw new BadRequestException('No client ID found in request context');
       }
 
       // Check if client exists in tenant database
-      const exists = await this.multiTenantService.validateClientExists(tenantInfo.clientId, clientId);
-      
+      const exists = await this.multiTenantService.validateClientExists(
+        tenantInfo.clientId,
+        clientId,
+      );
+
       if (!exists) {
         throw new NotFoundException(
-          `Client record not found in tenant database. Please contact support to fix this issue.`
+          `Client record not found in tenant database. Please contact support to fix this issue.`,
         );
       }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
       throw new BadRequestException('Failed to validate client record');
@@ -253,24 +257,33 @@ export class StoreService {
   /**
    * Validate that user record exists in tenant database
    */
-  private async validateUserExists(clientId: string, userId: string): Promise<void> {
+  private async validateUserExists(
+    clientId: string,
+    userId: string,
+  ): Promise<void> {
     try {
       const tenantInfo = this.tenantContext.getTenantInfo();
-      
+
       if (!tenantInfo.clientId) {
         throw new BadRequestException('No client ID found in request context');
       }
 
       // Check if user exists in tenant database
-      const exists = await this.multiTenantService.validateUserExists(tenantInfo.clientId, userId);
-      
+      const exists = await this.multiTenantService.validateUserExists(
+        tenantInfo.clientId,
+        userId,
+      );
+
       if (!exists) {
         throw new NotFoundException(
-          `User record not found in tenant database. Please contact support to fix this issue.`
+          `User record not found in tenant database. Please contact support to fix this issue.`,
         );
       }
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
       throw new BadRequestException('Failed to validate user record');

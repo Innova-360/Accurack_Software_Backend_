@@ -7,6 +7,7 @@ import {
   Delete,
   Param,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -25,6 +26,14 @@ export class CategoryController extends BaseAuthController {
     responseService: ResponseService,
   ) {
     super(responseService);
+  }
+
+  @Get('search')
+  async searchCategories(@Query('q') q: string) {
+    return this.handleServiceOperation(
+      () => this.categoryService.searchCategories(q),
+      'Categories search results',
+    );
   }
 
   @Post()
