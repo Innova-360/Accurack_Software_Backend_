@@ -104,7 +104,33 @@ export class TaxService {
   }
   async getAllTaxRates() {
     const prisma = await this.tenantContext.getPrismaClient();
-    return prisma.taxRate.findMany();
+    return prisma.taxRate.findMany({
+      include: {
+        region: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true,
+          },
+        },
+        taxType: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            payer: true,
+          },
+        },
+        taxCode: {
+          select: {
+            id: true,
+            code: true,
+            description: true,
+          },
+        },
+      },
+    });
   }
   async getTaxRateById(id: string) {
     const prisma = await this.tenantContext.getPrismaClient();
@@ -274,7 +300,7 @@ export class TaxService {
   }
 
   /**
-   * Bulk assign taxes to multiple entities (product, category, store, supplier) in one call.
+   * Bulk assign taxes to multiple entities (product, category, store, supplier, customer) in one call.
    */
   async bulkAssignTaxes(assignments: AssignTaxDto[]) {
     const prisma = await this.tenantContext.getPrismaClient();

@@ -10,15 +10,26 @@ import {
 import { Type } from 'class-transformer';
 
 export class AssignTaxDto {
-  @ApiProperty({ enum: EntityType })
+  @ApiProperty({
+    enum: EntityType,
+    description:
+      'Type of entity (PRODUCT, CATEGORY, SUPPLIER, STORE, CUSTOMER)',
+    example: EntityType.PRODUCT,
+  })
   @IsEnum(EntityType)
   entityType: EntityType;
 
-  @ApiProperty()
+  @ApiProperty({
+    description: 'ID of the entity to assign tax to',
+    example: 'uuid-of-entity',
+  })
   @IsString()
   entityId: string;
 
-  @ApiProperty()
+  @ApiProperty({
+    description: 'ID of the tax rate to assign',
+    example: 'uuid-of-tax-rate',
+  })
   @IsString()
   taxRateId: string;
 }

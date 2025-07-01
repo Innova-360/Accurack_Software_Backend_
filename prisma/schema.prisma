@@ -705,6 +705,7 @@ enum EntityType {
   CATEGORY
   SUPPLIER
   STORE
+  CUSTOMER
 }
 
 enum TaxRateType {
