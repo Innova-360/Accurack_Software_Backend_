@@ -85,9 +85,6 @@ docker-compose*.yml
 # Scripts (deployment scripts shouldn't be in container)
 scripts/
 
-# Prisma migrations (handled separately)
-prisma/migrations/
-
 # Temporary files
 tmp/
 temp/
