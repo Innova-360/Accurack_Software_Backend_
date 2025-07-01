@@ -350,7 +350,6 @@ export class SupplierService {
       if (!existingSupplier) {
         throw new NotFoundException('Supplier not found');
       }
-      }
 
       // If storeId is being updated, validate the new store
       if (
@@ -500,21 +499,21 @@ export class SupplierService {
     };
 
     // Store access for non-super-admin
-    // if (user.role !== Role.super_admin) {
-    //   const accessibleStoreIds =
-    //     user.stores?.map((store) => store.storeId) || [];
-    //   whereClause.storeId = { in: accessibleStoreIds };
-    // }
+    if (user.role !== Role.super_admin) {
+      const accessibleStoreIds =
+        user.stores?.map((store) => store.storeId) || [];
+      whereClause.storeId = { in: accessibleStoreIds };
+    }
 
     const supplier = await prisma.suppliers.findFirst({
-      // where: whereClause,
+      where: whereClause,
       select: {
         id: true,
         name: true,
         storeId: true,
         productSuppliers: {
           where: {
-            productId: { not: undefined },
+            productId: { not: undefined},
           },
           include: {
             product: true,
@@ -535,6 +534,58 @@ export class SupplierService {
       message: 'Products retrieved successfully',
       data: products,
     };
+  }
+
+  async searchSuppliers(user: any, query: string, storeId?: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    let whereClause: any = {
+      status: Status.active,
+      OR: [
+        { name: { contains: query, mode: 'insensitive' } },
+        { email: { contains: query, mode: 'insensitive' } },
+        { phone: { contains: query, mode: 'insensitive' } },
+        { address: { contains: query, mode: 'insensitive' } },
+      ],
+    };
+    if (user.role === Role.super_admin) {
+      if (storeId) {
+        whereClause.storeId = storeId;
+      }
+    } else {
+      const accessibleStoreIds =
+        user.stores?.map((store) => store.storeId) || [];
+      if (storeId) {
+        if (!accessibleStoreIds.includes(storeId)) {
+          throw new ForbiddenException('No access to this store');
+        }
+        whereClause.storeId = storeId;
+      } else {
+        whereClause.storeId = { in: accessibleStoreIds };
+      }
+    }
+    return prisma.suppliers.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        address: true,
+        storeId: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
   }
 
   private async validateStoreAccess(user: any, storeId: string): Promise<any> {
