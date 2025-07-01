@@ -36,9 +36,10 @@ async function bootstrap() {
   // app.use(helmet());
   app.enableCors({
     origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    // origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    exposedHeaders: ['Set-Cookie'],
   });
   // Swagger Configuration
   const config = new DocumentBuilder()
