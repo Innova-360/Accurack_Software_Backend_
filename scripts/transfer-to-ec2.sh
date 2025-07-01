@@ -20,13 +20,20 @@ scp -i "$KEY_PATH" .env.ec2 "$EC2_HOST":/home/ubuntu/accurack/.env
 echo "📤 Transferring Setup script..."
 scp -i "$KEY_PATH" scripts/setup-ec2.sh "$EC2_HOST":/home/ubuntu/accurack/
 
+echo "📤 Transferring Migration fix scripts..."
+scp -i "$KEY_PATH" scripts/quick-migration-fix.sh "$EC2_HOST":/home/ubuntu/accurack/
+scp -i "$KEY_PATH" scripts/fix-migrations-prod.sh "$EC2_HOST":/home/ubuntu/accurack/
+
+echo "📤 Making scripts executable on EC2..."
+ssh -i "$KEY_PATH" "$EC2_HOST" "chmod +x /home/ubuntu/accurack/*.sh"
+
 echo "✅ Transfer complete!"
 echo ""
 echo "📋 Next steps:"
 echo "1. SSH to EC2: ssh -i \"$KEY_PATH\" \"$EC2_HOST\""
 echo "2. Navigate to: cd /home/ubuntu/accurack"
-echo "3. Make script executable: chmod +x setup-ec2.sh"
-echo "4. Run setup: ./setup-ec2.sh"
-echo "5. Configure AWS credentials: aws configure"
+echo "3. Fix migration issues: ./scripts/quick-migration-fix.sh"
+echo "4. Or run comprehensive fix: ./scripts/fix-migrations-prod.sh"
+echo "5. Configure AWS credentials if needed: aws configure"
 echo "6. Edit environment if needed: nano .env"
-echo "7. Deploy: ./deploy.sh"
+echo "7. Check application: docker-compose -f docker-compose.ec2.yml logs backend"
