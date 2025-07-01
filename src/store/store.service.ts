@@ -289,8 +289,7 @@ export class StoreService {
       throw new BadRequestException('Failed to validate user record');
     }
   }
-  
-  
+
   async searchStores(user: any, query: string) {
     const prisma = await this.tenantContext.getPrismaClient();
     if (!query || query.trim() === '') {
@@ -336,20 +335,18 @@ export class StoreService {
         createdAt: true,
         settings: {
           select: {
-
             currency: true,
             timezone: true,
             taxRate: true,
-            taxMode: true,  
-   },
+            taxMode: true,
+          },
         },
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
-
-
+  }
 
   async updateStore(user: any, storeId: string, dto: UpdateStoreDto) {
     if (user.role !== Role.super_admin && user.role !== Role.admin) {
@@ -362,7 +359,9 @@ export class StoreService {
       const existingStore = await prisma.stores.findFirst({
         where: {
           id: storeId,
-          ...(user.role === Role.super_admin ? {} : { clientId: user.clientId }),
+          ...(user.role === Role.super_admin
+            ? {}
+            : { clientId: user.clientId }),
         },
       });
 
@@ -417,7 +416,8 @@ export class StoreService {
       return { store: result.store, settings: result.settings };
     } catch (error) {
       console.error('Update store error:', error);
-      throw error instanceof NotFoundException || error instanceof ForbiddenException
+      throw error instanceof NotFoundException ||
+        error instanceof ForbiddenException
         ? error
         : new BadRequestException('Failed to update store: ' + error.message);
     }
@@ -434,7 +434,9 @@ export class StoreService {
       const existingStore = await prisma.stores.findFirst({
         where: {
           id: storeId,
-          ...(user.role === Role.super_admin ? {} : { clientId: user.clientId }),
+          ...(user.role === Role.super_admin
+            ? {}
+            : { clientId: user.clientId }),
         },
       });
 
@@ -451,7 +453,8 @@ export class StoreService {
       return { message: 'Store deleted successfully' };
     } catch (error) {
       console.error('Delete store error:', error);
-      throw error instanceof NotFoundException || error instanceof ForbiddenException
+      throw error instanceof NotFoundException ||
+        error instanceof ForbiddenException
         ? error
         : new BadRequestException('Failed to delete store: ' + error.message);
     }

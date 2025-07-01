@@ -44,6 +44,7 @@
     "migration:reset": "npx prisma migrate reset --force",
     "prisma:reset": "npx prisma migrate reset",
     "prisma:studio": "npx prisma studio",
+    "prisma:all": "npx prisma db push && npx prisma generate && npx prisma migrate dev",
     "git:latest": "git fetch --all && git reset --hard origin/main"
   },
   "prisma": {
