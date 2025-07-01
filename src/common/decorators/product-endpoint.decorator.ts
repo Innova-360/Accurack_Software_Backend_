@@ -636,5 +636,60 @@ export const ProductEndpoint = {
         description: 'Invalid input data or product not found'
       })
     );
-  }
+  },
+
+  SearchProducts: () =>
+    applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.READ,
+        PermissionScope.STORE,
+      ),
+      ApiOperation({
+        summary: 'Search products',
+        description:
+          'Search for products by name, SKU, PLU/UPC, or EAN. Optionally filter by store ID.',
+      }),
+      ApiQuery({
+        name: 'q',
+        description: 'Search query to find products by name, SKU, PLU/UPC, or EAN',
+        example: 'iPhone',
+        type: String,
+      }),
+      ApiQuery({
+        name: 'storeId',
+        description: 'Optional store ID to filter products by specific store',
+        example: 'uuid-store-id',
+        required: false,
+        type: String,
+      }),
+      ApiResponse({
+        status: 200,
+        description: 'Products found successfully',
+        schema: successResponseSchema('Products found successfully', [
+          {
+            id: 'uuid-product-id',
+            name: 'iPhone 15 Pro',
+            sku: 'IPHONE15PRO',
+            pluUpc: '123456789',
+            ean: '1234567890123',
+            category: 'Electronics',
+            sellingPrice: 999.99,
+            costPrice: 750.00,
+            quantity: 50,
+            store: {
+              id: 'uuid-store-id',
+              name: 'Electronics Store'
+            }
+          }
+        ]),
+      }),
+      ApiResponse({
+        status: 404,
+        description: 'No products found',
+        schema: errorResponseSchema(404, 'No products found matching the search criteria'),
+      }),
+      ...standardErrorResponses(),
+      ApiBearerAuth(),
+    ),
 };

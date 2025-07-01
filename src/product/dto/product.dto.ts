@@ -887,4 +887,21 @@ export class ProductResponseDto {
   purchaseOrders?: any[];
 }
 
+export class SearchProductDto {
+  @ApiProperty({
+    example: 'iPhone',
+    description: 'Search query to find products by name, SKU, PLU/UPC, or EAN',
+  })
+  @IsString()
+  q: string;
+
+  @ApiPropertyOptional({
+    example: 'uuid-store-id',
+    description: 'Optional store ID to filter products by specific store',
+  })
+  @IsString()
+  @IsOptional()
+  storeId?: string;
+}
+
 

@@ -28,6 +28,7 @@ import {
   UpdateProductDto,
   ProductResponseDto,
   AssignSupplierDto,
+  SearchProductDto,
 } from './dto/product.dto';
 
 import { PermissionsGuard } from '../guards/permissions.guard';
@@ -66,6 +67,20 @@ export class ProductController extends BaseProductController {
     return this.handleProductOperation(
       () => this.productService.getProducts(user, storeId, page, limit),
       'Products retrieved successfully',
+    );
+  }
+
+  @Get('search')
+  @ProductEndpoint.SearchProducts()
+  async searchProducts(
+    @Req() req,
+    @Query('q') query: string,
+    @Query('storeId') storeId?: string,
+  ) {
+    const user = req.user;
+    return this.handleProductOperation(
+      () => this.productService.searchProducts(user, query, storeId),
+      'Products found successfully',
     );
   }
 
