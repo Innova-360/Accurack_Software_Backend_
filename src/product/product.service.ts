@@ -586,7 +586,7 @@ export class ProductService {
     // Get the tenant-specific Prisma client
     const prisma = await this.tenantContext.getPrismaClient();
 
-    const skip = (page - 1) * limit;
+    const skip = (Number(page) - 1) * Number(limit);
 
     let where: any = {};
 
@@ -621,7 +621,7 @@ export class ProductService {
           purchaseOrders: true,
         },
         skip,
-        take: limit,
+        take: Number(limit),
         orderBy: { createdAt: 'desc' },
       }),
       prisma.products.count({ where }),
