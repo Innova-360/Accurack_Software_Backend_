@@ -41,6 +41,9 @@ services:
       # Encryption
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
 
+      # Node.js Options (Override any problematic options from Dockerfile)
+      - NODE_OPTIONS=--max-old-space-size=512
+
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:4000/api/v1/health']
       interval: 30s
