@@ -74,6 +74,17 @@ export class SupplierController extends BaseSupplierController {
     );
   }
 
+
+  @SupplierEndpoint.SupplierProducts()
+  @Get(':id/products')
+  async getSupplierProducts(@Req() req, @Param('id') supplierId: string) {
+    const user = req.user;
+    return this.handleSupplierOperation(
+      () => this.supplierService.getSupplierProducts(user, supplierId),
+      'Supplier retrieved successfully',
+    );
+  }
+
   @SupplierEndpoint.GetSupplierBySupplierId()
   @Get('by-supplier-id/:supplierId')
   async getSupplierBySupplierId(

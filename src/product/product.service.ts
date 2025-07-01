@@ -20,6 +20,7 @@ import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { CategoryService } from './category.service';
 import { chunk } from 'lodash';
+import { SupplierState } from '@prisma/client';
 
 interface UploadedFile {
   buffer: Buffer;
@@ -184,6 +185,8 @@ export class ProductService {
   ): Promise<ProductResponseDto> {
     this.validateProductOperationPermissions(user, 'create');
 
+    console.log("createproductdto",createProductDto)
+
     const prisma = await this.tenantContext.getPrismaClient();
     // Validate PLU uniqueness for non-variant products (only if PLU is provided)
     // if (!createProductDto.hasVariants && createProductDto.pluUpc) {
@@ -276,29 +279,29 @@ export class ProductService {
       }
     } else {
       // For non-variant products, PLU/UPC is at product level (optional)
-      // No additional validation needed as PLU/UPC is already optional
+      // No additional validation needed as PLU/UPC is already optionals
     }
 
     // Validate ProductSupplier relationships (optional - products can exist without suppliers)
-    if (
-      createProductDto.productSuppliers &&
-      createProductDto.productSuppliers.length > 0
-    ) {
-      // Validate that at least one supplier is marked as primary
-      const primarySuppliers = createProductDto.productSuppliers.filter(
-        (ps) => ps.state === 'primary',
-      );
-      if (primarySuppliers.length === 0) {
-        throw new BadRequestException(
-          'At least one supplier must be marked as primary',
-        );
-      }
-      if (primarySuppliers.length > 1) {
-        throw new BadRequestException(
-          'Only one supplier can be marked as primary',
-        );
-      }
-    }
+    // if (
+    //   createProductDto.productSuppliers &&
+    //   createProductDto.productSuppliers.length > 0
+    // ) {
+    //   // Validate that at least one supplier is marked as primary
+    //   const primarySuppliers = createProductDto.productSuppliers.filter(
+    //     (ps) => ps.state === 'primary',
+    //   );
+    //   if (primarySuppliers.length === 0) {
+    //     throw new BadRequestException(
+    //       'At least one supplier must be marked as primary',
+    //     );
+    //   }
+    //   if (primarySuppliers.length > 1) {
+    //     throw new BadRequestException(
+    //       'Only one supplier can be marked as primary',
+    //     );
+    //   }
+    // }
 
     // Create the product first without supplier reference (products can exist without suppliers)
     let product: any;
@@ -390,13 +393,33 @@ export class ProductService {
               productId: product.id,
               supplierId: supplierData.supplierId,
               costPrice: supplierData.costPrice,
-              category: supplierData.category,
+              categoryId: createProductDto.categoryId,
               state: supplierData.state,
             },
           }),
         ),
       );
+    }else{
+      const supplierData = await prisma.suppliers.findFirst({
+        where: {
+          id: createProductDto.supplierId,
+          storeId: createProductDto.storeId, // Ensure suppliers belong to the same store
+        },
+      });
+
+      await prisma.productSupplier.create({
+            data: {
+              productId: product.id,
+              supplierId: createProductDto.supplierId,
+              costPrice: Number(createProductDto.singleItemCostPrice),
+              categoryId: createProductDto.categoryId,
+              state : SupplierState.primary,
+            },
+      });
     }
+
+
+    
 
     let packIds: string[] = [];
     let variantsWithPacks: any[] = [];
@@ -625,6 +648,7 @@ export class ProductService {
       where: { id },
       include: {
         packs: true,
+        category: true,
         productSuppliers: {
           include: {
             supplier: true,
@@ -638,8 +662,11 @@ export class ProductService {
         },
         saleItems: true,
         purchaseOrders: true,
+        
       },
     });
+
+    console.log("product", product);
 
     if (!product) {
       throw new NotFoundException('Product not found');
@@ -921,7 +948,7 @@ export class ProductService {
             productId: id,
             supplierId: ps.supplierId,
             costPrice: ps.costPrice,
-            category: ps.category,
+            categoryId: updateProductDto.categoryId,
             state: ps.state,
           })),
         });
@@ -1368,7 +1395,7 @@ export class ProductService {
                     productId: createdProduct.id,
                     supplierId: supplier.id,
                     costPrice: product.VendorPrice || 0,
-                    category: resolvedCategory?.name || product.Category,
+                    categoryId: resolvedCategory?.id,
                     state: 'primary', // Default to primary for uploaded products
                   },
                 });

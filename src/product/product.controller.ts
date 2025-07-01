@@ -115,7 +115,7 @@ export class ProductController extends BaseProductController {
 
   @ProductEndpoint.AssignSupplier() 
   @Post('assign-supplier')
-  async assignSupplier(@Req() req, dto: AssignSupplierDto){
+  async assignSupplier(@Req() req,@Body() dto: AssignSupplierDto){
     return this.handleProductOperation(
       () => this.productService.assignSupplier(dto),
       'Supplier has been added on product'

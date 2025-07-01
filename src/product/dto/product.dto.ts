@@ -89,7 +89,7 @@ class ProductSupplierDto {
     description: 'Category for this supplier relationship',
   })
   @IsString()
-  category: string;
+  categoryId: string;
 
   @ApiProperty({
     example: 'primary',
@@ -289,6 +289,10 @@ export class CreateProductDto {
   @Type(() => ProductSupplierDto)
   @IsOptional()
   productSuppliers?: ProductSupplierDto[];
+
+  @ApiProperty({ example: '5465768923921', description: 'Supplier of this product' })
+  @IsString()
+  supplierId: string;
 
   @ApiProperty({
     example: 'COFFEE-001',
