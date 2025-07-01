@@ -43,10 +43,19 @@ npm --version
 
 # Install AWS CLI v2
 echo "☁️ Installing AWS CLI v2..."
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-sudo ./aws/install
-rm -rf awscliv2.zip aws/
+if ! command -v aws &> /dev/null; then
+    echo "📥 Downloading AWS CLI v2..."
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+    unzip awscliv2.zip
+    sudo ./aws/install
+    rm -rf awscliv2.zip aws/
+else
+    echo "✅ AWS CLI v2 already installed, skipping..."
+fi
+
+# Verify AWS CLI installation
+echo "🔍 Verifying AWS CLI installation..."
+aws --version
 
 # Create app directory (we're already in /home/ubuntu/accurack)
 echo "📁 Setting up application directory..."
