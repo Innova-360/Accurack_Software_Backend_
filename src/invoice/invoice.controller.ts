@@ -1,6 +1,14 @@
-import { Controller, Post, Get, Param, Body, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Param,
+  Body,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { InvoiceService } from './invoice.service';
-import { CreateInvoiceDto } from './dto/invoice.dto';
+import { businessInfoDto, CreateInvoiceDto } from './dto/invoice.dto';
 import { Invoice } from '@prisma/client';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
@@ -20,11 +28,13 @@ export class InvoiceController extends BaseInvoiceController {
     super(responseService);
   }
 
- 
   @InvoiceEndpoint.CreateInvoice(CreateInvoiceDto)
   @Post()
-  async createInvoice(@Body() dto: CreateInvoiceDto, @Req() req: any): Promise<Invoice> {
-    const user = req.user
+  async createInvoice(
+    @Body() dto: CreateInvoiceDto,
+    @Req() req: any,
+  ): Promise<Invoice> {
+    const user = req.user;
     return this.handleServiceOperation(
       () => this.invoiceService.createInvoice(dto, user),
       'Invoice created successfully',
@@ -32,7 +42,6 @@ export class InvoiceController extends BaseInvoiceController {
     );
   }
 
- 
   @InvoiceEndpoint.GetInvoice()
   @Get(':id')
   async getInvoice(@Param('id') id: string): Promise<Invoice> {
@@ -42,13 +51,28 @@ export class InvoiceController extends BaseInvoiceController {
     );
   }
 
- 
   @InvoiceEndpoint.GetInvoicesByStore()
   @Get('store/:storeId')
-  async getInvoicesByStore(@Param('storeId') storeId: string): Promise<Invoice[]> {
+  async getInvoicesByStore(
+    @Param('storeId') storeId: string,
+  ): Promise<Invoice[]> {
     return this.handleServiceOperation(
       () => this.invoiceService.getInvoicesByStore(storeId),
       'Invoices retrieved successfully',
+    );
+  }
+
+
+  @InvoiceEndpoint.setBusinessInfo(businessInfoDto)
+  @Post('business-info')
+  async setBusinessInfo(
+    @Param('storeId') storeId: string,
+    @Body() dto: businessInfoDto,
+    @Req() req: any,
+  ) {
+    return this.handleServiceOperation(
+      () => this.invoiceService.setBusinessInfo(storeId, dto, req.user),
+      'Business information operation completed',
     );
   }
 }

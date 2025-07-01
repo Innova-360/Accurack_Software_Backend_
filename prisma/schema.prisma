@@ -589,11 +589,12 @@ model ProductSupplier {
   productId   String
   supplierId  String
   costPrice   Float
-  category    String
+  categoryId  String?
   state       SupplierState @default(secondary)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
+  category    Category?      @relation(fields: [categoryId], references: [id])
   product     Products?      @relation(fields: [productId], references: [id], onDelete: Cascade)
   supplier    Suppliers?     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
@@ -609,6 +610,7 @@ model Category {
   parent      Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children    Category[] @relation("CategoryHierarchy")
   products    Products[]
+  ProductSupplier ProductSupplier[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
