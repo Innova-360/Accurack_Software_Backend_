@@ -16,60 +16,6 @@ export class SupplierService {
     private readonly tenantContext: TenantContextService, // Add tenant context
   ) {}
 
-  // ...existing code...
-
-  async searchSuppliers(user: any, query: string, storeId?: string) {
-    const prisma = await this.tenantContext.getPrismaClient();
-    let whereClause: any = {
-      status: Status.active,
-      OR: [
-        { name: { contains: query, mode: 'insensitive' } },
-        { email: { contains: query, mode: 'insensitive' } },
-        { phone: { contains: query, mode: 'insensitive' } },
-        { address: { contains: query, mode: 'insensitive' } },
-      ],
-    };
-    if (user.role === Role.super_admin) {
-      if (storeId) {
-        whereClause.storeId = storeId;
-      }
-    } else {
-      const accessibleStoreIds =
-        user.stores?.map((store) => store.storeId) || [];
-      if (storeId) {
-        if (!accessibleStoreIds.includes(storeId)) {
-          throw new ForbiddenException('No access to this store');
-        }
-        whereClause.storeId = storeId;
-      } else {
-        whereClause.storeId = { in: accessibleStoreIds };
-      }
-    }
-    return prisma.suppliers.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        address: true,
-        storeId: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-        store: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-  }
-
   async createSupplier(user: any, createSupplierDto: CreateSupplierDto) {
     // Check permissions - only super_admin, admin, and manager can create suppliers
     if (![Role.super_admin, Role.admin, Role.manager].includes(user.role)) {
@@ -159,31 +105,30 @@ export class SupplierService {
         status: Status.active,
       };
 
-      if (user.role === Role.super_admin) {
-        // Super admin can see all suppliers
-        if (storeId) {
-          whereClause.storeId = storeId;
-        }
-      } else {
-        // Other users can only see suppliers from their accessible stores
-        const accessibleStoreIds =
-          user.stores?.map((store) => store.storeId) || [];
-        if (storeId) {
-          // Check if user has access to the specific store
-          if (!accessibleStoreIds.includes(storeId)) {
-            throw new ForbiddenException('No access to this store');
-          }
-          whereClause.storeId = storeId;
-        } else {
-          whereClause.storeId = { in: accessibleStoreIds };
-        }
-      }
+      // if (user.role === Role.super_admin) {
+      //   // Super admin can see all suppliers
+      //   if (storeId) {
+      //     whereClause.storeId = storeId;
+      //   }
+      // } else {
+      //   // Other users can only see suppliers from their accessible stores
+      //   const accessibleStoreIds =
+      //     user.stores?.map((store) => store.storeId) || [];
+      //   if (storeId) {
+      //     // Check if user has access to the specific store
+      //     if (!accessibleStoreIds.includes(storeId)) {
+      //       throw new ForbiddenException('No access to this store');
+      //     }
+      //     whereClause.storeId = storeId;
+      //   } else {
+      //     whereClause.storeId = { in: accessibleStoreIds };
+      //   }
+      // }
 
       const skip = (page - 1) * limit;
 
       const [suppliers, total] = await Promise.all([
         prisma.suppliers.findMany({
-          where: whereClause,
           select: {
             id: true,
             name: true,
@@ -200,6 +145,14 @@ export class SupplierService {
                 name: true,
               },
             },
+            productSuppliers: {
+              where: {
+                productId: { not: undefined },
+              },
+              include: {
+                product: true,
+              },
+            },
           },
           orderBy: {
             createdAt: 'desc',
@@ -211,6 +164,12 @@ export class SupplierService {
           where: whereClause,
         }),
       ]);
+
+      suppliers.forEach((supplier) => {
+        supplier.productSuppliers = supplier.productSuppliers.filter(
+          (ps) => ps.product !== null,
+        );
+      });
 
       const totalPages = Math.ceil(total / limit);
 
@@ -253,7 +212,7 @@ export class SupplierService {
       }
 
       const supplier = await prisma.suppliers.findFirst({
-        where: whereClause,
+        // where: whereClause,
         select: {
           id: true,
           name: true,
@@ -270,12 +229,24 @@ export class SupplierService {
               name: true,
             },
           },
+          productSuppliers: {
+            where: {
+              productId: { not: undefined },
+            },
+            include: {
+              product: true,
+            },
+          },
         },
       });
 
       if (!supplier) {
         throw new NotFoundException('Supplier not found');
       }
+
+      supplier.productSuppliers = supplier.productSuppliers.filter(
+        (ps) => ps.product !== null,
+      );
 
       return {
         message: 'Supplier retrieved successfully',
@@ -516,6 +487,105 @@ export class SupplierService {
         'Failed to delete supplier: ' + (error.message || 'Unknown error'),
       );
     }
+  }
+
+  async getSupplierProducts(user: any, supplierId: string) {
+    // Get tenant-specific Prisma client
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    let whereClause: any = {
+      id: supplierId,
+      status: Status.active,
+    };
+
+    // Store access for non-super-admin
+    if (user.role !== Role.super_admin) {
+      const accessibleStoreIds =
+        user.stores?.map((store) => store.storeId) || [];
+      whereClause.storeId = { in: accessibleStoreIds };
+    }
+
+    const supplier = await prisma.suppliers.findFirst({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        storeId: true,
+        productSuppliers: {
+          where: {
+            productId: { not: undefined},
+          },
+          include: {
+            product: true,
+          },
+        },
+      },
+    });
+
+    if (!supplier) {
+      throw new NotFoundException('Supplier not found');
+    }
+
+    const products = supplier.productSuppliers
+      .filter((ps) => ps.product !== null)
+      .map((ps) => ps.product);
+
+    return {
+      message: 'Products retrieved successfully',
+      data: products,
+    };
+  }
+
+  async searchSuppliers(user: any, query: string, storeId?: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    let whereClause: any = {
+      status: Status.active,
+      OR: [
+        { name: { contains: query, mode: 'insensitive' } },
+        { email: { contains: query, mode: 'insensitive' } },
+        { phone: { contains: query, mode: 'insensitive' } },
+        { address: { contains: query, mode: 'insensitive' } },
+      ],
+    };
+    if (user.role === Role.super_admin) {
+      if (storeId) {
+        whereClause.storeId = storeId;
+      }
+    } else {
+      const accessibleStoreIds =
+        user.stores?.map((store) => store.storeId) || [];
+      if (storeId) {
+        if (!accessibleStoreIds.includes(storeId)) {
+          throw new ForbiddenException('No access to this store');
+        }
+        whereClause.storeId = storeId;
+      } else {
+        whereClause.storeId = { in: accessibleStoreIds };
+      }
+    }
+    return prisma.suppliers.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        address: true,
+        storeId: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
   }
 
   private async validateStoreAccess(user: any, storeId: string): Promise<any> {

@@ -6,10 +6,9 @@ import {
 } from '@prisma/client';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { generate } from 'qrcode';
-import { CreateInvoiceDto } from './dto/invoice.dto';
+import { businessInfoDto, CreateInvoiceDto } from './dto/invoice.dto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { TenantContextService } from 'src/tenant/tenant-context.service';
-
 
 interface User {
   businessId: string;
@@ -24,10 +23,60 @@ export class InvoiceService {
     private readonly tenantContext: TenantContextService, // Add tenant context
   ) {}
 
+  async setBusinessInfo(storeId: string, dto: businessInfoDto, user: any) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    const { businessName, contactNo, website, address, logoUrl } = dto;
+
+    try {
+      // Check if business already exists for this client (clientId is unique in the model)
+      const existingBusiness = await prisma.business.findUnique({
+        where: { clientId: user.clientId },
+      });
+
+      if (existingBusiness) {
+        return {
+          message: 'Business information already set for this client.',
+          data: existingBusiness,
+        };
+      }
+
+      const createdBusiness = await prisma.business.create({
+        data: {
+          clientId: user.clientId,
+          businessName,
+          contactNo,
+          website,
+          address,
+          logoUrl,
+        },
+      });
+
+      return {
+        message: 'Business information saved successfully.',
+        data: createdBusiness,
+      };
+    } catch (error) {
+      console.error('Error setting business info:', error);
+
+      // Handle known Prisma constraint errors
+      if (error.code === 'P2002') {
+        return {
+          message: 'Business info already exists for this client.',
+          data: null,
+        };
+      }
+
+      throw new Error(
+        'An error occurred while saving business information: ' +
+          (error.message || 'Unknown error'),
+      );
+    }
+  }
+
   async createInvoice(dto: CreateInvoiceDto, user: User): Promise<Invoice> {
     const prisma = await this.tenantContext.getPrismaClient();
     const { saleId, customFields } = dto;
-    const { businessId } = user; 
+    const { businessId } = user;
     const { logoUrl } = user.business;
 
     // Fetch sale with related data
@@ -88,7 +137,7 @@ export class InvoiceService {
         netAmount,
         tax: sale.tax,
         status: sale.status,
-        cashierName: sale.cashierName || "nan",
+        cashierName: sale.cashierName || 'nan',
         logoUrl: logoUrl || business.logoUrl || undefined,
         qrCode,
         customFields: {

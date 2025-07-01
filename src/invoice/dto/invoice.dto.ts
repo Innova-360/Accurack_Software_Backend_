@@ -40,3 +40,30 @@ export class CreateInvoiceDto {
   @Type(() => CustomFieldDto)
   customFields?: CustomFieldDto[];
 }
+
+
+export class businessInfoDto {
+  @ApiProperty({ example: 'abcaas', description: 'Business name for the invoice' })
+  @IsString()
+  businessName: string;
+
+  @ApiProperty({ example: '56788989', description: 'Business contactNo' })
+  @IsString()
+  contactNo: string;
+
+  @ApiProperty({ example: 'abcaas', description: 'Business website' })
+  @IsOptional()
+  @IsString()
+  website?: string;
+
+  @ApiProperty({ example: 'abcaas', description: 'Business address' })
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @ApiPropertyOptional({ example: 'https://example.com/logo.png', description: 'Optional logo URL for the invoice' })
+  @IsOptional()
+  @IsString()
+  logoUrl?: string;
+
+}

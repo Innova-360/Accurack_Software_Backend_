@@ -256,6 +256,45 @@ export const SupplierEndpoint = {
       ApiBearerAuth('JWT-auth'),
     ),
 
+  SupplierProducts:() =>
+  applyDecorators(
+    RequirePermissions(
+      PermissionResource.SUPPLIER,
+      PermissionAction.READ,
+      PermissionScope.STORE,
+    ),
+    ApiOperation({
+      summary: 'Get products linked to a supplier',
+      description: 'Retrieves all products associated with a given supplier.',
+    }),
+    ApiParam({
+      name: 'supplierId',
+      type: 'string',
+      description: 'UUID of the supplier',
+      example: 'uuid-supplier-id',
+    }),
+    ApiResponse({
+      status: 200,
+      description: 'Products linked to the supplier retrieved successfully',
+      schema: successResponseSchema('Products retrieved successfully', [
+        {
+          id: 'uuid-product-id',
+          name: 'Product Name',
+          description: 'Product Description',
+          sku: 'SKU-001',
+          price: 50.0,
+        },
+      ]),
+    }),
+    ApiResponse({
+      status: 404,
+      description: 'Supplier not found',
+      schema: errorResponseSchema(404, 'Supplier not found'),
+    }),
+    ...standardErrorResponses(),
+    ApiBearerAuth('JWT-auth'),
+  ),
+
   GetSupplierBySupplierId: () =>
     applyDecorators(
       RequirePermissions(
