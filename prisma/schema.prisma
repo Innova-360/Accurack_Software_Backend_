@@ -82,7 +82,13 @@ enum PaymentStatus {
 
 enum InvoiceSource {
   manual
-  system
+  website
+}
+
+enum SaleConfirmation {
+  CONFIRMED
+  NOT_CONFIRMED
+  CANCELLED
 }
 
 model Clients {
@@ -251,12 +257,14 @@ model Sales {
   clientId        String
   paymentMethod   PaymentMethod
   totalAmount     Float
+  confirmation    SaleConfirmation @default(NOT_CONFIRMED) 
+  quantitySend    Int
   allowance       Float?        @default(0)
   source          InvoiceSource @default(manual)
   tax             Float         @default(0)
   status          SaleStatus    @default(PENDING)
   generateInvoice Boolean       @default(true)
-  cashierName     String
+  cashierName     String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   fileUploadSalesId String?

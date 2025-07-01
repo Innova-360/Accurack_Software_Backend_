@@ -147,9 +147,19 @@ export class CreateSaleDto {
   @IsNumber()
   tax?: number;
 
+   @ApiPropertyOptional({ description: 'allowance amount', default: 0 })
+  @IsOptional()
+  @IsNumber()
+  allowance?: number;
+
+
   @ApiProperty({ description: 'Cashier name' })
   @IsString()
   cashierName?: string;
+
+  @ApiProperty({ description: 'sale soource (manual/website)' })
+  @IsString()
+  source?: string;
 
   @ApiPropertyOptional({ description: 'Generate invoice', default: true })
   @IsOptional()

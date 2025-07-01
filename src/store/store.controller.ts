@@ -7,13 +7,15 @@ import {
   Post,
   Body,
   Param,
+  Put,
+  Delete,
   Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { StoreService } from './store.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
-import { CreateStoreDto } from './dto/dto.store';
+import { CreateStoreDto, UpdateStoreDto } from './dto/dto.store';
 import { BaseAuthController, ResponseService } from '../common';
 import { StoreEndpoint } from '../common/decorators/store-endpoint.decorator';
 
@@ -68,6 +70,25 @@ export class StoreController extends BaseAuthController {
     return this.handleServiceOperation(
       () => this.storeService.findStoreById(req.user, id),
       'Store retrieved successfully',
+    );
+  }
+
+
+  @StoreEndpoint.UpdateStore(UpdateStoreDto)
+  @Put(':id')
+  async updateStore(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateStoreDto) {
+    return this.handleServiceOperation(
+      () => this.storeService.updateStore(req.user, id, dto),
+      'Store updated successfully',
+    );
+  }
+
+  @StoreEndpoint.DeleteStore()
+  @Delete(':id')
+  async deleteStore(@Request() req: any, @Param('id') id: string) {
+    return this.handleServiceOperation(
+      () => this.storeService.deleteStore(req.user, id),
+      'Store deleted successfully',
     );
   }
 }

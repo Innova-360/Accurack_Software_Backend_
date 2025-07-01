@@ -289,6 +289,8 @@ export class StoreService {
       throw new BadRequestException('Failed to validate user record');
     }
   }
+  
+  
   async searchStores(user: any, query: string) {
     const prisma = await this.tenantContext.getPrismaClient();
     if (!query || query.trim() === '') {
@@ -334,16 +336,124 @@ export class StoreService {
         createdAt: true,
         settings: {
           select: {
+
             currency: true,
             timezone: true,
             taxRate: true,
-            taxMode: true,
-          },
+            taxMode: true,  
+   },
         },
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
+
+
+
+  async updateStore(user: any, storeId: string, dto: UpdateStoreDto) {
+    if (user.role !== Role.super_admin && user.role !== Role.admin) {
+      throw new ForbiddenException('Only admins can update stores');
+    }
+
+    try {
+      const prisma = await this.tenantContext.getPrismaClient();
+
+      const existingStore = await prisma.stores.findFirst({
+        where: {
+          id: storeId,
+          ...(user.role === Role.super_admin ? {} : { clientId: user.clientId }),
+        },
+      });
+
+      if (!existingStore) {
+        throw new NotFoundException('Store not found or access denied');
+      }
+
+      const result = await prisma.$transaction(async (prisma) => {
+        const store = await prisma.stores.update({
+          where: { id: storeId },
+          data: {
+            name: dto.name,
+            email: dto.email,
+            address: dto.address,
+            phone: dto.phone,
+            logoUrl: dto.logoUrl,
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            address: true,
+            phone: true,
+            logoUrl: true,
+            clientId: true,
+            status: true,
+            createdAt: true,
+          },
+        });
+
+        const settings = await prisma.storeSettings.update({
+          where: { storeId: storeId },
+          data: {
+            currency: dto.currency,
+            timezone: dto.timezone,
+          },
+          select: {
+            id: true,
+            storeId: true,
+            currency: true,
+            timezone: true,
+            taxRate: true,
+            taxMode: true,
+            lowStockAlert: true,
+            enableNotifications: true,
+          },
+        });
+
+        return { store, settings };
+      });
+
+      return { store: result.store, settings: result.settings };
+    } catch (error) {
+      console.error('Update store error:', error);
+      throw error instanceof NotFoundException || error instanceof ForbiddenException
+        ? error
+        : new BadRequestException('Failed to update store: ' + error.message);
+    }
+  }
+
+  async deleteStore(user: any, storeId: string) {
+    if (user.role !== Role.super_admin && user.role !== Role.admin) {
+      throw new ForbiddenException('Only admins can delete stores');
+    }
+
+    try {
+      const prisma = await this.tenantContext.getPrismaClient();
+
+      const existingStore = await prisma.stores.findFirst({
+        where: {
+          id: storeId,
+          ...(user.role === Role.super_admin ? {} : { clientId: user.clientId }),
+        },
+      });
+
+      if (!existingStore) {
+        throw new NotFoundException('Store not found or access denied');
+      }
+
+      await prisma.$transaction(async (prisma) => {
+        await prisma.userStoreMap.deleteMany({ where: { storeId } });
+        await prisma.storeSettings.deleteMany({ where: { storeId } });
+        await prisma.stores.delete({ where: { id: storeId } });
+      });
+
+      return { message: 'Store deleted successfully' };
+    } catch (error) {
+      console.error('Delete store error:', error);
+      throw error instanceof NotFoundException || error instanceof ForbiddenException
+        ? error
+        : new BadRequestException('Failed to delete store: ' + error.message);
+    }
   }
 }
