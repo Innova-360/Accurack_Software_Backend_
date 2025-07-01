@@ -13,6 +13,7 @@ import { EmployeeModule } from './employee/employee.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 import { SaleModule } from './sale/sale.module';
 import { TaxModule } from './tax/tax.module';
+import { InvoiceModule } from './invoice/invoice.module';
 
 @Module({
   imports: [
@@ -26,8 +27,9 @@ import { TaxModule } from './tax/tax.module';
     TenantModule,
     DatabaseModule,
     SaleModule,
+    InvoiceModule,
     EmployeeModule,
-    TaxModule,
+    TaxModule
   ],
   providers: [
     {
