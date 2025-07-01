@@ -13,6 +13,9 @@ import { MultiTenantService } from '../database/multi-tenant.service';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { GoogleOAuthGuard } from 'src/guards/google-oauth.guard';
 import { RolesGuard } from 'src/guards/roles.guard';
+import { TenantContextService } from 'src/tenant/tenant-context.service';
+import { PrismaService } from 'src/prisma/prisma.service';
+
 
 @Module({
   imports: [
@@ -41,6 +44,8 @@ import { RolesGuard } from 'src/guards/roles.guard';
     JwtAuthGuard,
     GoogleOAuthGuard,
     RolesGuard,
+    PrismaService,
+    TenantContextService,
     MultiTenantService, // Add MultiTenantService for tenant database creation
   ],
   exports: [

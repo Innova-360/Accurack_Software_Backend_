@@ -157,7 +157,28 @@ export const AuthEndpoint = {
         status: 200,
         description: 'Login successful',
         schema: successResponseSchema('Login successful', {
-          user: { id: 'uuid', email: 'user@example.com', role: 'employee' },
+          user: { 
+            id: 'uuid', 
+            email: 'user@example.com', 
+            firstName: 'John',
+            lastName: 'Doe',
+            role: 'employee',
+            stores: [{ storeId: 'store-123' }]
+          },
+          accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          permissions: {
+            userId: 'uuid',
+            storeId: 'store-123',
+            permissions: [
+              {
+                resource: 'inventory',
+                actions: ['read', 'create'],
+                storeId: 'store-123'
+              }
+            ],
+            roleTemplates: ['cashier']
+          }
         }),
       }),
       ...standardErrorResponses(),

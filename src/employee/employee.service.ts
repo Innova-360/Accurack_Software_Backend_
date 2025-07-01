@@ -14,6 +14,8 @@ import { UpdateEmployeePermissionsDto } from './dto/update-employee-permissions.
 import { InviteEmployeeDto } from './dto/invite-employee.dto';
 import * as bcrypt from 'bcrypt';
 import { generateRandomPassword } from 'src/common';
+import { PrismaClientModule } from 'src/prisma-client/prisma-client.module';
+import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 
 @Injectable()
 export class EmployeeService {
@@ -40,6 +42,18 @@ export class EmployeeService {
 
     // Get the tenant-specific Prisma client
     const clientdb = await this.tenantContext.getPrismaClient();
+
+    console.log(clientdb)
+
+    // Check if employee with email already exists in both master and tenant DB
+    const [existingMasterUser, existingTenantUser] = await Promise.all([
+      this.prisma.users.findUnique({ where: { email } }),
+      clientdb.users.findUnique({ where: { email } })
+    ]);
+
+    if (existingMasterUser || existingTenantUser) {
+      throw new BadRequestException('Employee with this email already exists');
+    }
 
     // Validate role template first (before any user creation)
     const roleTemplate = await this.validateRoleTemplate(
@@ -72,10 +86,12 @@ export class EmployeeService {
     // Hash the password
     const passwordHash = await bcrypt.hash(finalPassword, 10);
 
-    // Create user with employee role and details in a transaction
-    const employee = await clientdb.$transaction(async (prisma) => {
-      // Create user with employee details
-      const user = await prisma.users.create({
+    let masterUser: any = null;
+    let tenantUser: any = null;
+
+    try {
+      // First create user in master database
+      masterUser = await this.prisma.users.create({
         data: {
           email,
           passwordHash,
@@ -84,113 +100,151 @@ export class EmployeeService {
           phone,
           position,
           department,
-          role: 'employee', // Store role template name for compatibility
+          role: 'employee',
           status: 'active',
           clientId: req.user.clientId,
         },
       });
 
-      // Create UserRole record for advanced role management
-      await prisma.userRole.create({
-        data: {
-          userId: user.id,
-          roleTemplateId: roleTemplate.id,
-          assignedBy: req.user.id,
-        },
-      });
-
-      // Handle permissions assignment with role template integration
-      let finalPermissions: any[] = [];
-
-      // 1. Get role template permissions (always get them since role is validated)
-      const roleTemplatePermissions = await this.getRoleTemplatePermissions(
-        prisma,
-        roleTemplate.id,
-      );
-      finalPermissions = [...roleTemplatePermissions];
-
-      // 2. Merge with explicit permissions if provided
-      if (permissions && permissions.length > 0) {
-        // Validate and prepare explicit permissions
-        const validatedExplicitPermissions = await this.validatePermissions(
-          prisma,
-          permissions,
-        );
-
-        if (finalPermissions.length > 0) {
-          // Merge role template + explicit permissions
-          finalPermissions = this.mergeRoleAndExplicitPermissions(
-            finalPermissions,
-            validatedExplicitPermissions,
-          );
-        } else {
-          // Only explicit permissions
-          finalPermissions = validatedExplicitPermissions.map((p) => ({
-            ...p,
-            source: 'explicit',
-          }));
-        }
-      }
-
-      // 3. Assign final merged permissions
-      if (finalPermissions.length > 0) {
-        const permissionData = finalPermissions.map((permission) => ({
-          userId: user.id,
-          resource: permission.resource,
-          actions: [permission.action],
-          storeId: permission.storeId || null,
-          granted: true,
-          grantedBy: req.user.id,
-        }));
-
-        // Use createMany for better performance
-        await prisma.permission.createMany({
-          data: permissionData,
-          skipDuplicates: true,
-        });
-      }
-
-      // Assign stores to the employee if provided
-      if (storeIds && storeIds.length > 0) {
-        // Validate store IDs before attempting to create mappings
-        const existingStores = await prisma.stores.findMany({
-          where: {
-            id: {
-              in: storeIds,
-            },
-          },
-          select: {
-            id: true,
+      // Then create user with employee role and details in tenant database transaction
+      tenantUser = await clientdb.$transaction(async (prisma) => {
+        // Create user with employee details (using same ID as master user for consistency)
+        const user = await prisma.users.create({
+          data: {
+            id: masterUser.id, // Use same ID as master user
+            email,
+            passwordHash,
+            firstName,
+            lastName,
+            phone,
+            position,
+            department,
+            role: 'employee', // Store role template name for compatibility
+            status: 'active',
+            clientId: req.user.clientId,
           },
         });
 
-        const validStoreIds = existingStores.map((store) => store.id);
-
-        if (validStoreIds.length > 0) {
-          // Only create mappings for valid store IDs
-          const storeAssignments = validStoreIds.map((storeId) => ({
+        // Create UserRole record for advanced role management
+        await prisma.userRole.create({
+          data: {
             userId: user.id,
-            storeId,
+            roleTemplateId: roleTemplate.id,
+            assignedBy: req.user.id,
+          },
+        });
+
+        // Handle permissions assignment with role template integration
+        let finalPermissions: any[] = [];
+
+        // 1. Get role template permissions (always get them since role is validated)
+        const roleTemplatePermissions = await this.getRoleTemplatePermissions(
+          prisma,
+          roleTemplate.id,
+        );
+        finalPermissions = [...roleTemplatePermissions];
+
+        // 2. Merge with explicit permissions if provided
+        if (permissions && permissions.length > 0) {
+          // Validate and prepare explicit permissions
+          const validatedExplicitPermissions = await this.validatePermissions(
+            prisma,
+            permissions,
+          );
+
+          if (finalPermissions.length > 0) {
+            // Merge role template + explicit permissions
+            finalPermissions = this.mergeRoleAndExplicitPermissions(
+              finalPermissions,
+              validatedExplicitPermissions,
+            );
+          } else {
+            // Only explicit permissions
+            finalPermissions = validatedExplicitPermissions.map((p) => ({
+              ...p,
+              source: 'explicit',
+            }));
+          }
+        }
+
+        // 3. Assign final merged permissions
+        if (finalPermissions.length > 0) {
+          const permissionData = finalPermissions.map((permission) => ({
+            userId: user.id,
+            resource: permission.resource,
+            actions: [permission.action],
+            storeId: permission.storeId || null,
+            granted: true,
+            grantedBy: req.user.id,
           }));
 
-          // Create store assignments one by one to avoid transaction issues
-          for (const assignment of storeAssignments) {
-            try {
-              await prisma.userStoreMap.create({
-                data: assignment,
-              });
-            } catch (error) {
-              // Log error but continue with other assignments
-              console.error(
-                `Failed to assign store ${assignment.storeId} to user ${assignment.userId}: ${error.message}`,
-              );
+          // Use createMany for better performance
+          await prisma.permission.createMany({
+            data: permissionData,
+            skipDuplicates: true,
+          });
+        }
+
+        // Assign stores to the employee if provided
+        if (storeIds && storeIds.length > 0) {
+          // Validate store IDs before attempting to create mappings
+          const existingStores = await prisma.stores.findMany({
+            where: {
+              id: {
+                in: storeIds,
+              },
+            },
+            select: {
+              id: true,
+            },
+          });
+
+          const validStoreIds = existingStores.map((store) => store.id);
+
+          if (validStoreIds.length > 0) {
+            // Only create mappings for valid store IDs
+            const storeAssignments = validStoreIds.map((storeId) => ({
+              userId: user.id,
+              storeId,
+            }));
+
+            // Create store assignments one by one to avoid transaction issues
+            for (const assignment of storeAssignments) {
+              try {
+                await prisma.userStoreMap.create({
+                  data: assignment,
+                });
+              } catch (error) {
+                // Log error but continue with other assignments
+                console.error(
+                  `Failed to assign store ${assignment.storeId} to user ${assignment.userId}: ${error.message}`,
+                );
+              }
             }
           }
         }
-      }
 
-      return user;
-    });
+        return user;
+      });
+
+    } catch (error) {
+      // Rollback strategy: if tenant DB creation fails, delete from master DB
+      if (masterUser && !tenantUser) {
+        try {
+          await this.prisma.users.delete({
+            where: { id: masterUser.id },
+          });
+          console.log(`Rolled back master DB user creation for ID: ${masterUser.id}`);
+        } catch (rollbackError) {
+          console.error(`Failed to rollback master DB user creation: ${rollbackError.message}`);
+        }
+      }
+      
+      // Re-throw the original error
+      throw error;
+    }
+
+    const employee = tenantUser;
 
     // Send welcome email with credentials
     const emailSubject = 'Welcome to Accurack - Your Employee Account';

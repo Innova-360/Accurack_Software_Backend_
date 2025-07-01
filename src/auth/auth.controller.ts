@@ -130,6 +130,7 @@ export class AuthController extends BaseAuthController {
           user: this.extractUserData(resp.user),
           accessToken: resp.accessToken,
           refreshToken: resp.refreshToken,
+          permissions: resp.permissions,
         },
         200,
       ),

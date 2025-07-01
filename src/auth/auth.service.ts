@@ -25,7 +25,9 @@ import {
 } from './dto/auth.dto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { MultiTenantService } from '../database/multi-tenant.service';
+import { TenantContextService } from '../tenant/tenant-context.service';
 import { Role, Status } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 import * as crypto from 'crypto';
 
@@ -37,6 +39,7 @@ export class AuthService {
     private readonly mailService: MailService,
     private readonly permissionsService: PermissionsService,
     private readonly multiTenantService: MultiTenantService,
+    private readonly tenantContext: TenantContextService,
   ) {}
   async googleLogin(googleUser: GoogleProfileDto): Promise<AuthResponseDto> {
     try {
@@ -397,93 +400,87 @@ export class AuthService {
       role: string;
       stores: { storeId: string }[] | string[];
     };
+    permissions: {
+      userId: string;
+      storeId?: string;
+      permissions: Array<{
+        resource: string;
+        actions: string[];
+        storeId?: string;
+        resourceId?: string;
+        conditions?: Record<string, any>;
+        expiresAt?: string;
+      }>;
+      roleTemplates: string[];
+    };
   }> {
     const { email, password } = dto;
 
-    const user = await this.prisma.users.findUnique({
+    console.log(email, password);
+
+    // Step 1: Get clientId from master database (minimal lookup)
+    const masterUser = await this.prisma.users.findUnique({
       where: { email },
       select: {
         id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        passwordHash: true,
-        role: true,
-        status: true,
         clientId: true,
-        stores: { select: { storeId: true } },
+        status: true,
       },
     });
-    if (!user || user.status !== Status.active) {
+
+    if (!masterUser || masterUser.status !== Status.active) {
       throw new UnauthorizedException('User not found or inactive');
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Password is incorrect');
-    }
-    const payload = {
-      id: user.id,
-      role: user.role,
-      email: user.email,
-      clientId: user.clientId,
-      stores: user.role === Role.super_admin ? ['*'] : user.stores,
-    };
-
-    const accessToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_SECRET,
-      expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '24h',
-    });
-    const refreshToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_SECRET,
-      expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
-    });
-    console.log('🔍 JWT TOKENS:', accessToken);
-    console.log('🔍 JWT payload:', payload);
-
-    await this.prisma.auditLogs.create({
-      data: {
-        userId: user.id,
-        action: 'login',
-        resource: 'auth',
-        details: { email },
-      },
-    });
-
-    return {
-      accessToken,
-      refreshToken,
-      user: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role ?? 'employee',
-        stores: payload.stores,
-      },
-    };
-  }
-
-  async refreshToken(dto: RefreshTokenDto) {
-    const { refreshToken } = dto;
+    // Step 2: Get tenant-specific Prisma client using MultiTenantService directly
+    let tenantPrisma: PrismaClient;
     try {
-      const decoded = this.jwtService.verify(refreshToken, {
-        secret: process.env.JWT_SECRET, // Use same secret as access token
+      const credentials = await this.multiTenantService['getTenantCredentials'](masterUser.clientId);
+      if (!credentials) {
+        throw new Error('Tenant credentials not found');
+      }
+
+      const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
+
+      tenantPrisma = new PrismaClient({
+        datasources: {
+          db: { url: tenantDatabaseUrl },
+        },
       });
 
-      const user = await this.prisma.users.findUnique({
-        where: { id: decoded.id },
+      await tenantPrisma.$connect();
+    } catch (error) {
+      console.error('Failed to connect to tenant database:', error);
+      throw new InternalServerErrorException('Tenant database connection failed');
+    }
+
+    try {
+      // Step 3: Query tenant database for full user details and authentication
+      const user = await tenantPrisma.users.findUnique({
+        where: { email },
         select: {
           id: true,
-          role: true,
+          firstName: true,
+          lastName: true,
           email: true,
-          clientId: true,
+          passwordHash: true,
+          role: true,
           status: true,
+          clientId: true,
           stores: { select: { storeId: true } },
         },
       });
+
+      console.log("tenant user", user);
+      
       if (!user || user.status !== Status.active) {
-        throw new UnauthorizedException('Invalid refresh token');
+        throw new UnauthorizedException('User not found in tenant database or inactive');
+      }
+
+      // Verify password using tenant database user data
+      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('Password is incorrect');
       }
 
       const payload = {
@@ -495,10 +492,131 @@ export class AuthService {
       };
 
       const accessToken = this.jwtService.sign(payload, {
-        expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+        secret: process.env.JWT_SECRET,
+        expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '24h',
+      });
+      const refreshToken = this.jwtService.sign(payload, {
+        secret: process.env.JWT_SECRET,
+        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+      });
+      
+      console.log('🔍 JWT TOKENS:', accessToken);
+      console.log('🔍 JWT payload:', payload);
+
+      // Log to tenant database (since that's where the full user context is)
+      await tenantPrisma.auditLogs.create({
+        data: {
+          userId: user.id,
+          action: 'login',
+          resource: 'auth',
+          details: { email },
+        },
       });
 
-      return { accessToken };
+      // Fetch user permissions from tenant database
+      const userPermissions = await this.permissionsService.getUserPermissionsWithClient(
+        tenantPrisma,
+        user.id,
+        undefined // For login, we get all permissions across all stores
+      );
+
+      return {
+        accessToken,
+        refreshToken,
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role ?? 'employee',
+          stores: payload.stores,
+        },
+        permissions: userPermissions,
+      };
+    } finally {
+      // Clean up tenant connection
+      await tenantPrisma.$disconnect();
+    }
+  }
+
+  async refreshToken(dto: RefreshTokenDto) {
+    const { refreshToken } = dto;
+    try {
+      const decoded = this.jwtService.verify(refreshToken, {
+        secret: process.env.JWT_SECRET, // Use same secret as access token
+      });
+
+      // Step 1: Get clientId from master database to verify user exists
+      const masterUser = await this.prisma.users.findUnique({
+        where: { id: decoded.id },
+        select: {
+          id: true,
+          clientId: true,
+          status: true,
+        },
+      });
+      
+      if (!masterUser || masterUser.status !== Status.active) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      // Step 2: Get tenant-specific Prisma client
+      let tenantPrisma: PrismaClient;
+      try {
+        const credentials = await this.multiTenantService['getTenantCredentials'](masterUser.clientId);
+        if (!credentials) {
+          throw new Error('Tenant credentials not found');
+        }
+
+        const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
+
+        tenantPrisma = new PrismaClient({
+          datasources: {
+            db: { url: tenantDatabaseUrl },
+          },
+        });
+
+        await tenantPrisma.$connect();
+      } catch (error) {
+        console.error('Failed to connect to tenant database:', error);
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      try {
+        // Step 3: Get user details from tenant database
+        const user = await tenantPrisma.users.findUnique({
+          where: { id: decoded.id },
+          select: {
+            id: true,
+            role: true,
+            email: true,
+            clientId: true,
+            status: true,
+            stores: { select: { storeId: true } },
+          },
+        });
+        
+        if (!user || user.status !== Status.active) {
+          throw new UnauthorizedException('Invalid refresh token');
+        }
+
+        const payload = {
+          id: user.id,
+          role: user.role,
+          email: user.email,
+          clientId: user.clientId,
+          stores: user.role === Role.super_admin ? ['*'] : user.stores,
+        };
+
+        const accessToken = this.jwtService.sign(payload, {
+          expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+        });
+
+        return { accessToken };
+      } finally {
+        // Clean up tenant connection
+        await tenantPrisma.$disconnect();
+      }
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');
     }

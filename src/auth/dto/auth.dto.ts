@@ -339,3 +339,74 @@ export class FixUserRecordDto {
   @IsNotEmpty()
   userId: string;
 }
+
+export class UserInfoDto {
+  @ApiProperty({ example: 'user-id-123' })
+  id: string;
+
+  @ApiProperty({ example: 'John' })
+  firstName: string;
+
+  @ApiProperty({ example: 'Doe' })
+  lastName: string;
+
+  @ApiProperty({ example: 'john@example.com' })
+  email: string;
+
+  @ApiProperty({ example: 'employee' })
+  role: string;
+
+  @ApiProperty({
+    example: [{ storeId: 'store-123' }],
+    description: 'Array of store access or ["*"] for super admin',
+  })
+  stores: { storeId: string }[] | string[];
+}
+
+export class PermissionDto {
+  @ApiProperty({ example: 'inventory' })
+  resource: string;
+
+  @ApiProperty({ example: ['read', 'write'] })
+  actions: string[];
+
+  @ApiPropertyOptional({ example: 'store-123' })
+  storeId?: string;
+
+  @ApiPropertyOptional({ example: 'product-456' })
+  resourceId?: string;
+
+  @ApiPropertyOptional()
+  conditions?: Record<string, any>;
+
+  @ApiPropertyOptional()
+  expiresAt?: string;
+}
+
+export class UserPermissionsDto {
+  @ApiProperty({ example: 'user-id-123' })
+  userId: string;
+
+  @ApiPropertyOptional({ example: 'store-123' })
+  storeId?: string;
+
+  @ApiProperty({ type: [PermissionDto] })
+  permissions: PermissionDto[];
+
+  @ApiProperty({ example: ['manager', 'cashier'] })
+  roleTemplates: string[];
+}
+
+export class LoginWithPermissionsResponseDto {
+  @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
+  accessToken: string;
+
+  @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
+  refreshToken: string;
+
+  @ApiProperty({ type: UserInfoDto })
+  user: UserInfoDto;
+
+  @ApiProperty({ type: UserPermissionsDto })
+  permissions: UserPermissionsDto;
+}
