@@ -9,7 +9,7 @@ set -e
 AWS_REGION=${AWS_REGION:-"us-east-1"}
 ECR_REPOSITORY=${ECR_REPOSITORY:-"accurack-backend"}
 IMAGE_TAG=${IMAGE_TAG:-"latest"}
-DOCKERFILE=${DOCKERFILE:-"Dockerfile.prod"}
+DOCKERFILE=${DOCKERFILE:-"Dockerfile"}
 
 echo "🚀 Building and deploying to AWS ECR for t2.micro..."
 echo "📋 Configuration:"
