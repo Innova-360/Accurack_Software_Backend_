@@ -18,7 +18,7 @@ import { PermissionsGuard } from '../guards/permissions.guard';
 import { CreateSupplierDto, UpdateSupplierDto } from './dto/dto.supplier';
 import { SupplierService } from './supplier.service';
 import { SupplierEndpoint } from '../common/decorators/supplier-endpoint.decorator';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { BaseSupplierController } from '../common/controllers/base-supplier.controller';
 import { ResponseService } from '../common/services/response.service';
 
@@ -45,6 +45,32 @@ export class SupplierController extends BaseSupplierController {
       () => this.supplierService.createSupplier(user, createSupplierDto),
       'Supplier created successfully',
       201,
+    );
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search suppliers by query' })
+  @ApiQuery({
+    name: 'q',
+    required: true,
+    type: String,
+    description: 'Search term (name, email, phone, or address)',
+  })
+  @ApiQuery({
+    name: 'storeId',
+    required: false,
+    type: String,
+    description: 'Optional store ID to filter suppliers',
+  })
+  async searchSuppliers(
+    @Req() req,
+    @Query('q') q: string,
+    @Query('storeId') storeId?: string,
+  ) {
+    const user = req.user;
+    return this.handleSupplierOperation(
+      () => this.supplierService.searchSuppliers(user, q, storeId),
+      'Suppliers search results',
     );
   }
 
@@ -97,7 +123,7 @@ export class SupplierController extends BaseSupplierController {
       'Supplier retrieved successfully',
     );
   }
-  
+
   @SupplierEndpoint.UpdateSupplier(UpdateSupplierDto)
   @Put(':id')
   async updateSupplier(

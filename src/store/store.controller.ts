@@ -9,8 +9,9 @@ import {
   Param,
   Put,
   Delete,
+  Query,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { StoreService } from './store.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
@@ -36,6 +37,21 @@ export class StoreController extends BaseAuthController {
       () => this.storeService.createStore(req.user, dto),
       'Store created successfully',
       201,
+    );
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search stores by query' })
+  @ApiQuery({
+    name: 'q',
+    required: true,
+    type: String,
+    description: 'Search term (name, email, address, or phone)',
+  })
+  async searchStores(@Request() req: any, @Query('q') q: string) {
+    return this.handleServiceOperation(
+      () => this.storeService.searchStores(req.user, q),
+      'Stores search results',
     );
   }
 

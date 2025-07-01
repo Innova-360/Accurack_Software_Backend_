@@ -350,6 +350,7 @@ export class SupplierService {
       if (!existingSupplier) {
         throw new NotFoundException('Supplier not found');
       }
+      }
 
       // If storeId is being updated, validate the new store
       if (
