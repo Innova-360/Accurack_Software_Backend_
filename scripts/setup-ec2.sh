@@ -31,6 +31,16 @@ echo "📋 Installing Docker Compose..."
 sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
 
+# Install Node.js 22.15.0
+echo "🟢 Installing Node.js 22.15.0..."
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Verify Node.js and npm installation
+echo "✅ Verifying Node.js installation..."
+node --version
+npm --version
+
 # Install AWS CLI v2
 echo "☁️ Installing AWS CLI v2..."
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
