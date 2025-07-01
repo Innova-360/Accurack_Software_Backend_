@@ -4,7 +4,7 @@
 # Run this from your project root directory
 
 KEY_PATH="C:/Users/DELL/Downloads/batch-2-accurack.pem"
-EC2_HOST="ubuntu@ec2-54-146-54-252.compute-1.amazonaws.com"
+EC2_HOST="ubuntu@ec2-3-85-166-59.compute-1.amazonaws.com"
 
 echo "🚀 Transferring files to EC2 instance..."
 
