@@ -46,11 +46,11 @@ export class TaxCalculationService {
     const { totalTaxAmount, effectiveRate } = this.calculateTaxAmount(
       taxAssignments,
       dto.amount,
-      dto.quantity || 1
+      dto.quantity || 1,
     );
 
     const subtotal = dto.amount * (dto.quantity || 1);
-    
+
     return {
       subtotal,
       taxAmount: totalTaxAmount,
@@ -62,7 +62,7 @@ export class TaxCalculationService {
         const individualTaxAmount = this.calculateIndividualTaxAmount(
           assignment.taxRate,
           dto.amount,
-          dto.quantity || 1
+          dto.quantity || 1,
         );
         return {
           id: assignment.id,
@@ -119,6 +119,13 @@ export class TaxCalculationService {
       });
     }
 
+    if (dto.customerId) {
+      entityQueries.push({
+        entityType: EntityType.CUSTOMER,
+        entityId: dto.customerId,
+      });
+    }
+
     const taxAssignments = await prisma.taxAssignment.findMany({
       where: {
         OR: entityQueries,
@@ -143,23 +150,13 @@ export class TaxCalculationService {
       };
     }
 
-    // Apply tax precedence: PRODUCT > CATEGORY > STORE > SUPPLIER
-    const precedenceOrder = [
-      EntityType.PRODUCT,
-      EntityType.CATEGORY,
-      EntityType.STORE,
-      EntityType.SUPPLIER,
-    ];
-    const applicableTaxes = this.applyTaxPrecedence(
-      taxAssignments,
-      precedenceOrder,
-    );
-
+    // Apply all applicable taxes (additive approach)
+    // All taxes from different entity types are applied together
     const lineTotal = dto.amount * (dto.quantity || 1);
     const { totalTaxAmount, effectiveRate } = this.calculateTaxAmount(
-      applicableTaxes,
+      taxAssignments,
       dto.amount,
-      dto.quantity || 1
+      dto.quantity || 1,
     );
 
     return {
@@ -167,11 +164,11 @@ export class TaxCalculationService {
       taxAmount: totalTaxAmount,
       total: lineTotal + totalTaxAmount,
       effectiveRate,
-      appliedTaxes: applicableTaxes.map((assignment) => {
+      appliedTaxes: taxAssignments.map((assignment) => {
         const individualTaxAmount = this.calculateIndividualTaxAmount(
           assignment.taxRate,
           dto.amount,
-          dto.quantity || 1
+          dto.quantity || 1,
         );
         return {
           id: assignment.id,
@@ -187,32 +184,45 @@ export class TaxCalculationService {
     };
   }
 
-  private calculateTaxAmount(taxAssignments: any[], amount: number, quantity: number) {
+  private calculateTaxAmount(
+    taxAssignments: any[],
+    amount: number,
+    quantity: number,
+  ) {
     let totalTaxAmount = 0;
     let totalPercentageRate = 0;
-    
+
     for (const assignment of taxAssignments) {
       const taxRate = assignment.taxRate;
-      const individualTaxAmount = this.calculateIndividualTaxAmount(taxRate, amount, quantity);
+      const individualTaxAmount = this.calculateIndividualTaxAmount(
+        taxRate,
+        amount,
+        quantity,
+      );
       totalTaxAmount += individualTaxAmount;
-      
+
       // For effective rate calculation, convert fixed amounts to percentage equivalent
       if (taxRate.rateType === TaxRateType.PERCENTAGE) {
         totalPercentageRate += taxRate.rate;
       } else {
         // Convert fixed amount to percentage for display purposes
         const lineTotal = amount * quantity;
-        totalPercentageRate += lineTotal > 0 ? (individualTaxAmount / lineTotal) : 0;
+        totalPercentageRate +=
+          lineTotal > 0 ? individualTaxAmount / lineTotal : 0;
       }
     }
-    
+
     return {
       totalTaxAmount,
       effectiveRate: totalPercentageRate,
     };
   }
 
-  private calculateIndividualTaxAmount(taxRate: any, amount: number, quantity: number): number {
+  private calculateIndividualTaxAmount(
+    taxRate: any,
+    amount: number,
+    quantity: number,
+  ): number {
     if (taxRate.rateType === TaxRateType.PERCENTAGE) {
       // For percentage: rate is already in decimal form (e.g., 0.08 for 8%)
       return amount * quantity * taxRate.rate;
@@ -220,29 +230,6 @@ export class TaxCalculationService {
       // For fixed amount: rate is the fixed amount per item
       return taxRate.rate * quantity;
     }
-  }
-
-  private applyTaxPrecedence(
-    taxAssignments: any[],
-    precedenceOrder: EntityType[],
-  ) {
-    // Group by entity type
-    const groupedTaxes = taxAssignments.reduce((acc, assignment) => {
-      if (!acc[assignment.entityType]) {
-        acc[assignment.entityType] = [];
-      }
-      acc[assignment.entityType].push(assignment);
-      return acc;
-    }, {});
-
-    // Apply precedence - use highest priority entity type that has taxes
-    for (const entityType of precedenceOrder) {
-      if (groupedTaxes[entityType] && groupedTaxes[entityType].length > 0) {
-        return groupedTaxes[entityType];
-      }
-    }
-
-    return [];
   }
 
   async getTaxAssignmentsByEntity(entityType: EntityType, entityId: string) {

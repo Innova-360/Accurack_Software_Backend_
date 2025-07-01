@@ -14,9 +14,10 @@ export const TaxEndpoint = {
   CalculateByEntity: (dtoType: any) =>
     applyDecorators(
       ApiTags('tax'),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Calculate tax by entity type',
-        description: 'Calculate tax for a specific entity (product, category, store, supplier)'
+        description:
+          'Calculate tax for a specific entity (product, category, store, supplier, customer)',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({ status: 200, description: 'Tax calculated successfully' }),
@@ -27,9 +28,10 @@ export const TaxEndpoint = {
   CalculateComprehensive: (dtoType: any) =>
     applyDecorators(
       ApiTags('tax'),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Calculate comprehensive tax',
-        description: 'Calculate tax considering all applicable entity types with precedence'
+        description:
+          'Calculate tax combining all applicable entity types (product, category, store, supplier, customer) - taxes are additive',
       }),
       ApiBody({ type: dtoType }),
       ApiResponse({ status: 200, description: 'Tax calculated successfully' }),
@@ -40,11 +42,14 @@ export const TaxEndpoint = {
   GetTaxAssignments: () =>
     applyDecorators(
       ApiTags('tax'),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Get tax assignments by entity',
-        description: 'Retrieve all tax assignments for a specific entity'
+        description: 'Retrieve all tax assignments for a specific entity',
       }),
-      ApiResponse({ status: 200, description: 'Tax assignments retrieved successfully' }),
+      ApiResponse({
+        status: 200,
+        description: 'Tax assignments retrieved successfully',
+      }),
       ...standardErrorResponses(),
       Version('1'),
     ),

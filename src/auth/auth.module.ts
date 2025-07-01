@@ -17,6 +17,33 @@ import { TenantContextService } from 'src/tenant/tenant-context.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 
+// Check if Google OAuth is configured
+const isGoogleOAuthConfigured = () => {
+  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+};
+
+// Create conditional providers array
+const createProviders = (): any[] => {
+  const baseProviders: any[] = [
+    AuthService,
+    JwtStrategy,
+    JwtAuthGuard,
+    GoogleOAuthGuard,
+    RolesGuard,
+    MultiTenantService, // Add MultiTenantService for tenant database creation
+  ];
+
+  // Only add GoogleStrategy if Google OAuth is properly configured
+  if (isGoogleOAuthConfigured()) {
+    baseProviders.push(GoogleStrategy);
+    console.log('✅ Google OAuth is configured - GoogleStrategy enabled');
+  } else {
+    console.log('⚠️  Google OAuth not configured - GoogleStrategy disabled');
+  }
+
+  return baseProviders;
+};
+
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
