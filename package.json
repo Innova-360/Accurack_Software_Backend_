@@ -38,6 +38,10 @@
     "prisma:migrate": "npx prisma migrate dev",
     "prisma:migrate:deploy": "npx prisma migrate deploy",
     "prisma:seed": "npx prisma db seed",
+    "fix:migrations": "chmod +x scripts/fix-migrations.sh && ./scripts/fix-migrations.sh",
+    "fix:migrations:win": "scripts\\fix-migrations.bat",
+    "migration:status": "npx prisma migrate status",
+    "migration:reset": "npx prisma migrate reset --force",
     "prisma:reset": "npx prisma migrate reset",
     "prisma:studio": "npx prisma studio"
   },

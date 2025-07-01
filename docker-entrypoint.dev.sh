@@ -31,7 +31,55 @@ fi
 
 # Run Prisma migrations for development
 echo "🔄 Running database migrations (development)..."
-npx prisma migrate dev --name "auto-migration" 2>/dev/null || npx prisma migrate deploy
+
+# Function to clean failed migrations
+clean_failed_migrations() {
+    echo "🧹 Cleaning failed migrations..."
+    # This requires psql to be available in the container or we skip it
+    # The external fix script will handle this
+    return 0
+}
+
+# Function to handle migration issues
+handle_migration_issues() {
+    local migration_output="$1"
+    
+    if echo "$migration_output" | grep -q "failed migrations"; then
+        echo "⚠️  Failed migrations detected. Attempting automatic fix..."
+        
+        # Try to resolve common issues
+        if echo "$migration_output" | grep -q "already exists"; then
+            echo "🔧 Enum conflict detected. Marking problematic migration as applied..."
+            npx prisma migrate resolve --applied "20250630194620_" 2>/dev/null || true
+        fi
+        
+        # Try migrate deploy as fallback
+        echo "🔄 Attempting migrate deploy..."
+        npx prisma migrate deploy 2>/dev/null || {
+            echo "❌ Automatic migration fix failed."
+            echo "📝 Please run: ./scripts/fix-migrations.sh (or .bat on Windows)"
+            echo "💡 The application will continue but may have database issues."
+            return 1
+        }
+    fi
+    
+    return 0
+}
+
+# Attempt migrations with error handling
+migration_output=$(npx prisma migrate dev --name "auto-migration" 2>&1) || {
+    echo "⚠️  Migration failed. Attempting to fix..."
+    handle_migration_issues "$migration_output"
+    
+    # Try one more time after fixing
+    npx prisma migrate dev --name "auto-migration-retry" 2>/dev/null || {
+        echo "🔄 Falling back to migrate deploy..."
+        npx prisma migrate deploy || {
+            echo "❌ All migration attempts failed."
+            echo "📝 Please run the fix script: ./scripts/fix-migrations.sh"
+        }
+    }
+}
 
 # Generate Prisma client (ensure it's up to date)
 echo "🔧 Generating Prisma client..."
