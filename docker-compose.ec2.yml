@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  backend:
+    image: ${IMAGE_URI:-418272791309.dkr.ecr.us-east-1.amazonaws.com/accurack-backend:latest}
+    container_name: accurack_backend_prod
+    restart: unless-stopped
+    ports:
+      - '4000:4000'
+    environment:
+      - NODE_ENV=production
+
+      # Database Configuration (RDS)
+      - DATABASE_URL=${DATABASE_URL}
+
+      # JWT Configuration
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - JWT_ACCESS_EXPIRES_IN=${JWT_ACCESS_EXPIRES_IN:-24h}
+      - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN:-7d}
+
+      # Google OAuth Configuration
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
+
+      # Email Configuration (Gmail/SMTP)
+      - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID}
+      - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
+      - GMAIL_REDIRECT_URI=${GMAIL_REDIRECT_URI}
+      - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
+      - GMAIL_USER=${GMAIL_USER}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+
+      # Frontend Configuration
+      - FRONTEND_URL=${FRONTEND_URL}
+
+      # AWS Configuration
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+
+      # Encryption
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:4000/api/v1/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s # Give more time for startup on t2.micro
+
+    deploy:
+      resources:
+        limits:
+          memory: 700M # Leave 300MB for system on t2.micro (1GB total)
+        reservations:
+          memory: 500M
+
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+networks:
+  default:
+    name: accurack-network
