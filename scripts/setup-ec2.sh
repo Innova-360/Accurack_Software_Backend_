@@ -43,19 +43,87 @@ npm --version
 
 # Install AWS CLI v2
 echo "☁️ Installing AWS CLI v2..."
-if ! command -v aws &> /dev/null; then
-    echo "📥 Downloading AWS CLI v2..."
-    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-    unzip awscliv2.zip
-    sudo ./aws/install
-    rm -rf awscliv2.zip aws/
-else
-    echo "✅ AWS CLI v2 already installed, skipping..."
+
+# Function to completely uninstall AWS CLI
+uninstall_aws_cli() {
+    echo "🗑️ Completely removing existing AWS CLI installations..."
+    
+    # Remove AWS CLI v2 installation
+    sudo rm -rf /usr/local/aws-cli
+    sudo rm -f /usr/local/bin/aws
+    sudo rm -f /usr/local/bin/aws_completer
+    
+    # Remove AWS CLI v1 if installed via package manager
+    sudo apt remove -y awscli || true
+    
+    # Remove AWS CLI v1 if installed via pip (only if pip exists)
+    if command -v pip &> /dev/null; then
+        sudo pip uninstall -y awscli || true
+    fi
+    if command -v pip3 &> /dev/null; then
+        sudo pip3 uninstall -y awscli || true
+    fi
+    
+    # Remove any cached/config files
+    rm -rf ~/.aws/cli/cache || true
+    
+    echo "✅ AWS CLI uninstallation complete"
+}
+
+# Check if AWS CLI exists and handle accordingly
+if command -v aws &> /dev/null; then
+    echo "⚠️ Existing AWS CLI found. Checking version..."
+    aws --version || echo "❌ AWS CLI version check failed - corrupted installation"
+    
+    # Ask if user wants to reinstall (for interactive use) or just reinstall automatically
+    echo "🔄 Performing clean reinstallation of AWS CLI..."
+    uninstall_aws_cli
 fi
+
+# Fresh installation of AWS CLI v2
+echo "📥 Downloading and installing fresh AWS CLI v2..."
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+
+# Try installation with error handling
+echo "🔧 Installing AWS CLI v2..."
+if sudo ./aws/install --update; then
+    echo "✅ AWS CLI v2 installed successfully"
+else
+    echo "⚠️ Standard installation failed, trying alternative method..."
+    
+    # Clean up failed installation
+    sudo rm -rf /usr/local/aws-cli /usr/local/bin/aws /usr/local/bin/aws_completer
+    
+    # Try without --update flag
+    if sudo ./aws/install; then
+        echo "✅ AWS CLI v2 installed successfully (alternative method)"
+    else
+        echo "❌ AWS CLI installation failed with both methods"
+        echo "🔄 Trying manual extraction method..."
+        
+        # Manual extraction method
+        sudo mkdir -p /usr/local/aws-cli
+        sudo cp -r aws/* /usr/local/aws-cli/
+        sudo ln -sf /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
+        sudo ln -sf /usr/local/aws-cli/v2/current/bin/aws_completer /usr/local/bin/aws_completer
+        
+        echo "✅ AWS CLI v2 installed manually"
+    fi
+fi
+
+rm -rf awscliv2.zip aws/
 
 # Verify AWS CLI installation
 echo "🔍 Verifying AWS CLI installation..."
 aws --version
+
+# Ensure aws command is in PATH
+if ! command -v aws &> /dev/null; then
+    echo "⚠️ AWS CLI not in PATH, adding to current session..."
+    export PATH="/usr/local/bin:$PATH"
+    echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bashrc
+fi
 
 # Create app directory (we're already in /home/ubuntu/accurack)
 echo "📁 Setting up application directory..."
