@@ -274,7 +274,7 @@ export class TaxService {
   }
 
   /**
-   * Bulk assign taxes to multiple entities (product, category, store, supplier) in one call.
+   * Bulk assign taxes to multiple entities (product, category, store, supplier, customer) in one call.
    */
   async bulkAssignTaxes(assignments: AssignTaxDto[]) {
     const prisma = await this.tenantContext.getPrismaClient();

@@ -1,0 +1,45 @@
+# Development Dockerfile - Optimized for hot reload
+FROM node:22-alpine
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init netcat-openbsd
+
+# Create app directory
+WORKDIR /app
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nestjs -u 1001
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig*.json ./
+COPY nest-cli.json ./
+
+# Install all dependencies (including dev dependencies for development)
+RUN npm ci
+
+# Copy Prisma schema first (for better caching)
+COPY prisma ./prisma/
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Copy source code
+COPY . .
+
+# Ensure entrypoint scripts are executable
+RUN chmod +x docker-entrypoint.sh docker-entrypoint.dev.sh || true
+
+# Change ownership to nodejs user
+RUN chown -R nestjs:nodejs /app
+USER nestjs
+
+# Expose port
+EXPOSE 4000
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start in development mode with migrations
+CMD ["./docker-entrypoint.dev.sh"]

@@ -13,6 +13,7 @@ import { EmployeeModule } from './employee/employee.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 import { SaleModule } from './sale/sale.module';
 import { TaxModule } from './tax/tax.module';
+import { HealthController } from './health/health.controller';
 
 @Module({
   imports: [
@@ -35,6 +36,6 @@ import { TaxModule } from './tax/tax.module';
       useClass: TenantContextInterceptor,
     },
   ],
-  controllers: [],
+  controllers: [HealthController],
 })
 export class AppModule {}

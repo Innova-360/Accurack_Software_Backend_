@@ -3,7 +3,10 @@ import { EntityType } from '@prisma/client';
 import { IsEnum, IsString, IsNumber, IsOptional, Min } from 'class-validator';
 
 export class CalculateTaxByEntityDto {
-  @ApiProperty({ enum: EntityType, description: 'Type of entity to calculate tax for' })
+  @ApiProperty({
+    enum: EntityType,
+    description: 'Type of entity to calculate tax for',
+  })
   @IsEnum(EntityType)
   entityType: EntityType;
 
@@ -43,6 +46,11 @@ export class CalculateComprehensiveTaxDto {
   @IsString()
   supplierId?: string;
 
+  @ApiPropertyOptional({ description: 'Customer ID' })
+  @IsOptional()
+  @IsString()
+  customerId?: string;
+
   @ApiPropertyOptional({ description: 'Quantity for calculation', minimum: 1 })
   @IsOptional()
   @IsNumber()
@@ -63,7 +71,10 @@ export class TaxCalculationResponseDto {
   @ApiProperty({ description: 'Effective tax rate applied' })
   effectiveRate: number;
 
-  @ApiProperty({ description: 'Entity type used for calculation', enum: EntityType })
+  @ApiProperty({
+    description: 'Entity type used for calculation',
+    enum: EntityType,
+  })
   entityType?: EntityType;
 
   @ApiProperty({ description: 'Entity ID used for calculation' })
