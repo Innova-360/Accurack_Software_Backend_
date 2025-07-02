@@ -34,7 +34,7 @@
     "deploy:logs": "chmod +x scripts/deploy.sh && ./scripts/deploy.sh logs",
     "deploy:stop": "chmod +x scripts/deploy.sh && ./scripts/deploy.sh stop",
     "deploy:restart": "chmod +x scripts/deploy.sh && ./scripts/deploy.sh restart",
-    "deploy:render": "npm run build && npm run migrate && npm run start:prod",
+    "deploy:render": "npm install && npm run build && npm run migrate",
     "prisma:generate": "npx prisma generate",
     "migrate": "node --max-old-space-size=4096 node_modules/.bin/prisma migrate deploy",
     "prisma:migrate": "npx prisma migrate dev",
