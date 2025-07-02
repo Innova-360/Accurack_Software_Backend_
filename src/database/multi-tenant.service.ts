@@ -135,7 +135,7 @@ export class MultiTenantService {
       this.logger.log(`Initializing schema for database: ${databaseName}`);
 
       // Create DATABASE_URL for the new tenant
-      let tenantDatabaseUrl = `postgresql://${userName}:${password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${databaseName}`;
+      let tenantDatabaseUrl = `postgresql://${userName}:${password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${databaseName}?sslmode=require`;
       if (process.env.NODE_ENV === 'production') {
         tenantDatabaseUrl += '?sslmode=require';
       }
