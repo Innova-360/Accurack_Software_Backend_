@@ -3,7 +3,7 @@ import { Response } from 'express';
 export interface CookieConfig {
   httpOnly?: boolean;
   secure?: boolean;
-  sameSite?: 'strict' | 'lax' | 'none';
+  sameSite?: 'lax' | 'none';
   maxAge?: number;
   path?: string;
 }
@@ -25,7 +25,7 @@ export class CookieHelper {
     return {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
     };
   }
 
@@ -68,7 +68,7 @@ export class CookieHelper {
       path: '/',
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
     };
 
     // Clear all possible cookie names

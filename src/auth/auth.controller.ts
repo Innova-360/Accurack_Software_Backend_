@@ -113,7 +113,7 @@ export class AuthController extends BaseAuthController {
     res.cookie('accessToken', resp.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'none',
+      sameSite: 'lax',
     });
 
     res.cookie('refreshToken', resp.refreshToken, {
