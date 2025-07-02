@@ -348,8 +348,7 @@ export class StoreService {
     });
   }
 
- 
-}
+
 
  async updateStore(user: any, storeId: string, dto: UpdateStoreDto) {
     if (user.role !== Role.super_admin && user.role !== Role.admin) {

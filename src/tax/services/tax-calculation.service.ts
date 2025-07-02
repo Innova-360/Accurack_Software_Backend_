@@ -121,7 +121,7 @@ export class TaxCalculationService {
 
     if (dto.customerId) {
       entityQueries.push({
-        entityType: EntityType.CUSTOMER,
+        entityType: EntityType.CATEGORY,
         entityId: dto.customerId,
       });
     }

@@ -1035,46 +1035,108 @@ export class ProductService {
 
     const prisma = await this.tenantContext.getPrismaClient();
 
-    const products = await prisma.products.findMany({
-      where: { storeId },
-      select: { id: true },
-    });
+    // Use transaction with 240 seconds timeout for bulk delete operations
+    await prisma.$transaction(
+      async (prisma) => {
+        // First, find all products in the store
+        const products = await prisma.products.findMany({
+          where: { storeId },
+          select: { id: true },
+        });
 
-    if (!products || products.length === 0) {
-      throw new NotFoundException('No products found for this store.');
-    }
+        if (!products || products.length === 0) {
+          throw new NotFoundException('No products found for this store.');
+        }
 
-    const productIds = products.map((p) => p.id);
+        const productIds = products.map((p) => p.id);
+        console.log(`Deleting ${productIds.length} products from store ${storeId}`);
 
-    // Delete associated packs
-    await Promise.all(
-      productIds.map((productId) =>
-        prisma.pack.deleteMany({ where: { productId } }),
-      ),
-    );
+        // Delete associated records in batches for better performance
+        const batchSize = 500;
+        const batches: string[][] = [];
+        for (let i = 0; i < productIds.length; i += batchSize) {
+          batches.push(productIds.slice(i, i + batchSize));
+        }
 
-    // Perform hard delete (current behavior)
-    await Promise.all(
-      productIds.map((productId) =>
-        prisma.products.delete({ where: { id: productId } }),
-      ),
+        // Delete associated packs in batches
+        for (const batch of batches) {
+          await prisma.pack.deleteMany({
+            where: { productId: { in: batch } },
+          });
+        }
+
+        // Delete associated product suppliers in batches
+        for (const batch of batches) {
+          await prisma.productSupplier.deleteMany({
+            where: { productId: { in: batch } },
+          });
+        }
+
+        // Delete associated sale items in batches (if any)
+        for (const batch of batches) {
+          await prisma.saleItem.deleteMany({
+            where: { productId: { in: batch } },
+          });
+        }
+
+        // Delete associated purchase orders in batches (if any)
+        for (const batch of batches) {
+          await prisma.purchaseOrders.deleteMany({
+            where: { productId: { in: batch } },
+          });
+        }
+
+        // Finally, delete all products in batches
+        for (const batch of batches) {
+          await prisma.products.deleteMany({
+            where: { id: { in: batch } },
+          });
+        }
+
+        console.log(`Successfully deleted ${productIds.length} products from store ${storeId}`);
+      },
+      {
+        timeout: 240000, // 240 seconds timeout for large delete operations
+      },
     );
 
     return;
     // 📌 Future: Soft delete alternative (uncomment when needed)
     /*
-  await Promise.all(
-    productIds.map(productId =>
-      prisma.products.update({
-        where: { id: productId },
-        data: {
-          updatedAt: new Date(), // Marker for soft delete
-          // If you add a `deleted` or `isDeleted` field later, you can set it here
-        },
-      }),
-    ),
-  );
-  */
+    await prisma.$transaction(
+      async (prisma) => {
+        const products = await prisma.products.findMany({
+          where: { storeId },
+          select: { id: true },
+        });
+
+        if (!products || products.length === 0) {
+          throw new NotFoundException('No products found for this store.');
+        }
+
+        const productIds = products.map((p) => p.id);
+        const batchSize = 500;
+        const batches = [];
+        for (let i = 0; i < productIds.length; i += batchSize) {
+          batches.push(productIds.slice(i, i + batchSize));
+        }
+
+        // Soft delete by updating updatedAt (marker for soft delete)
+        for (const batch of batches) {
+          await prisma.products.updateMany({
+            where: { id: { in: batch } },
+            data: {
+              updatedAt: new Date(), // Marker for soft delete
+              // If you add a `deleted` or `isDeleted` field later, you can set it here
+            },
+          });
+        }
+      },
+      {
+        timeout: 240000, // 240 seconds timeout
+      },
+    );
+    */
 
     // No return value; global interceptor can format response
   }
