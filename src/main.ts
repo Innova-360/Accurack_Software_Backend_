@@ -22,7 +22,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   // Add cookie parser middleware
   app.use(cookieParser());
-
+  console.log('Environment Variables:');
   // Apply global filters and interceptors
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalInterceptors(new ResponseInterceptor(app.get(Reflector)));
