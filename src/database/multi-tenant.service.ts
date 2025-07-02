@@ -21,10 +21,7 @@ export class MultiTenantService {
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,
-      ssl:
-        process.env.NODE_ENV === 'production'
-          ? { rejectUnauthorized: false }
-          : false,
+      ssl: { rejectUnauthorized: false },
     });
 
     // Initialize master database on startup
@@ -61,10 +58,7 @@ export class MultiTenantService {
         password: process.env.DB_PASSWORD || 'secure_password', // Master admin password
         database: databaseName, // New tenant database
         max: 2,
-        ssl:
-          process.env.NODE_ENV === 'production'
-            ? { rejectUnauthorized: false }
-            : false,
+        ssl: { rejectUnauthorized: false },
       });
 
       try {
@@ -135,10 +129,9 @@ export class MultiTenantService {
       this.logger.log(`Initializing schema for database: ${databaseName}`);
 
       // Create DATABASE_URL for the new tenant
-      let tenantDatabaseUrl = `postgresql://${userName}:${password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${databaseName}?sslmode=require`;
-      if (process.env.NODE_ENV === 'production') {
-        tenantDatabaseUrl += '?sslmode=require';
-      }
+      const tenantDatabaseUrl = `postgresql://${userName}:${password}@${
+        process.env.DB_HOST || 'localhost'
+      }:${process.env.DB_PORT || '5432'}/${databaseName}?sslmode=require`;
 
       // Try Method 1: Use Prisma CLI
       try {
@@ -178,10 +171,7 @@ export class MultiTenantService {
       const testPool = new Pool({
         connectionString: databaseUrl,
         max: 1,
-        ssl:
-          process.env.NODE_ENV === 'production'
-            ? { rejectUnauthorized: false }
-            : false,
+        ssl: { rejectUnauthorized: false },
       });
 
       try {
@@ -240,10 +230,7 @@ export class MultiTenantService {
         password: password,
         database: databaseName,
         max: 2, // Small pool for schema creation
-        ssl:
-          process.env.NODE_ENV === 'production'
-            ? { rejectUnauthorized: false }
-            : false,
+        ssl: { rejectUnauthorized: false },
       }); // Generate schema SQL from Prisma
       const { stdout: schemaSql } = await execAsync(
         'npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script',
@@ -317,10 +304,7 @@ export class MultiTenantService {
       max: 5,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,
-      ssl:
-        process.env.NODE_ENV === 'production'
-          ? { rejectUnauthorized: false }
-          : false,
+      ssl: { rejectUnauthorized: false },
     });
 
     pool.on('error', (err) => {
@@ -632,10 +616,7 @@ export class MultiTenantService {
         password: password,
         database: databaseName,
         max: 2,
-        ssl:
-          process.env.NODE_ENV === 'production'
-            ? { rejectUnauthorized: false }
-            : false,
+        ssl: { rejectUnauthorized: false },
       });
 
       const client = await tenantPool.connect();
@@ -789,10 +770,7 @@ export class MultiTenantService {
         password: password,
         database: databaseName,
         max: 2,
-        ssl:
-          process.env.NODE_ENV === 'production'
-            ? { rejectUnauthorized: false }
-            : false,
+        ssl: { rejectUnauthorized: false },
       });
 
       const client = await tenantPool.connect();
