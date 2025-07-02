@@ -134,7 +134,34 @@ export class TaxService {
   }
   async getTaxRateById(id: string) {
     const prisma = await this.tenantContext.getPrismaClient();
-    const found = await prisma.taxRate.findUnique({ where: { id } });
+    const found = await prisma.taxRate.findUnique({
+      where: { id },
+      include: {
+        region: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true,
+          },
+        },
+        taxType: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            payer: true,
+          },
+        },
+        taxCode: {
+          select: {
+            id: true,
+            code: true,
+            description: true,
+          },
+        },
+      },
+    });
     if (!found) throw new NotFoundException('TaxRate not found');
     return found;
   }
