@@ -1,4 +1,15 @@
-import { IsUUID, IsString, IsNumber, IsEnum, IsOptional, IsBoolean, IsArray, ValidateNested, IsPositive, IsEmail } from 'class-validator';
+import {
+  IsUUID,
+  IsString,
+  IsNumber,
+  IsEnum,
+  IsOptional,
+  IsBoolean,
+  IsArray,
+  ValidateNested,
+  IsPositive,
+  IsEmail,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -7,7 +18,7 @@ export enum PaymentMethod {
   CARD = 'CARD',
   BANK_TRANSFER = 'BANK_TRANSFER',
   CHECK = 'CHECK',
-  DIGITAL_WALLET = 'DIGITAL_WALLET'
+  DIGITAL_WALLET = 'DIGITAL_WALLET',
 }
 
 export enum SaleStatus {
@@ -15,20 +26,20 @@ export enum SaleStatus {
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
   REFUNDED = 'REFUNDED',
-  PARTIALLY_RETURNED = 'PARTIALLY_RETURNED'
+  PARTIALLY_RETURNED = 'PARTIALLY_RETURNED',
 }
 
 export enum ReturnCategory {
   SALEABLE = 'SALEABLE',
   NON_SALEABLE = 'NON_SALEABLE',
-  SCRAP = 'SCRAP'
+  SCRAP = 'SCRAP',
 }
 
 export enum PaymentStatus {
   PAID = 'PAID',
   PARTIAL = 'PARTIAL',
   UNPAID = 'UNPAID',
-  OVERDUE = 'OVERDUE'
+  OVERDUE = 'OVERDUE',
 }
 
 export class CreateCustomerDto {
@@ -115,7 +126,10 @@ export class SaleItemDto {
 }
 
 export class CreateSaleDto {
-  @ApiProperty({ description: 'Customer phone number (for existing customer) or customer data' })
+  @ApiProperty({
+    description:
+      'Customer phone number (for existing customer) or customer data',
+  })
   @IsString()
   customerPhone: string;
 
@@ -147,11 +161,10 @@ export class CreateSaleDto {
   @IsNumber()
   tax?: number;
 
-   @ApiPropertyOptional({ description: 'allowance amount', default: 0 })
+  @ApiPropertyOptional({ description: 'allowance amount', default: 0 })
   @IsOptional()
   @IsNumber()
   allowance?: number;
-
 
   @ApiProperty({ description: 'Cashier name' })
   @IsString()
@@ -259,7 +272,9 @@ export class CreatePaymentDto {
   @IsUUID()
   customerId: string;
 
-  @ApiPropertyOptional({ description: 'Sale ID (if payment is for specific sale)' })
+  @ApiPropertyOptional({
+    description: 'Sale ID (if payment is for specific sale)',
+  })
   @IsOptional()
   @IsUUID()
   saleId?: string;
@@ -306,12 +321,12 @@ export class SaleQueryDto {
   @ApiPropertyOptional({ description: 'Page number', default: 1 })
   @IsOptional()
   @IsNumber()
-  page?: number = 1;
+  page?: string = '1';
 
   @ApiPropertyOptional({ description: 'Limit per page', default: 20 })
   @IsOptional()
   @IsNumber()
-  limit?: number = 20;
+  limit?: string = '20';
 
   @ApiPropertyOptional({ description: 'Customer ID filter' })
   @IsOptional()
@@ -323,7 +338,10 @@ export class SaleQueryDto {
   @IsEnum(SaleStatus)
   status?: SaleStatus;
 
-  @ApiPropertyOptional({ description: 'Payment method filter', enum: PaymentMethod })
+  @ApiPropertyOptional({
+    description: 'Payment method filter',
+    enum: PaymentMethod,
+  })
   @IsOptional()
   @IsEnum(PaymentMethod)
   paymentMethod?: PaymentMethod;

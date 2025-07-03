@@ -417,7 +417,7 @@ export class SaleService {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(total / Number(limit)),
     };
   }
 
