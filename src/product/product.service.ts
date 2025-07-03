@@ -179,29 +179,17 @@ export class ProductService {
       variants: product.variants || [],
     };
   }
+    
+    
   async createProduct(
     user: any,
     createProductDto: CreateProductDto,
   ): Promise<ProductResponseDto> {
     this.validateProductOperationPermissions(user, 'create');
 
-    console.log("createproductdto",createProductDto)
+    console.log('createproductdto', createProductDto);
 
     const prisma = await this.tenantContext.getPrismaClient();
-    // Validate PLU uniqueness for non-variant products (only if PLU is provided)
-    // if (!createProductDto.hasVariants && createProductDto.pluUpc) {
-    //   await this.validatePluUniqueness(async (plu: string) => {
-    //     const existing = await prisma.products.findFirst({
-    //       where: { pluUpc: plu },
-    //     });
-    //     return !!existing;
-    //   }, createProductDto.pluUpc);
-    // }
-
-    // Validate PLU uniqueness for variants (if product has variants)
-    // if (createProductDto.hasVariants && createProductDto.variants) {
-    //   await this.validateVariantPluUniqueness(createProductDto.variants);
-    // }
 
     // Validate clientId and storeId
     if (!createProductDto.clientId || !createProductDto.storeId) {
@@ -228,10 +216,10 @@ export class ProductService {
         'Store does not belong to the specified client',
       );
     }
+
     const existingCategory = await prisma.category.findFirst({
       where: { id: createProductDto.categoryId },
     });
-
     if (!existingCategory) {
       throw new BadRequestException(
         'Invalid categoryId - category does not exist',
@@ -262,13 +250,11 @@ export class ProductService {
 
     // Validate PLU/UPC logic based on hasVariants
     if (createProductDto.hasVariants) {
-      // For variant products, PLU/UPC should be empty at product level
       if (createProductDto.pluUpc) {
         throw new BadRequestException(
           'PLU/UPC must be empty for products with variants. Each variant should have its own PLU/UPC.',
         );
       }
-      // Ensure variants exist if hasVariants is true
       if (
         !createProductDto.variants ||
         createProductDto.variants.length === 0
@@ -277,36 +263,31 @@ export class ProductService {
           'At least one variant must be provided when hasVariants is true',
         );
       }
-    } else {
-      // For non-variant products, PLU/UPC is at product level (optional)
-      // No additional validation needed as PLU/UPC is already optionals
     }
 
-    // Validate ProductSupplier relationships (optional - products can exist without suppliers)
-    // if (
-    //   createProductDto.productSuppliers &&
-    //   createProductDto.productSuppliers.length > 0
-    // ) {
-    //   // Validate that at least one supplier is marked as primary
-    //   const primarySuppliers = createProductDto.productSuppliers.filter(
-    //     (ps) => ps.state === 'primary',
-    //   );
-    //   if (primarySuppliers.length === 0) {
-    //     throw new BadRequestException(
-    //       'At least one supplier must be marked as primary',
-    //     );
-    //   }
-    //   if (primarySuppliers.length > 1) {
-    //     throw new BadRequestException(
-    //       'Only one supplier can be marked as primary',
-    //     );
-    //   }
-    // }
+    // Validate ProductSupplier relationships (optional)
+    if (
+      createProductDto.productSuppliers &&
+      createProductDto.productSuppliers.length > 0
+    ) {
+      const primarySuppliers = createProductDto.productSuppliers.filter(
+        (ps) => ps.state === 'primary',
+      );
+      if (primarySuppliers.length === 0) {
+        throw new BadRequestException(
+          'At least one supplier must be marked as primary',
+        );
+      }
+      if (primarySuppliers.length > 1) {
+        throw new BadRequestException(
+          'Only one supplier can be marked as primary',
+        );
+      }
+    }
 
-    // Create the product first without supplier reference (products can exist without suppliers)
+    // Create the product
     let product: any;
     try {
-      // Prepare create data with proper typing
       const createData: any = {
         name: createProductDto.name,
         categoryId: createProductDto.categoryId,
@@ -324,7 +305,6 @@ export class ProductService {
         variants: [],
       };
 
-      // Only set pluUpc if hasVariants is false and pluUpc is provided
       if (!createProductDto.hasVariants && createProductDto.pluUpc) {
         createData.pluUpc = createProductDto.pluUpc;
       }
@@ -350,7 +330,6 @@ export class ProductService {
         },
       });
     } catch (error: any) {
-      // Handle foreign key constraint violations
       console.log('Error creating product:', error);
       if (error.code === 'P2003') {
         throw new BadRequestException(
@@ -358,19 +337,22 @@ export class ProductService {
         );
       }
       throw error;
-    } // Create ProductSupplier relationships
+    }
+
+    // Handle supplier relationships
+    const assignedSuppliers = new Set<string>();
+    
     if (
       createProductDto.productSuppliers &&
       createProductDto.productSuppliers.length > 0
     ) {
-      // Validate that all suppliers exist
       const supplierIds = createProductDto.productSuppliers.map(
         (ps) => ps.supplierId,
       );
       const existingSuppliers = await prisma.suppliers.findMany({
         where: {
           id: { in: supplierIds },
-          storeId: createProductDto.storeId, // Ensure suppliers belong to the same store
+          storeId: createProductDto.storeId,
         },
       });
 
@@ -383,12 +365,10 @@ export class ProductService {
         );
       }
 
-      // Always set the category field in productSupplier to the actual category name from the product's category
-      // const categoryName = existingCategory?.name || '';
-
       await Promise.all(
-        createProductDto.productSuppliers.map((supplierData) =>
-          prisma.productSupplier.create({
+        createProductDto.productSuppliers.map((supplierData) => {
+          assignedSuppliers.add(supplierData.supplierId);
+          return prisma.productSupplier.create({
             data: {
               productId: product.id,
               supplierId: supplierData.supplierId,
@@ -396,37 +376,41 @@ export class ProductService {
               categoryId: createProductDto.categoryId,
               state: supplierData.state,
             },
-          }),
-        ),
+          });
+        }),
       );
-    }else{
+    } else if (createProductDto.supplierId && !createProductDto.hasVariants) {
+      // Only create productSupplier for non-variant products if supplierId is provided
       const supplierData = await prisma.suppliers.findFirst({
         where: {
           id: createProductDto.supplierId,
-          storeId: createProductDto.storeId, // Ensure suppliers belong to the same store
+          storeId: createProductDto.storeId,
         },
       });
 
+      if (!supplierData) {
+        throw new BadRequestException(
+          `Invalid supplierId: ${createProductDto.supplierId} - supplier does not exist or does not belong to this store`,
+        );
+      }
+
+      assignedSuppliers.add(createProductDto.supplierId);
       await prisma.productSupplier.create({
-            data: {
-              productId: product.id,
-              supplierId: createProductDto.supplierId,
-              costPrice: Number(createProductDto.singleItemCostPrice),
-              categoryId: createProductDto.categoryId,
-              state : SupplierState.primary,
-            },
+        data: {
+          productId: product.id,
+          supplierId: createProductDto.supplierId,
+          costPrice: Number(createProductDto.singleItemCostPrice) || 0,
+          categoryId: createProductDto.categoryId,
+          state: SupplierState.primary,
+        },
       });
     }
-
-
-    
 
     let packIds: string[] = [];
     let variantsWithPacks: any[] = [];
 
-    // Handle pack creation based on hasVariants
+    // Handle pack and variant creation
     if (createProductDto.hasVariants && createProductDto.variants) {
-      // Create packs for variants and store packIds in variants
       variantsWithPacks = await Promise.all(
         createProductDto.variants.map(async (variant) => {
           let variantPackIds: string[] = [];
@@ -435,12 +419,12 @@ export class ProductService {
               variant.packs.map((pack) =>
                 prisma.pack.create({
                   data: {
-                    productId: product.id, // Use valid productId
+                    productId: product.id,
                     minimumSellingQuantity: pack.minimumSellingQuantity,
                     totalPacksQuantity: pack.totalPacksQuantity,
                     orderedPacksPrice: pack.orderedPacksPrice,
-                    discountAmount: pack.discountAmount || 0,
-                    percentDiscount: pack.percentDiscount || 0,
+                    discountAmount: Number(pack.discountAmount) || 0,
+                    percentDiscount: Number(pack.percentDiscount) || 0,
                   },
                   select: { id: true },
                 }),
@@ -448,21 +432,67 @@ export class ProductService {
             );
             variantPackIds = createdPacks.map((pack) => pack.id);
           }
+
+          // Validate variant supplierId if provided
+          let validatedSupplierId: string | null = null;
+          if (variant.supplierId) {
+            const supplierData = await prisma.suppliers.findFirst({
+              where: {
+                id: variant.supplierId,
+                storeId: createProductDto.storeId,
+              },
+            });
+            if (!supplierData) {
+              throw new BadRequestException(
+                `Invalid supplierId: ${variant.supplierId} for variant ${variant.name} - supplier does not exist or does not belong to this store`,
+              );
+            }
+            validatedSupplierId = variant.supplierId;
+
+            // Handle ProductSupplier creation/update for variant suppliers
+            if (assignedSuppliers.has(variant.supplierId)) {
+              // Supplier already exists for this product, update the cost price if needed
+              // We'll use the variant's price as the cost price for this supplier relationship
+              await prisma.productSupplier.updateMany({
+                where: {
+                  productId: product.id,
+                  supplierId: variant.supplierId,
+                },
+                data: {
+                  costPrice: Number(variant.price) || 0,
+                  // Keep existing state and categoryId
+                },
+              });
+            } else {
+              // New supplier for this product, create new ProductSupplier record
+              await prisma.productSupplier.create({
+                data: {
+                  productId: product.id,
+                  supplierId: variant.supplierId,
+                  costPrice: Number(variant.price) || 0,
+                  categoryId: createProductDto.categoryId,
+                  state: SupplierState.secondary, // Variant suppliers default to secondary
+                },
+              });
+              // Mark this supplier as assigned
+              assignedSuppliers.add(variant.supplierId);
+            }
+          }
+
           return {
             name: variant.name,
             price: variant.price,
             pluUpc: variant.pluUpc,
             packIds: variantPackIds,
-            quantity: variant.quantity || 0, // Ensure quantity is set
+            quantity: variant.quantity || 0,
             msrpPrice: variant.msrpPrice || 0,
-            supplierId: variant.supplierId || null, // Optional supplierId
-            discountAmount: Number(variant.discountAmount),
-            percentDiscount: Number(variant.percentDiscount),
+            supplierId: validatedSupplierId,
+            discountAmount: Number(variant.discountAmount) || 0,
+            percentDiscount: Number(variant.percentDiscount) || 0,
           };
         }),
       );
 
-      // Update product with variants
       await prisma.products.update({
         where: { id: product.id },
         data: {
@@ -470,17 +500,16 @@ export class ProductService {
         },
       });
     } else if (createProductDto.packs && createProductDto.packs.length > 0) {
-      // Create packs for non-variant products and store packIds in product
       const createdPacks = await Promise.all(
         createProductDto.packs.map((pack) =>
           prisma.pack.create({
             data: {
-              productId: product.id, // Use valid productId
+              productId: product.id,
               minimumSellingQuantity: pack.minimumSellingQuantity,
               totalPacksQuantity: pack.totalPacksQuantity,
               orderedPacksPrice: pack.orderedPacksPrice,
-              discountAmount: Number(pack.discountAmount),
-              percentDiscount: Number(pack.percentDiscount),
+              discountAmount: Number(pack.discountAmount) || 0,
+              percentDiscount: Number(pack.percentDiscount) || 0,
             },
             select: { id: true },
           }),
@@ -488,7 +517,6 @@ export class ProductService {
       );
       packIds = createdPacks.map((pack) => pack.id);
 
-      // Update product with packIds
       await prisma.products.update({
         where: { id: product.id },
         data: {
@@ -497,12 +525,11 @@ export class ProductService {
       });
     }
 
-    // Fetch the updated product with all relations
     const updatedProduct = await prisma.products.findUnique({
       where: { id: product.id },
       include: {
         packs: true,
-        category: true, // Ensure category is included in the response
+        category: true,
         productSuppliers: {
           include: {
             supplier: true,
@@ -518,55 +545,6 @@ export class ProductService {
         purchaseOrders: true,
       },
     });
-
-    // Create a purchase order record if this is part of inventory management
-    // if (
-    //   createProductDto.supplierId &&
-    //   createProductDto.itemQuantity > 0 &&
-    //   updatedProduct
-    // ) {
-    //   try {
-    //     const employee = await this.prisma.employees.findFirst({
-    //       where: {
-    //         email: user.email,
-    //         storeId: createProductDto.storeId,
-    //       },
-    //     });
-
-    //     if (employee) {
-    //       console.log(
-    //         `Creating purchase order with employee ID: ${employee.id}`,
-    //       );
-    //       await this.prisma.purchaseOrders.create({
-    //         data: {
-    //           productId: updatedProduct.id,
-    //           supplierId: createProductDto.supplierId,
-    //           employeeId: employee.id,
-    //           storeId: createProductDto.storeId,
-    //           quantity: createProductDto.itemQuantity,
-    //           price: createProductDto.singleItemCostPrice,
-    //           total:
-    //             createProductDto.singleItemCostPrice *
-    //             createProductDto.itemQuantity,
-    //           status: 'active',
-    //         },
-    //       });
-    //       console.log('Purchase order created successfully');
-    //     } else {
-    //       console.warn(
-    //         `No employee record found for user ${user.email} in store ${createProductDto.storeId}. Skipping purchase order creation.`,
-    //       );
-    //     }
-    //   } catch (purchaseOrderError) {
-    //     console.error('Failed to create purchase order:', purchaseOrderError);
-    //     if (purchaseOrderError.code === 'P2003') {
-    //       console.error(
-    //         'Foreign key constraint failed - one of the referenced records does not exist',
-    //       );
-    //       console.error('Constraint:', purchaseOrderError.meta?.constraint);
-    //     }
-    //   }
-    // }
 
     if (!updatedProduct) {
       throw new BadRequestException('Failed to create product');
