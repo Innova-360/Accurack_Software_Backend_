@@ -105,8 +105,17 @@ export class TaxService {
   }
   async getAllTaxRates() {
     const prisma = await this.tenantContext.getPrismaClient();
+
+    // Step 1: Fetch all tax rates and their assignments
     const taxRates = await prisma.taxRate.findMany({
       select: {
+        id: true,
+        rate: true,
+        rateType: true,
+        effectiveFrom: true,
+        effectiveTo: true,
+        createdAt: true,
+        updatedAt: true,
         assignments: {
           select: {
             id: true,
@@ -116,36 +125,21 @@ export class TaxService {
           },
         },
         region: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            description: true,
-          },
+          select: { id: true, name: true, code: true, description: true },
         },
         taxType: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            payer: true,
-          },
+          select: { id: true, name: true, description: true, payer: true },
         },
-        taxCode: {
-          select: {
-            id: true,
-            code: true,
-            description: true,
-          },
-        },
+        taxCode: { select: { id: true, code: true, description: true } },
       },
     });
 
     const allAssignments = taxRates.flatMap((rate) => rate.assignments);
     if (allAssignments.length === 0) {
-      return taxRates.map((rate) => ({ ...rate, assignments: [] }));
+      return taxRates;
     }
 
+    // Step 2: Group IDs by entity type for efficient batch fetching
     const entityIdsByType = allAssignments.reduce(
       (acc, assignment) => {
         if (!acc[assignment.entityType]) {
@@ -157,10 +151,13 @@ export class TaxService {
       {} as Record<EntityType, Set<string>>,
     );
 
+    // Step 3: Fetch all entities in batches and build map with known types
+    const entityMap = new Map<string, any>();
+
     const entityPromises = Object.entries(entityIdsByType).map(
       async ([type, idsSet]) => {
         const ids = Array.from(idsSet);
-        if (ids.length === 0) return [type, new Map()];
+        if (ids.length === 0) return { type, entities: [] };
 
         let entities: any[] = [];
         switch (type) {
@@ -189,24 +186,33 @@ export class TaxService {
               where: { id: { in: ids } },
             });
             break;
+          default:
+            entities = [];
         }
-        return [type, new Map(entities.map((e) => [e.id, e]))];
+        return { type, entities };
       },
     );
 
-    const fetchedEntityTypeMaps = await Promise.all(entityPromises);
-    const entityMap = new Map(
-      fetchedEntityTypeMaps as [EntityType, Map<string, any>][],
-    );
+    const entityResults = await Promise.all(entityPromises);
 
+    // Step 4: Build the lookup map using the known entity types
+    entityResults.forEach(({ type, entities }) => {
+      entities.forEach((entity) => {
+        const key = `${type}:${entity.id}`;
+        entityMap.set(key, entity);
+      });
+    });
+
+    // Step 5: Map the fetched entities back to their assignments
     return taxRates.map((rate) => ({
       ...rate,
-      assignments: rate.assignments.map((assignment) => ({
-        ...assignment,
-        entity:
-          entityMap.get(assignment.entityType)?.get(assignment.entityId) ||
-          null,
-      })),
+      assignments: rate.assignments.map((assignment) => {
+        const key = `${assignment.entityType}:${assignment.entityId}`;
+        return {
+          ...assignment,
+          entity: entityMap.get(key) || null,
+        };
+      }),
     }));
   }
   async getTaxRateById(id: string) {
