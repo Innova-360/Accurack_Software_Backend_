@@ -445,9 +445,12 @@ export class StoreService {
       }
 
       await prisma.$transaction(async (prisma) => {
-        await prisma.userStoreMap.deleteMany({ where: { storeId } });
-        await prisma.storeSettings.deleteMany({ where: { storeId } });
-        await prisma.stores.delete({ where: { id: storeId } });
+        await prisma.stores.update({
+          where: { id: storeId },
+          data: {
+            status: Status.inactive,
+          },
+        });
       });
 
       return { message: 'Store deleted successfully' };
