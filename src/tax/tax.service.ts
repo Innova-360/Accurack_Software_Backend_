@@ -195,22 +195,53 @@ export class TaxService {
 
     const entityResults = await Promise.all(entityPromises);
 
+    // Debug: Log what we're trying to fetch and what we got back
+    console.log(
+      'DEBUG - Entity IDs by Type:',
+      JSON.stringify(
+        entityIdsByType,
+        (key, value) => {
+          if (value instanceof Set) {
+            return Array.from(value);
+          }
+          return value;
+        },
+        2,
+      ),
+    );
+
+    entityResults.forEach(({ type, entities }) => {
+      console.log(
+        `DEBUG - Fetched ${entities.length} entities for type ${type}:`,
+        entities.map((e) => e.id),
+      );
+    });
+
     // Step 4: Build the lookup map using the known entity types
     entityResults.forEach(({ type, entities }) => {
       entities.forEach((entity) => {
         const key = `${type}:${entity.id}`;
         entityMap.set(key, entity);
+        console.log(`DEBUG - Added to map: ${key}`);
       });
     });
+
+    console.log('DEBUG - Entity map size:', entityMap.size);
+    console.log('DEBUG - Entity map keys:', Array.from(entityMap.keys()));
 
     // Step 5: Map the fetched entities back to their assignments
     return taxRates.map((rate) => ({
       ...rate,
       assignments: rate.assignments.map((assignment) => {
         const key = `${assignment.entityType}:${assignment.entityId}`;
+        const foundEntity = entityMap.get(key);
+        console.log(
+          `DEBUG - Looking for key: ${key}, found:`,
+          foundEntity ? 'YES' : 'NO',
+        );
         return {
           ...assignment,
-          entity: entityMap.get(key) || null,
+          entity: foundEntity || null,
         };
       }),
     }));
