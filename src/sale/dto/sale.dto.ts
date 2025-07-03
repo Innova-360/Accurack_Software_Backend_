@@ -320,12 +320,12 @@ export class InvoiceQueryDto {
 export class SaleQueryDto {
   @ApiPropertyOptional({ description: 'Page number', default: 1 })
   @IsOptional()
-  @IsNumber()
+  @IsString()
   page?: string = '1';
 
   @ApiPropertyOptional({ description: 'Limit per page', default: 20 })
   @IsOptional()
-  @IsNumber()
+  @IsString()
   limit?: string = '20';
 
   @ApiPropertyOptional({ description: 'Customer ID filter' })
