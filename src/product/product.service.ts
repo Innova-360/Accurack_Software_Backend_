@@ -1115,7 +1115,7 @@ export class ProductService {
             supplierId,
             costPrice,
             state,
-            category: product.category || 'default',
+            categoryId: product.categoryId || null,
           },
         });
       }),
