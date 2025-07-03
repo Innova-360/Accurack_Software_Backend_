@@ -106,8 +106,15 @@ export class TaxService {
   async getAllTaxRates() {
     const prisma = await this.tenantContext.getPrismaClient();
     const taxRates = await prisma.taxRate.findMany({
-      include: {
-        assignments: true,
+      select: {
+        assignments: {
+          select: {
+            id: true,
+            entityId: true,
+            entityType: true,
+            assignedAt: true,
+          },
+        },
         region: {
           select: {
             id: true,
@@ -136,7 +143,7 @@ export class TaxService {
 
     const allAssignments = taxRates.flatMap((rate) => rate.assignments);
     if (allAssignments.length === 0) {
-      return taxRates;
+      return taxRates.map((rate) => ({ ...rate, assignments: [] }));
     }
 
     const entityIdsByType = allAssignments.reduce(
@@ -153,9 +160,9 @@ export class TaxService {
     const entityPromises = Object.entries(entityIdsByType).map(
       async ([type, idsSet]) => {
         const ids = Array.from(idsSet);
-        if (ids.length === 0) return [type, []];
+        if (ids.length === 0) return [type, new Map()];
 
-        let entities;
+        let entities: any[] = [];
         switch (type) {
           case EntityType.PRODUCT:
             entities = await prisma.products.findMany({
@@ -182,22 +189,14 @@ export class TaxService {
               where: { id: { in: ids } },
             });
             break;
-          default:
-            entities = [];
         }
-        return [type, entities];
+        return [type, new Map(entities.map((e) => [e.id, e]))];
       },
     );
 
-    const fetchedEntities = await Promise.all(entityPromises);
-    const entityMap = fetchedEntities.reduce(
-      (acc, [type, entities]) => {
-        acc[type as EntityType] = new Map(
-          (entities as any[]).map((e) => [e.id, e]),
-        );
-        return acc;
-      },
-      {} as Record<EntityType, Map<string, any>>,
+    const fetchedEntityTypeMaps = await Promise.all(entityPromises);
+    const entityMap = new Map(
+      fetchedEntityTypeMaps as [EntityType, Map<string, any>][],
     );
 
     return taxRates.map((rate) => ({
@@ -205,7 +204,8 @@ export class TaxService {
       assignments: rate.assignments.map((assignment) => ({
         ...assignment,
         entity:
-          entityMap[assignment.entityType]?.get(assignment.entityId) || null,
+          entityMap.get(assignment.entityType)?.get(assignment.entityId) ||
+          null,
       })),
     }));
   }
