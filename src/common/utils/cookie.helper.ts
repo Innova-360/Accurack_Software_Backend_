@@ -24,8 +24,8 @@ export class CookieHelper {
   private static getDefaultConfig(): CookieConfig {
     return {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: true,
+      sameSite: 'none',
     };
   }
 
@@ -67,8 +67,8 @@ export class CookieHelper {
     const clearConfig: CookieConfig = {
       path: '/',
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: true,
+      sameSite: 'none',
     };
 
     // Clear all possible cookie names
