@@ -20,6 +20,7 @@ import {
   AssignTaxDto,
 } from './dto';
 import { UpdateTaxBundleDto } from './dto/update-tax-bundle.dto';
+import { EntityType } from '@prisma/client';
 
 @Injectable()
 export class TaxService {
@@ -104,8 +105,9 @@ export class TaxService {
   }
   async getAllTaxRates() {
     const prisma = await this.tenantContext.getPrismaClient();
-    return prisma.taxRate.findMany({
+    const taxRates = await prisma.taxRate.findMany({
       include: {
+        assignments: true,
         region: {
           select: {
             id: true,
@@ -131,6 +133,81 @@ export class TaxService {
         },
       },
     });
+
+    const allAssignments = taxRates.flatMap((rate) => rate.assignments);
+    if (allAssignments.length === 0) {
+      return taxRates;
+    }
+
+    const entityIdsByType = allAssignments.reduce(
+      (acc, assignment) => {
+        if (!acc[assignment.entityType]) {
+          acc[assignment.entityType] = new Set<string>();
+        }
+        acc[assignment.entityType].add(assignment.entityId);
+        return acc;
+      },
+      {} as Record<EntityType, Set<string>>,
+    );
+
+    const entityPromises = Object.entries(entityIdsByType).map(
+      async ([type, idsSet]) => {
+        const ids = Array.from(idsSet);
+        if (ids.length === 0) return [type, []];
+
+        let entities;
+        switch (type) {
+          case EntityType.PRODUCT:
+            entities = await prisma.products.findMany({
+              where: { id: { in: ids } },
+            });
+            break;
+          case EntityType.CATEGORY:
+            entities = await prisma.category.findMany({
+              where: { id: { in: ids } },
+            });
+            break;
+          case EntityType.SUPPLIER:
+            entities = await prisma.suppliers.findMany({
+              where: { id: { in: ids } },
+            });
+            break;
+          case EntityType.STORE:
+            entities = await prisma.stores.findMany({
+              where: { id: { in: ids } },
+            });
+            break;
+          case EntityType.CUSTOMER:
+            entities = await prisma.customer.findMany({
+              where: { id: { in: ids } },
+            });
+            break;
+          default:
+            entities = [];
+        }
+        return [type, entities];
+      },
+    );
+
+    const fetchedEntities = await Promise.all(entityPromises);
+    const entityMap = fetchedEntities.reduce(
+      (acc, [type, entities]) => {
+        acc[type as EntityType] = new Map(
+          (entities as any[]).map((e) => [e.id, e]),
+        );
+        return acc;
+      },
+      {} as Record<EntityType, Map<string, any>>,
+    );
+
+    return taxRates.map((rate) => ({
+      ...rate,
+      assignments: rate.assignments.map((assignment) => ({
+        ...assignment,
+        entity:
+          entityMap[assignment.entityType]?.get(assignment.entityId) || null,
+      })),
+    }));
   }
   async getTaxRateById(id: string) {
     const prisma = await this.tenantContext.getPrismaClient();
