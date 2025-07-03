@@ -211,6 +211,15 @@ class VariantDto {
   discountAmount?: number;
 
   @ApiProperty({
+    example: 'uuid-supplier-id',
+    description: 'Supplier ID for this variant (OPTIONAL)',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  supplierId?: string;
+
+  @ApiProperty({
     type: [PackDto],
     example: [
       {
@@ -292,7 +301,8 @@ export class CreateProductDto {
 
   @ApiProperty({ example: '5465768923921', description: 'Supplier of this product' })
   @IsString()
-  supplierId: string;
+  @IsOptional()
+  supplierId?: string;
 
   @ApiProperty({
     example: 'COFFEE-001',
