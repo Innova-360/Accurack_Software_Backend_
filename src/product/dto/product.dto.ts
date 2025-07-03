@@ -21,8 +21,8 @@ class DynamicProperties {
   [key: string]: any;
 }
 
-class AssignSupplierProduct{
-   @ApiProperty({
+class AssignSupplierProduct {
+  @ApiProperty({
     example: 'uuid-product-id',
     description: 'ID of the product',
   })
@@ -38,6 +38,14 @@ class AssignSupplierProduct{
   @IsNumber()
   costPrice: number;
 
+  @ApiProperty({
+    example: 'uuid-category-id',
+    description: 'Category ID for this supplier relationship',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
 
   @ApiProperty({
     example: 'primary',
@@ -48,7 +56,10 @@ class AssignSupplierProduct{
 }
 
 export class AssignSupplierDto {
-  @ApiProperty({ example: 'uuid-supplier-id', description: 'ID of the supplier' })
+  @ApiProperty({
+    example: 'uuid-supplier-id',
+    description: 'ID of the supplier',
+  })
   supplierId: string;
 
   @ApiProperty({ example: 'uuid-store-id', description: 'ID of the store' })
@@ -59,13 +70,11 @@ export class AssignSupplierDto {
     example: {
       productId: '8bb688a6-9759-434a-90c9-83f8f8e196e3',
       costPrice: '56.9',
-      state: 'primary'
-    }
+      state: 'primary',
+    },
   })
   products?: AssignSupplierProduct | { [key: string]: any };
- 
 }
-
 
 class ProductSupplierDto {
   @ApiProperty({
@@ -299,7 +308,10 @@ export class CreateProductDto {
   @IsOptional()
   productSuppliers?: ProductSupplierDto[];
 
-  @ApiProperty({ example: '5465768923921', description: 'Supplier of this product' })
+  @ApiProperty({
+    example: '5465768923921',
+    description: 'Supplier of this product',
+  })
   @IsString()
   @IsOptional()
   supplierId?: string;
@@ -917,5 +929,3 @@ export class SearchProductDto {
   @IsOptional()
   storeId?: string;
 }
-
-
