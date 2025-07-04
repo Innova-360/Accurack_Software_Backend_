@@ -10,6 +10,7 @@ import { PermissionsService, ResponseService } from 'src/common';
 import { TenantContextService } from 'src/tenant/tenant-context.service';
 import { MultiTenantService } from 'src/database/multi-tenant.service';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { TenantModule } from 'src/tenant/tenant.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
       signOptions: { expiresIn: '15m' },
     }),
     PrismaClientModule,
+    TenantModule,
   ],
   controllers: [InvoiceController],
   providers: [
@@ -31,5 +33,6 @@ import { PrismaService } from 'src/prisma/prisma.service';
     MultiTenantService, // Required by TenantContextService
     PrismaService, // Required by TenantContextService,
   ],
+  exports: [InvoiceService],
 })
 export class InvoiceModule {}

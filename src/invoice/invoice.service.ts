@@ -1,10 +1,5 @@
-import {
-  PrismaClient,
-  Invoice,
-  SaleStatus,
-  PaymentMethod,
-} from '@prisma/client';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Invoice } from '@prisma/client';
+import { NotFoundException } from '@nestjs/common';
 import { generate } from 'qrcode';
 import { businessInfoDto, CreateInvoiceDto } from './dto/invoice.dto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
@@ -21,7 +16,12 @@ export class InvoiceService {
   constructor(
     private readonly prisma: PrismaClientService, // Keep for fallback/master DB operations
     private readonly tenantContext: TenantContextService, // Add tenant context
-  ) {}
+  ) {
+    console.log(
+      'InvoiceService initialized with tenantContext:',
+      tenantContext,
+    );
+  }
 
   async setBusinessInfo(storeId: string, dto: businessInfoDto, user: any) {
     const prisma = await this.tenantContext.getPrismaClient();

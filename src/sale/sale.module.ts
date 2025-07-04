@@ -11,6 +11,7 @@ import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { InvoiceService } from 'src/invoice/invoice.service';
 import { PermissionsService, ResponseService } from 'src/common';
+import { InvoiceModule } from 'src/invoice/invoice.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { PermissionsService, ResponseService } from 'src/common';
     PrismaClientModule,
     PermissionsModule,
     CommonModule,
+    InvoiceModule,
   ],
   controllers: [SaleController],
   providers: [
@@ -32,7 +34,7 @@ import { PermissionsService, ResponseService } from 'src/common';
     JwtService,
     PermissionsService,
     ResponseService,
-    InvoiceService
+    InvoiceService,
   ],
 })
 export class SaleModule {}
