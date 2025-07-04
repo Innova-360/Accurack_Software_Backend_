@@ -24,7 +24,7 @@ import {
   SaleQueryDto,
   CreateCustomerDto,
   UpdateCustomerDto,
-  InvoiceQueryDto,
+  InvoiceQueryDto,DeleteCustomerDto
 } from './dto/sale.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
@@ -79,6 +79,15 @@ export class SaleController extends BaseSaleController {
     );
   }
 
+  @SaleEndpoint.DeleteCustomer(DeleteCustomerDto)
+  @Delete('customers/:customerId')
+  async deleteCustomer(@Param('customerId') customerId: string) {
+    return this.handleCustomerOperation(
+      () => this.saleService.deleteCustomer(customerId),
+      'Customer deleted successfully',
+    );
+  }
+
   @SaleEndpoint.GetCustomers()
   @Get('customers')
   async getCustomers(
@@ -93,7 +102,7 @@ export class SaleController extends BaseSaleController {
           storeId,
           parseInt(page),
           parseInt(limit),
-          search
+          search,
         ),
       'Customers retrieved successfully',
     );
@@ -120,14 +129,16 @@ export class SaleController extends BaseSaleController {
 
   @SaleEndpoint.SetSaleConfirmation(CreateSaleDto)
   @Post('saleConfirmation')
-  async setSaleConfirmation(@Body() sale: CreateSaleDto, setStatus: 'CONFIRMED' | 'CANCELLED', @Req() req: any){
+  async setSaleConfirmation(
+    @Body() sale: CreateSaleDto,
+    setStatus: 'CONFIRMED' | 'CANCELLED',
+    @Req() req: any,
+  ) {
     return this.handleSaleCreation(
-      () => this.saleService.setSaleConfirmation(setStatus, sale , req.user),
+      () => this.saleService.setSaleConfirmation(setStatus, sale, req.user),
       'Sale created successfully',
     );
   }
-
-
 
   @SaleEndpoint.GetSales()
   @Get('list')

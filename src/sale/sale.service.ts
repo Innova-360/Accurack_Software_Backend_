@@ -100,6 +100,20 @@ export class SaleService {
     });
   }
 
+  async deleteCustomer(customerId: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+    });
+    if (customer?.id !== customerId) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    return await prisma.customer.delete({
+      where: { id: customerId },
+    });
+  }
+
   async getCustomers(
     storeId: string,
     page: number = 1,

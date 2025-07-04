@@ -75,6 +75,12 @@ export class CreateCustomerDto {
   clientId: string;
 }
 
+export class DeleteCustomerDto {
+  @ApiProperty({ description: 'Customer ID' })
+  @IsUUID()
+  customerId: string;
+}
+
 export class UpdateCustomerDto {
   @ApiPropertyOptional({ description: 'Customer name' })
   @IsOptional()
