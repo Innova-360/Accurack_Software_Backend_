@@ -1,5 +1,5 @@
 import { Invoice } from '@prisma/client';
-import { NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { generate } from 'qrcode';
 import { businessInfoDto, CreateInvoiceDto } from './dto/invoice.dto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
@@ -12,6 +12,7 @@ interface User {
   };
 }
 
+@Injectable()
 export class InvoiceService {
   constructor(
     private readonly prisma: PrismaClientService, // Keep for fallback/master DB operations

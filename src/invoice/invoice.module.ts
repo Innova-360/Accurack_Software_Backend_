@@ -7,9 +7,6 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from 'src/strategies/jwt.strategy';
 import { PermissionsService, ResponseService } from 'src/common';
-import { TenantContextService } from 'src/tenant/tenant-context.service';
-import { MultiTenantService } from 'src/database/multi-tenant.service';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { TenantModule } from 'src/tenant/tenant.module';
 
 @Module({
@@ -29,9 +26,7 @@ import { TenantModule } from 'src/tenant/tenant.module';
     JwtStrategy,
     ResponseService,
     PermissionsService,
-    TenantContextService, // Add tenant context
-    MultiTenantService, // Required by TenantContextService
-    PrismaService, // Required by TenantContextService,
+    // TenantContextService, MultiTenantService, and PrismaService are provided by TenantModule
   ],
   exports: [InvoiceService],
 })
