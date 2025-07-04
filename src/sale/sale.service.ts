@@ -90,12 +90,11 @@ export class SaleService {
     const customer = await prisma.customer.findUnique({
       where: { id: customerId },
     });
-
-    if (!customer) {
+    if (customer?.id !== customerId) {
       throw new NotFoundException('Customer not found');
     }
 
-    return await this.prisma.customer.update({
+    return await prisma.customer.update({
       where: { id: customerId },
       data: dto,
     });
@@ -161,6 +160,7 @@ export class SaleService {
       }),
       prisma.customer.count({ where }),
     ]);
+    console.log('customers', customers, 'total', total);
 
     return {
       customers,
@@ -478,7 +478,7 @@ export class SaleService {
       throw new NotFoundException('Sale not found');
     }
 
-    return await this.prisma.sales.update({
+    return await prisma.sales.update({
       where: { id: saleId },
       data: dto,
     });
