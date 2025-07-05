@@ -102,25 +102,58 @@ export class SaleService {
 
   async deleteCustomer(customerId: string) {
     const prisma = await this.tenantContext.getPrismaClient();
+    
+    // First check if customer exists
     const customer = await prisma.customer.findUnique({
       where: { id: customerId },
     });
-    if (customer?.id !== customerId) {
+
+    if (!customer) {
       throw new NotFoundException('Customer not found');
     }
 
-    return await prisma.customer.delete({
+    // Check if customer has any associated sales
+    const salesCount = await prisma.sales.count({
+      where: { customerId: customerId },
+    });
+
+    if (salesCount > 0) {
+      throw new BadRequestException(
+        'Cannot delete customer with existing sales records',
+      );
+    }
+
+    // Delete related balance sheets first (due to foreign key constraints)
+    await prisma.balanceSheet.deleteMany({
+      where: { customerId: customerId },
+    });
+
+    // Delete the customer
+    const response = await prisma.customer.delete({
       where: { id: customerId },
     });
+
+    return response;
   }
 
   async getCustomers(
+    user: any,
     storeId: string,
     page: number = 1,
     limit: number = 20,
     search?: string,
   ) {
     const prisma = await this.tenantContext.getPrismaClient();
+
+    if (storeId === 'undefined' || storeId === null) {
+      const store = await prisma.stores.findFirst({
+        where: { clientId: user.clientId },
+        select: { id: true },
+      });
+      if (!store) {
+        throw new NotFoundException('No store found for this user');
+      }
+    }
 
     // If search is provided, ignore pagination and return all matches
     if (search && search.trim() !== '') {

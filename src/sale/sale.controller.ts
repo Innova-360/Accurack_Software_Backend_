@@ -90,6 +90,7 @@ export class SaleController extends BaseSaleController {
   @SaleEndpoint.GetCustomers()
   @Get('customers')
   async getCustomers(
+    @Request() req: any,
     @Query('storeId') storeId: string,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
@@ -98,6 +99,7 @@ export class SaleController extends BaseSaleController {
     return this.handleSaleOperation(
       () =>
         this.saleService.getCustomers(
+          req.user,
           storeId,
           parseInt(page),
           parseInt(limit),
