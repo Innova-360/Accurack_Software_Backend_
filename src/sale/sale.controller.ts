@@ -24,7 +24,8 @@ import {
   SaleQueryDto,
   CreateCustomerDto,
   UpdateCustomerDto,
-  InvoiceQueryDto,DeleteCustomerDto
+  InvoiceQueryDto,
+  DeleteCustomerDto,
 } from './dto/sale.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
@@ -79,7 +80,7 @@ export class SaleController extends BaseSaleController {
     );
   }
 
-  @SaleEndpoint.DeleteCustomer(DeleteCustomerDto)
+  @SaleEndpoint.DeleteCustomer()
   @Delete('customers/:customerId')
   async deleteCustomer(@Param('customerId') customerId: string) {
     return this.handleCustomerOperation(

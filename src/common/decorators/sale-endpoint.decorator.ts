@@ -159,7 +159,7 @@ export const SaleEndpoint = {
       ),
     ),
 
-  DeleteCustomer: (dtoType: any) =>
+  DeleteCustomer: () =>
     applyDecorators(
       ApiTags('Sales'),
       ApiBearerAuth(),
@@ -169,7 +169,6 @@ export const SaleEndpoint = {
           'Deletes customer record and associated balance sheet, restoring inventory if applicable',
       }),
       ApiParam({ name: 'customerId', description: 'Customer ID' }),
-      ApiBody({ type: dtoType }),
       ApiResponse({
         status: 200,
         description: 'Customer deleted successfully',
