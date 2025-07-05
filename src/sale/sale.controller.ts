@@ -24,8 +24,6 @@ import {
   SaleQueryDto,
   CreateCustomerDto,
   UpdateCustomerDto,
-  InvoiceQueryDto,
-  DeleteCustomerDto,
 } from './dto/sale.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
