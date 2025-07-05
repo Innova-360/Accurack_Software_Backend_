@@ -110,4 +110,36 @@ export const InvoiceEndpoint = {
         }),
         Version('1'),
       ),
+
+
+    getBusinessInfo: () =>
+      applyDecorators(
+        ApiBearerAuth('JWT-auth'),
+        ApiResponse({
+          status: 200,
+          description: 'Business information saved successfully.',
+          schema: successResponseSchema('Business information saved successfully.', {
+            id: 'uuid-business-id',
+            clientId: 'uuid-client-id',
+            businessName: 'Example Corp',
+            contactNo: '123456789',
+            website: 'https://example.com',
+            address: '123 Street, City',
+            logoUrl: 'https://example.com/logo.png',
+            createdAt: '2025-06-01T12:00:00Z',
+            updatedAt: '2025-06-01T12:00:00Z',
+          }),
+        }),
+        ApiResponse({
+          status: 400,
+          description: 'Invalid input or business already exists',
+          schema: errorResponseSchema(400, 'Invalid input or duplicate entry'),
+        }),
+        ApiResponse({
+          status: 500,
+          description: 'Internal server error',
+          schema: errorResponseSchema(500, 'An unexpected error occurred'),
+        }),
+        Version('1'),
+      ),
 };

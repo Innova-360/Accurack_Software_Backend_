@@ -41,15 +41,26 @@ export class InvoiceService {
         };
       }
 
+      // Validate required fields
+      if (!businessName || !contactNo || !address) {
+        return {
+          success: false,
+          message: 'Please fill in all required business details to continue. Business name, contact number, and address are mandatory.',
+          showBusinessForm: true,
+          requiredFields: ['businessName', 'contactNo', 'address'],
+          data: null,
+        };
+      }
+
       // Create the business record
       const createdBusiness = await prisma.business.create({
         data: {
           clientId: user.clientId,
           businessName,
           contactNo,
-          website,
+          website: website || null,
           address,
-          logoUrl,
+          logoUrl: logoUrl || null,
         },
       });
 
@@ -62,7 +73,9 @@ export class InvoiceService {
       });
 
       return {
+        success: true,
         message: 'Business information saved successfully and user updated.',
+        showBusinessForm: false,
         data: createdBusiness,
       };
     } catch (error) {
@@ -71,7 +84,9 @@ export class InvoiceService {
       // Handle known Prisma constraint errors
       if (error.code === 'P2002') {
         return {
+          success: false,
           message: 'Business info already exists for this client.',
+          showBusinessForm: false,
           data: null,
         };
       }
@@ -83,14 +98,55 @@ export class InvoiceService {
     }
   }
 
+  async getBusinessInfo(user: any) {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    try {
+      // Check if business exists for this client
+      const business = await prisma.business.findUnique({
+        where: { clientId: user.clientId },
+      });
+
+      if (!business) {
+        return {
+          success: false,
+          message: 'Please fill in all required business details to continue. Business name, contact number, and address are mandatory.',
+          showBusinessForm: true,
+          requiredFields: ['businessName', 'contactNo', 'address'],
+          data: null,
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Business information found.',
+        showBusinessForm: false,
+        data: business,
+      };
+    } catch (error) {
+      console.error('Error getting business info:', error);
+      throw new Error(
+        'An error occurred while retrieving business information: ' +
+          (error.message || 'Unknown error'),
+      );
+    }
+  }
+
   async createInvoice(dto: CreateInvoiceDto, user: User): Promise<Invoice> {
     const prisma = await this.tenantContext.getPrismaClient();
     const { saleId, customFields } = dto;
     const { businessId } = user;
 
+    // Check if business information exists first
     if (!businessId) {
-      throw new NotFoundException('Business ID not found for user');
+      throw new NotFoundException({
+        message: 'Please fill in all required business details to continue. Business name, contact number, and address are mandatory.',
+        showBusinessForm: true,
+        requiredFields: ['businessName', 'contactNo', 'address'],
+        error: 'BUSINESS_INFO_REQUIRED'
+      });
     }
+
     const { logoUrl } = user.business || {};
  
 
