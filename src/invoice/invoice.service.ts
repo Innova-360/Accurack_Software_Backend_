@@ -87,15 +87,12 @@ export class InvoiceService {
     const prisma = await this.tenantContext.getPrismaClient();
     const { saleId, customFields } = dto;
     const { businessId } = user;
-    console.log(user);
 
     if (!businessId) {
       throw new NotFoundException('Business ID not found for user');
     }
     const { logoUrl } = user.business || {};
-    // if (!logoUrl) {
-    //   throw new NotFoundException('Logo URL not found for business');
-    // }
+ 
 
     // Fetch sale with related data
     const sale = await prisma.sales.findUnique({
@@ -123,9 +120,6 @@ export class InvoiceService {
 
     // Calculate net amount (totalAmount - allowance)
     const netAmount = sale.totalAmount - (sale.allowance || 0);
-
-
-    console.log(netAmount);
 
     // Generate QR code
     const qrCodeData = `Invoice:${sale.id}:${new Date().toISOString()}`;
