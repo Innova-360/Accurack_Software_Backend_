@@ -78,7 +78,13 @@ export class InvoiceService {
     const prisma = await this.tenantContext.getPrismaClient();
     const { saleId, customFields } = dto;
     const { businessId } = user;
-    const { logoUrl } = user.business;
+    if (!businessId) {
+      throw new NotFoundException('Business ID not found for user');
+    }
+    const { logoUrl } = user.business || {};
+    if (!logoUrl) {
+      throw new NotFoundException('Logo URL not found for business');
+    }
 
     // Fetch sale with related data
     const sale = await prisma.sales.findUnique({
