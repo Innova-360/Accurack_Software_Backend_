@@ -1,6 +1,6 @@
 import { Invoice } from '@prisma/client';
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { generate } from 'qrcode';
+import * as QRCode from 'qrcode';
 import { businessInfoDto, CreateInvoiceDto } from './dto/invoice.dto';
 import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { TenantContextService } from 'src/tenant/tenant-context.service';
@@ -41,6 +41,7 @@ export class InvoiceService {
         };
       }
 
+      // Create the business record
       const createdBusiness = await prisma.business.create({
         data: {
           clientId: user.clientId,
@@ -52,8 +53,16 @@ export class InvoiceService {
         },
       });
 
+      // Update the user's businessId in the Users table
+      await prisma.users.update({
+        where: { id: user.id }, // Assuming user.id is available in the user object
+        data: {
+          businessId: createdBusiness.id,
+        },
+      });
+
       return {
-        message: 'Business information saved successfully.',
+        message: 'Business information saved successfully and user updated.',
         data: createdBusiness,
       };
     } catch (error) {
@@ -78,13 +87,15 @@ export class InvoiceService {
     const prisma = await this.tenantContext.getPrismaClient();
     const { saleId, customFields } = dto;
     const { businessId } = user;
+    console.log(user);
+
     if (!businessId) {
       throw new NotFoundException('Business ID not found for user');
     }
     const { logoUrl } = user.business || {};
-    if (!logoUrl) {
-      throw new NotFoundException('Logo URL not found for business');
-    }
+    // if (!logoUrl) {
+    //   throw new NotFoundException('Logo URL not found for business');
+    // }
 
     // Fetch sale with related data
     const sale = await prisma.sales.findUnique({
@@ -113,10 +124,13 @@ export class InvoiceService {
     // Calculate net amount (totalAmount - allowance)
     const netAmount = sale.totalAmount - (sale.allowance || 0);
 
+
+    console.log(netAmount);
+
     // Generate QR code
     const qrCodeData = `Invoice:${sale.id}:${new Date().toISOString()}`;
     const qrCode = await new Promise<string>((resolve, reject) => {
-      generate(qrCodeData, { small: true }, (err, url) => {
+      QRCode.toDataURL(qrCodeData, { width: 128, margin: 1 }, (err, url) => {
         if (err) reject(err);
         resolve(url);
       });
