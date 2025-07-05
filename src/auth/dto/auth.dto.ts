@@ -339,3 +339,35 @@ export class FixUserRecordDto {
   @IsNotEmpty()
   userId: string;
 }
+
+export class ChangePasswordDto {
+  @ApiProperty({
+    description: 'Current password',
+    example: 'CurrentPass123!',
+    minLength: 6,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6, { message: 'Current password is required' })
+  currentPassword: string;
+
+  @ApiProperty({
+    description: 'New password',
+    example: 'NewSecurePass123!',
+    minLength: 8,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(8, { message: 'New password must be at least 8 characters long' })
+  newPassword: string;
+
+  @ApiProperty({
+    description: 'Confirm new password',
+    example: 'NewSecurePass123!',
+    minLength: 8,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(8, { message: 'Confirm password must be at least 8 characters long' })
+  confirmPassword: string;
+}

@@ -1455,4 +1455,114 @@ export class AuthService {
       );
     }
   }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) {
+    try {
+      // Validate that new passwords match
+      if (newPassword !== confirmPassword) {
+        throw new BadRequestException(
+          'New password and confirm password do not match',
+        );
+      }
+
+      // Validate new password strength
+      if (newPassword.length < 8) {
+        throw new BadRequestException(
+          'New password must be at least 8 characters long',
+        );
+      }
+
+      if (!/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+        throw new BadRequestException(
+          'New password must contain at least one uppercase letter and one number',
+        );
+      }
+
+      // Get user with current password hash
+      const user = await this.prisma.users.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          passwordHash: true,
+          status: true,
+        },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      if (user.status !== Status.active) {
+        throw new ForbiddenException('User account is not active');
+      }
+
+      // Verify current password
+      const isCurrentPasswordValid = await bcrypt.compare(
+        currentPassword,
+        user.passwordHash,
+      );
+      if (!isCurrentPasswordValid) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+
+      // Check if new password is different from current password
+      const isSamePassword = await bcrypt.compare(
+        newPassword,
+        user.passwordHash,
+      );
+      if (isSamePassword) {
+        throw new BadRequestException(
+          'New password must be different from current password',
+        );
+      }
+
+      // Hash new password
+      const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+      // Update password in database
+      await this.prisma.users.update({
+        where: { id: userId },
+        data: { passwordHash: newPasswordHash },
+      });
+
+      // Create audit log
+      await this.prisma.auditLogs.create({
+        data: {
+          userId: user.id,
+          action: 'password_changed',
+          resource: 'auth',
+          details: {
+            email: user.email,
+            timestamp: new Date().toISOString(),
+          },
+        },
+      });
+
+      return {
+        message: 'Password changed successfully',
+        success: true,
+      };
+    } catch (error) {
+      // Log error for debugging
+      console.error('Change password error:', error);
+
+      // Handle specific errors
+      if (
+        error instanceof BadRequestException ||
+        error instanceof UnauthorizedException ||
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException('Failed to change password');
+    }
+  }
 }

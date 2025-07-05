@@ -263,6 +263,32 @@ export const AuthEndpoint = {
       Version('1'),
     ),
 
+  // Change password
+  ChangePassword: (dtoType: any) =>
+    applyDecorators(
+      ApiOperation({ summary: 'Change user password' }),
+      ApiBody({ type: dtoType }),
+      ApiResponse({
+        status: 200,
+        description: 'Password changed successfully',
+        schema: successResponseSchema('Password changed successfully'),
+      }),
+      ApiResponse({
+        status: 400,
+        description: 'Invalid current password or password validation failed',
+        schema: errorResponseSchema(400, 'Invalid current password'),
+      }),
+      ApiResponse({
+        status: 401,
+        description: 'Unauthorized - Authentication required',
+        schema: errorResponseSchema(401, 'Authentication required'),
+      }),
+      ...standardErrorResponses(),
+      ApiBearerAuth('JWT-auth'),
+      UseGuards(JwtAuthGuard),
+      Version('1'),
+    ),
+
   // Invite user
   InviteUser: (dtoType: any) =>
     applyDecorators(

@@ -10,6 +10,7 @@ import { ProductModule } from './product/product.module';
 import { TenantModule } from './tenant/tenant.module';
 import { DatabaseModule } from './database/database.module';
 import { EmployeeModule } from './employee/employee.module';
+import { UsersModule } from './users/users.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 import { SaleModule } from './sale/sale.module';
 import { TaxModule } from './tax/tax.module';
@@ -31,6 +32,7 @@ import { HealthController } from './health/health.controller';
     SaleModule,
     InvoiceModule,
     EmployeeModule,
+    UsersModule,
     TaxModule
   ],
   providers: [

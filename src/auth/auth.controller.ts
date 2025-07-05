@@ -22,6 +22,7 @@ import {
   AcceptInviteDto,
   FixClientRecordDto,
   FixUserRecordDto,
+  ChangePasswordDto,
 } from './dto/auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -161,6 +162,21 @@ export class AuthController extends BaseAuthController {
     return this.handleServiceOperation(
       () => this.authService.resetPassword(dto),
       'Password reset successfully',
+      200,
+    );
+  }
+
+  @AuthEndpoint.ChangePassword(ChangePasswordDto)
+  @Post('change-password')
+  async changePassword(@Body() dto: ChangePasswordDto, @Request() req) {
+    return this.handleServiceOperation(
+      () => this.authService.changePassword(
+        req.user.id,
+        dto.currentPassword,
+        dto.newPassword,
+        dto.confirmPassword,
+      ),
+      'Password changed successfully',
       200,
     );
   }
