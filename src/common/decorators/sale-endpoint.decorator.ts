@@ -197,6 +197,11 @@ export const SaleEndpoint = {
         description: 'Items per page',
         required: false,
       }),
+      ApiQuery({
+        name: 'search',
+        description: 'Search query',
+        required: false,
+      }),
       ApiResponse({
         status: 200,
         description: 'Customers retrieved successfully',
