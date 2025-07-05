@@ -6,6 +6,7 @@ import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { TenantContextService } from 'src/tenant/tenant-context.service';
 
 interface User {
+  id: string,
   businessId: string;
   business: {
     logoUrl?: string;
@@ -42,12 +43,12 @@ export class InvoiceService {
       }
 
       // Validate required fields
-      if (!businessName || !contactNo || !address) {
+      if (!businessName || !contactNo) {
         return {
           success: false,
-          message: 'Please fill in all required business details to continue. Business name, contact number, and address are mandatory.',
+          message: 'Please fill in all required business details to continue. Business name, contact number are mandatory.',
           showBusinessForm: true,
-          requiredFields: ['businessName', 'contactNo', 'address'],
+          requiredFields: ['businessName', 'contactNo'],
           data: null,
         };
       }
@@ -59,7 +60,7 @@ export class InvoiceService {
           businessName,
           contactNo,
           website: website || null,
-          address,
+          address: address || null,
           logoUrl: logoUrl || null,
         },
       });
@@ -135,10 +136,16 @@ export class InvoiceService {
   async createInvoice(dto: CreateInvoiceDto, user: User): Promise<Invoice> {
     const prisma = await this.tenantContext.getPrismaClient();
     const { saleId, customFields } = dto;
-    const { businessId } = user;
+    const { id } = user;
 
-    // Check if business information exists first
-    if (!businessId) {
+    const userExist = await prisma.users.findFirst({
+      where: {id}
+    });
+
+    console.log(user);
+
+    // Check if user exists and business information exists first
+    if (!userExist || !userExist.businessId) {
       throw new NotFoundException({
         message: 'Please fill in all required business details to continue. Business name, contact number, and address are mandatory.',
         showBusinessForm: true,
@@ -167,7 +174,7 @@ export class InvoiceService {
 
     // Fetch business data
     const business = await prisma.business.findUnique({
-      where: { id: businessId },
+      where: { id: userExist.businessId },
     });
 
     if (!business) {
@@ -191,7 +198,7 @@ export class InvoiceService {
       data: {
         saleId,
         customerId: sale.customerId,
-        businessId,
+        businessId: userExist.businessId,
         invoiceNumber: `INV-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         customerName: sale.customer.customerName,
         customerPhone: sale.customer.phoneNumber,
