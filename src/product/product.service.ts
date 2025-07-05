@@ -179,8 +179,7 @@ export class ProductService {
       variants: product.variants || [],
     };
   }
-    
-    
+
   async createProduct(
     user: any,
     createProductDto: CreateProductDto,
@@ -341,7 +340,7 @@ export class ProductService {
 
     // Handle supplier relationships
     const assignedSuppliers = new Set<string>();
-    
+
     if (
       createProductDto.productSuppliers &&
       createProductDto.productSuppliers.length > 0
@@ -640,11 +639,10 @@ export class ProductService {
         },
         saleItems: true,
         purchaseOrders: true,
-        
       },
     });
 
-    console.log("product", product);
+    console.log('product', product);
 
     if (!product) {
       throw new NotFoundException('Product not found');
@@ -1013,48 +1011,85 @@ export class ProductService {
 
     const prisma = await this.tenantContext.getPrismaClient();
 
-    const products = await prisma.products.findMany({
+    // First, get the total count to check if products exist
+    const totalCount = await prisma.products.count({
       where: { storeId },
-      select: { id: true },
     });
 
-    if (!products || products.length === 0) {
+    if (totalCount === 0) {
       throw new NotFoundException('No products found for this store.');
     }
 
-    const productIds = products.map((p) => p.id);
-
-    // Delete associated packs
-    await Promise.all(
-      productIds.map((productId) =>
-        prisma.pack.deleteMany({ where: { productId } }),
-      ),
+    console.log(
+      `Starting batch deletion of ${totalCount} products for store ${storeId}`,
     );
 
-    // Perform hard delete (current behavior)
-    await Promise.all(
-      productIds.map((productId) =>
-        prisma.products.delete({ where: { id: productId } }),
-      ),
-    );
+    const batchSize = 500; // Process 100 products at a time
+    let processed = 0;
 
+    // Process in batches to avoid overwhelming the database
+    while (processed < totalCount) {
+      // Get a batch of product IDs
+      const productBatch = await prisma.products.findMany({
+        where: { storeId },
+        select: { id: true },
+        take: batchSize,
+        skip: 0, // Always take from the beginning since we're deleting
+      });
+
+      if (productBatch.length === 0) {
+        break; // No more products to process
+      }
+
+      const productIds = productBatch.map((p) => p.id);
+
+      try {
+        // Delete in transaction to ensure consistency
+        await prisma.$transaction(async (tx) => {
+          // First delete associated packs for this batch
+          await tx.pack.deleteMany({
+            where: {
+              productId: { in: productIds },
+            },
+          });
+
+          // Then delete associated product suppliers
+          await tx.productSupplier.deleteMany({
+            where: {
+              productId: { in: productIds },
+            },
+          });
+
+          // Finally delete the products themselves
+          await tx.products.deleteMany({
+            where: {
+              id: { in: productIds },
+            },
+          });
+        });
+
+        processed += productIds.length;
+        console.log(`Deleted batch: ${processed}/${totalCount} products`);
+
+        // Small delay between batches to prevent database overload
+        if (processed < totalCount) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      } catch (error) {
+        console.error(
+          `Error deleting batch at ${processed}/${totalCount}:`,
+          error,
+        );
+        throw new BadRequestException(
+          `Failed to delete products at batch ${Math.floor(processed / batchSize) + 1}. ${error.message}`,
+        );
+      }
+    }
+
+    console.log(
+      `Successfully deleted all ${processed} products for store ${storeId}`,
+    );
     return;
-    // 📌 Future: Soft delete alternative (uncomment when needed)
-    /*
-  await Promise.all(
-    productIds.map(productId =>
-      prisma.products.update({
-        where: { id: productId },
-        data: {
-          updatedAt: new Date(), // Marker for soft delete
-          // If you add a `deleted` or `isDeleted` field later, you can set it here
-        },
-      }),
-    ),
-  );
-  */
-
-    // No return value; global interceptor can format response
   }
 
   async assignSupplier(dto: AssignSupplierDto) {

@@ -1,4 +1,14 @@
-import { IsString, IsEmail, IsOptional, IsNotEmpty } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsOptional,
+  IsNotEmpty,
+  IsNumber,
+  IsBoolean,
+  IsEnum,
+  Min,
+  Max,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateStoreDto {
@@ -108,4 +118,43 @@ export class UpdateStoreDto {
   @IsString()
   @IsOptional()
   logoUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'Tax rate as decimal (0.08 = 8%)',
+    example: 0.08,
+    minimum: 0,
+    maximum: 1,
+  })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Max(1)
+  taxRate?: number;
+
+  @ApiPropertyOptional({
+    description: 'Tax calculation mode',
+    enum: ['exclusive', 'inclusive'],
+    example: 'exclusive',
+  })
+  @IsEnum(['exclusive', 'inclusive'])
+  @IsOptional()
+  taxMode?: 'exclusive' | 'inclusive';
+
+  @ApiPropertyOptional({
+    description: 'Low stock alert threshold (minimum quantity)',
+    example: 10,
+    minimum: 1,
+  })
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  lowStockAlert?: number;
+
+  @ApiPropertyOptional({
+    description: 'Enable notifications for alerts',
+    example: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  enableNotifications?: boolean;
 }
