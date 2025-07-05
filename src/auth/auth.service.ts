@@ -390,7 +390,10 @@ export class AuthService {
   /**
    * Helper method to find user across master and tenant databases
    */
-  private async findUserAcrossDatabases(email: string, selectFields: any = {}) {
+  private async findUserAcrossDatabases(
+    email: string,
+    selectFields: any = {},
+  ): Promise<any | null> {
     // First, try to find user in master database
     let user = await this.prisma.users.findUnique({
       where: { email },
@@ -399,8 +402,10 @@ export class AuthService {
 
     // If user not found in master database, search in tenant databases
     if (!user) {
-      console.log(`User ${email} not found in master database, searching tenant databases...`);
-      
+      console.log(
+        `User ${email} not found in master database, searching tenant databases...`,
+      );
+
       // Get all active clients from master database
       const clients = await this.prisma.clients.findMany({
         where: { status: 'active' },
@@ -410,18 +415,20 @@ export class AuthService {
       // Search each tenant database for the user
       for (const client of clients) {
         try {
-          const credentials = await this.multiTenantService['getTenantCredentials'](client.id);
+          const credentials = await this.multiTenantService[
+            'getTenantCredentials'
+          ](client.id);
           if (!credentials) continue;
 
           const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
-          
+
           const tenantPrisma = new PrismaClient({
             datasources: { db: { url: tenantDatabaseUrl } },
           });
 
           try {
             await tenantPrisma.$connect();
-            
+
             const tenantUser = await tenantPrisma.users.findUnique({
               where: { email },
               select: selectFields,
@@ -429,14 +436,19 @@ export class AuthService {
 
             if (tenantUser) {
               user = tenantUser;
-              console.log(`Found user ${email} in tenant database for client: ${client.name}`);
+              console.log(
+                `Found user ${email} in tenant database for client: ${client.name}`,
+              );
               break;
             }
           } finally {
             await tenantPrisma.$disconnect();
           }
         } catch (error) {
-          console.error(`Error searching tenant database for client ${client.id}:`, error);
+          console.error(
+            `Error searching tenant database for client ${client.id}:`,
+            error,
+          );
           continue;
         }
       }
@@ -448,7 +460,11 @@ export class AuthService {
   /**
    * Helper method to find user by ID across master and tenant databases
    */
-  private async findUserByIdAcrossDatabases(userId: string, clientId?: string, selectFields: any = {}) {
+  private async findUserByIdAcrossDatabases(
+    userId: string,
+    clientId?: string,
+    selectFields: any = {},
+  ): Promise<any | null> {
     // First, try to find user in master database
     let user = await this.prisma.users.findUnique({
       where: { id: userId },
@@ -458,17 +474,18 @@ export class AuthService {
     // If user not found in master database and has clientId, check tenant database
     if (!user && clientId) {
       try {
-        const credentials = await this.multiTenantService['getTenantCredentials'](clientId);
+        const credentials =
+          await this.multiTenantService['getTenantCredentials'](clientId);
         if (credentials) {
           const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
-          
+
           const tenantPrisma = new PrismaClient({
             datasources: { db: { url: tenantDatabaseUrl } },
           });
 
           try {
             await tenantPrisma.$connect();
-            
+
             user = await tenantPrisma.users.findUnique({
               where: { id: userId },
               select: selectFields,
@@ -512,6 +529,11 @@ export class AuthService {
       stores: { select: { storeId: true } },
     });
 
+    // Add type guard
+    if (Array.isArray(user)) {
+      throw new Error('Unexpected: findUserAcrossDatabases returned an array');
+    }
+
     if (!user || user.status !== Status.active) {
       throw new UnauthorizedException('User not found or inactive');
     }
@@ -521,12 +543,20 @@ export class AuthService {
       throw new UnauthorizedException('Password is incorrect');
     }
 
+    // Fix stores property handling
+    const stores =
+      user.role === Role.super_admin
+        ? ['*']
+        : Array.isArray(user.stores)
+          ? user.stores.map((s: any) => (typeof s === 'string' ? s : s.storeId))
+          : [];
+
     const payload = {
       id: user.id,
       role: user.role,
       email: user.email,
       clientId: user.clientId,
-      stores: user.role === Role.super_admin ? ['*'] : user.stores,
+      stores: stores,
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -592,7 +622,7 @@ export class AuthService {
         lastName: user.lastName,
         email: user.email,
         role: user.role ?? 'employee',
-        stores: payload.stores,
+        stores: stores,
       },
     };
   }
@@ -605,25 +635,46 @@ export class AuthService {
       });
 
       // First, try to find user in master database
-      let user = await this.findUserByIdAcrossDatabases(decoded.id, decoded.clientId, {
-        id: true,
-        role: true,
-        email: true,
-        clientId: true,
-        status: true,
-        stores: { select: { storeId: true } },
-      });
+      let user = await this.findUserByIdAcrossDatabases(
+        decoded.id,
+        decoded.clientId,
+        {
+          id: true,
+          role: true,
+          email: true,
+          clientId: true,
+          status: true,
+          stores: { select: { storeId: true } },
+        },
+      );
+
+      // Add type guard
+      if (Array.isArray(user)) {
+        throw new Error(
+          'Unexpected: findUserByIdAcrossDatabases returned an array',
+        );
+      }
 
       if (!user || user.status !== Status.active) {
         throw new UnauthorizedException('Invalid refresh token');
       }
+
+      // Fix stores property handling
+      const stores =
+        user.role === Role.super_admin
+          ? ['*']
+          : Array.isArray(user.stores)
+            ? user.stores.map((s: any) =>
+                typeof s === 'string' ? s : s.storeId,
+              )
+            : [];
 
       const payload = {
         id: user.id,
         role: user.role,
         email: user.email,
         clientId: user.clientId,
-        stores: user.role === Role.super_admin ? ['*'] : user.stores,
+        stores: stores,
       };
 
       const accessToken = this.jwtService.sign(payload, {
@@ -646,6 +697,11 @@ export class AuthService {
       email: true,
       clientId: true,
     });
+
+    // Add type guard
+    if (Array.isArray(user)) {
+      throw new Error('Unexpected: findUserAcrossDatabases returned an array');
+    }
 
     if (!user) {
       // Silently return to prevent email enumeration
@@ -706,6 +762,8 @@ export class AuthService {
                 details: { email },
               },
             });
+          } finally {
+            await tenantPrisma.$disconnect();
           }
         }
       } else {
@@ -1763,7 +1821,7 @@ export class AuthService {
    */
   async testMultiTenantAuth(email: string) {
     console.log(`🔍 Testing multi-tenant authentication for: ${email}`);
-    
+
     const user = await this.findUserAcrossDatabases(email, {
       id: true,
       firstName: true,
