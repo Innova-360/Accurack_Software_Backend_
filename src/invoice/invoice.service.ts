@@ -77,10 +77,10 @@ export class InvoiceService {
   async createInvoice(dto: CreateInvoiceDto, user: User): Promise<Invoice> {
     const prisma = await this.tenantContext.getPrismaClient();
     const { saleId, customFields } = dto;
-    const { businessId } = user;
-    if (!businessId) {
-      throw new NotFoundException('Business ID not found for user');
-    }
+    // const { businessId } = user;
+    // if (!businessId) {
+    //   throw new NotFoundException('Business ID not found for user');
+    // }
 
     // Fetch sale with related data
     const sale = await prisma.sales.findUnique({
