@@ -512,6 +512,7 @@ export class AuthService {
       email: string;
       role: string;
       stores: { storeId: string }[] | string[];
+      permissions: any;
     };
   }> {
     const { email, password } = dto;
@@ -613,6 +614,49 @@ export class AuthService {
       // Don't fail login if audit log fails
     }
 
+    // Get user permissions for all stores they have access to
+    let userPermissions: any = null;
+    try {
+      if (user.clientId) {
+        // For tenant users, get permissions from their tenant database
+        const credentials = await this.multiTenantService[
+          'getTenantCredentials'
+        ](user.clientId);
+        if (credentials) {
+          const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
+          const tenantPrisma = new PrismaClient({
+            datasources: { db: { url: tenantDatabaseUrl } },
+          });
+
+          try {
+            await tenantPrisma.$connect();
+            // Get permissions for all stores the user has access to
+            const permissions =
+              await this.permissionsService.getUserPermissionsWithClient(
+                tenantPrisma,
+                user.id,
+              );
+            userPermissions = permissions;
+          } finally {
+            await tenantPrisma.$disconnect();
+          }
+        }
+      } else {
+        // For master database users (super_admin, admin), get permissions from master database
+        userPermissions = await this.permissionsService.getUserPermissions(
+          user.id,
+        );
+      }
+    } catch (error) {
+      console.error('Failed to get user permissions during login:', error);
+      // Don't fail login if permissions fetch fails, just set to empty
+      userPermissions = {
+        userId: user.id,
+        permissions: [],
+        roleTemplates: [],
+      };
+    }
+
     return {
       accessToken,
       refreshToken,
@@ -623,6 +667,7 @@ export class AuthService {
         email: user.email,
         role: user.role ?? 'employee',
         stores: stores,
+        permissions: userPermissions,
       },
     };
   }
@@ -1048,6 +1093,105 @@ export class AuthService {
         role: user.role,
       },
     };
+  }
+
+  async getUserWithPermissions(reqUser: any) {
+    try {
+      // First, try to find user in master database
+      const user = await this.findUserByIdAcrossDatabases(
+        reqUser?.id,
+        reqUser?.clientId,
+        {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+          clientId: true,
+          googleId: true,
+          status: true,
+          stores: { select: { storeId: true } },
+        },
+      );
+
+      // Add type guard
+      if (Array.isArray(user)) {
+        throw new Error(
+          'Unexpected: findUserByIdAcrossDatabases returned an array',
+        );
+      }
+      console.log('user', user);
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Fix stores property handling
+      const stores =
+        user.role === Role.super_admin
+          ? ['*']
+          : Array.isArray(user.stores)
+            ? user.stores.map((s: any) =>
+                typeof s === 'string' ? s : s.storeId,
+              )
+            : [];
+
+      // Get user permissions
+      let userPermissions: any = null;
+      try {
+        if (user.clientId) {
+          // For tenant users, get permissions from their tenant database
+          const credentials = await this.multiTenantService[
+            'getTenantCredentials'
+          ](user.clientId);
+          if (credentials) {
+            const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
+            const tenantPrisma = new PrismaClient({
+              datasources: { db: { url: tenantDatabaseUrl } },
+            });
+
+            try {
+              await tenantPrisma.$connect();
+              // Get permissions for all stores the user has access to
+              const permissions =
+                await this.permissionsService.getUserPermissionsWithClient(
+                  tenantPrisma,
+                  user.id,
+                );
+              userPermissions = permissions;
+            } finally {
+              await tenantPrisma.$disconnect();
+            }
+          }
+        } else {
+          // For master database users (super_admin, admin), get permissions from master database
+          userPermissions = await this.permissionsService.getUserPermissions(
+            user.id,
+          );
+        }
+      } catch (error) {
+        console.error('Failed to get user permissions:', error);
+        // Don't fail if permissions fetch fails, just set to empty
+        userPermissions = {
+          userId: user.id,
+          permissions: [],
+          roleTemplates: [],
+        };
+      }
+
+      return {
+        ...user,
+        stores: stores,
+        permissions: userPermissions,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to get user with permissions',
+      );
+    }
   }
 
   async getPermissions(userId: string, storeId: string) {
