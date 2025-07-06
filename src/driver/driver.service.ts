@@ -108,4 +108,32 @@ export class DriverService {
       },
     });
   }
+
+
+  async getDrivers(user: any) {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    // Only allow admins or managers to get list of drivers
+    if (!user || (user.position !== 'admin' && user.position !== 'manager')) {
+      throw new ForbiddenException('User is not authorized to view drivers list');
+    }
+
+    const drivers = await prisma.users.findMany({
+      where: { position: "driver" },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        position: true,
+        status: true,
+        clientId: true,
+        createdAt: true,
+        updatedAt: true,
+        // Exclude sensitive fields like passwordHash, otp, etc.
+      },
+    });
+
+    return drivers;
+  }
 }
