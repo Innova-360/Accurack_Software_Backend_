@@ -513,10 +513,14 @@ export class SupplierService {
         storeId: true,
         productSuppliers: {
           where: {
-            productId: { not: undefined},
+            productId: { not: undefined },
           },
           include: {
-            product: true,
+            product: {
+              include: {
+                category: true,
+              },
+            },
           },
         },
       },
