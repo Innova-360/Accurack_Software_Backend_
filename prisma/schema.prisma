@@ -7,6 +7,653 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Clients {
+  id           String     @id @default(uuid())
+  name         String
+  email        String     @unique
+  phone        String?
+  address      String?
+  contactName  String?
+  databaseUrl  String?
+  databaseName String?
+  tier         Tier
+  dataSizeMB   String?
+  businessId   String?
+  status       Status     @default(active)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  business     Business?
+  customers    Customer[]
+  products     Products[]
+  sales        Sales[]
+  stores       Stores[]
+  users        Users[]
+}
+
+model Users {
+  id                   String                @id @default(uuid())
+  googleId             String?               @unique
+  firstName            String
+  lastName             String
+  email                String                @unique
+  passwordHash         String?
+  googleRefreshToken   String?
+  otp                  String?
+  otpExpiresAt         DateTime?
+  isOtpUsed            Boolean?              @default(false)
+  role                 String?
+  clientId             String
+  status               Status                @default(active)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  businessId           String?
+  employeeCode         String?               @unique
+  position             String?
+  department           String?
+  phone                String?
+  apiTokens            ApiTokens[]
+  auditLogs            AuditLogs[]
+  expenses             Expenses[]
+  inviteLinks          InviteLinks[]
+  notifications        Notifications[]
+  passwordResetTokens  PasswordResetTokens[]
+  purchaseOrders       PurchaseOrders[]
+  saleAdjustments      SaleAdjustment[]
+  processedReturns     SaleReturn[]
+  sales                Sales[]
+  validatedSales       Sales[]               @relation("ValidatedSales")
+  stores               UserStoreMap[]
+  business             Business?             @relation(fields: [businessId], references: [id])
+  client               Clients               @relation(fields: [clientId], references: [id])
+  grantedPermissions   Permission[]          @relation("PermissionGrantedBy")
+  permissions          Permission[]          @relation("UserPermissions")
+  createdRoleTemplates RoleTemplate[]        @relation("CreatedRoleTemplates")
+  assignedUserRoles    UserRole[]            @relation("AssignedUserRoles")
+  userRoles            UserRole[]
+}
+
+model Stores {
+  id                  String                @id @default(uuid())
+  name                String
+  address             String?
+  phone               String?
+  email               String?
+  logoUrl             String?
+  clientId            String
+  status              Status                @default(active)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  businessId          String?
+  customers           Customer[]
+  expenses            Expenses[]
+  FileUploadInventory FileUploadInventory[]
+  FileUploadSales     FileUploadSales[]
+  products            Products[]
+  purchaseOrders      PurchaseOrders[]
+  reports             Reports[]
+  saleAdjustments     SaleAdjustment[]
+  sales               Sales[]
+  settings            StoreSettings?
+  business            Business?             @relation(fields: [businessId], references: [id])
+  client              Clients               @relation(fields: [clientId], references: [id])
+  suppliers           Suppliers[]
+  users               UserStoreMap[]
+  permissions         Permission[]
+}
+
+model Business {
+  id           String    @id @default(uuid())
+  clientId     String    @unique
+  businessName String
+  contactNo    String
+  website      String?
+  address      String?
+  logoUrl      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  client       Clients   @relation(fields: [clientId], references: [id])
+  invoices     Invoice[]
+  stores       Stores[]
+  users        Users[]
+}
+
+model SaleAdjustment {
+  id                   String             @id @default(uuid())
+  saleId               String
+  productId            String
+  userId               String
+  storeId              String
+  adjustmentType       AdjustmentType
+  damageSubCategory    DamageSubCategory?
+  quantity             Int
+  amount               Float
+  addToRevenue         Boolean?
+  addToInventory       Boolean?
+  replacementProductId String?
+  reason               String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  product              Products           @relation("ProductAdjustments", fields: [productId], references: [id])
+  replacementProduct   Products?          @relation("ReplacementProduct", fields: [replacementProductId], references: [id])
+  sale                 Sales              @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  store                Stores             @relation(fields: [storeId], references: [id])
+  user                 Users              @relation(fields: [userId], references: [id])
+}
+
+model Customer {
+  id              String         @id @default(uuid())
+  customerName    String
+  customerAddress String?
+  phoneNumber     String         @unique
+  telephoneNumber String?
+  customerMail    String?
+  website         String?
+  threshold       Float?         @default(0)
+  storeId         String
+  clientId        String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  balanceSheets   BalanceSheet[]
+  client          Clients        @relation(fields: [clientId], references: [id])
+  store           Stores         @relation(fields: [storeId], references: [id])
+  invoices        Invoice[]
+  sales           Sales[]
+}
+
+model Sales {
+  id                String           @id @default(uuid())
+  customerId        String
+  userId            String
+  storeId           String
+  clientId          String
+  paymentMethod     PaymentMethod
+  totalAmount       Float
+  confirmation      SaleConfirmation @default(NOT_CONFIRMED)
+  quantitySend      Int
+  allowance         Float?           @default(0)
+  source            InvoiceSource    @default(manual)
+  tax               Float            @default(0)
+  status            SaleStatus       @default(PENDING)
+  generateInvoice   Boolean          @default(true)
+  cashierName       String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  fileUploadSalesId String?
+  validatorId       String?
+  balanceSheets     BalanceSheet[]
+  invoices          Invoice[]
+  saleAdjustments   SaleAdjustment[]
+  saleItems         SaleItem[]
+  returns           SaleReturn[]
+  client            Clients          @relation(fields: [clientId], references: [id])
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  fileUploadSales   FileUploadSales? @relation(fields: [fileUploadSalesId], references: [id])
+  store             Stores           @relation(fields: [storeId], references: [id])
+  user              Users            @relation(fields: [userId], references: [id])
+  validator         Users?           @relation("ValidatedSales", fields: [validatorId], references: [id])
+}
+
+model SaleItem {
+  id           String    @id @default(uuid())
+  saleId       String
+  productId    String?
+  pluUpc       String
+  productName  String
+  quantity     Int
+  sellingPrice Float
+  totalPrice   Float
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  product      Products? @relation(fields: [productId], references: [id])
+  sale         Sales     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id              String        @id @default(uuid())
+  saleId          String
+  customerId      String
+  businessId      String
+  invoiceNumber   String        @unique
+  customerName    String
+  customerPhone   String
+  customerMail    String?
+  customerWebsite String?
+  customerAddress String?
+  businessName    String
+  businessContact String
+  businessWebsite String?
+  businessAddress String?
+  shippingAddress String?
+  paymentMethod   PaymentMethod
+  totalAmount     Float
+  netAmount       Float
+  tax             Float
+  status          SaleStatus
+  cashierName     String
+  logoUrl         String?
+  qrCode          String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  customFields    CustomField[]
+  business        Business      @relation(fields: [businessId], references: [id])
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  sale            Sales         @relation(fields: [saleId], references: [id])
+}
+
+model CustomField {
+  id         String   @id @default(uuid())
+  invoiceId  String
+  fieldName  String
+  fieldValue String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model BalanceSheet {
+  id              String        @id @default(uuid())
+  customerId      String
+  saleId          String?
+  remainingAmount Float
+  amountPaid      Float
+  paymentStatus   PaymentStatus @default(UNPAID)
+  description     String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  sale            Sales?        @relation(fields: [saleId], references: [id])
+}
+
+model SaleReturn {
+  id              String    @id @default(uuid())
+  saleId          String
+  productId       String?
+  pluUpc          String
+  quantity        Int
+  returnCategory  String
+  reason          String?
+  processedBy     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  processedByUser Users     @relation(fields: [processedBy], references: [id])
+  product         Products? @relation(fields: [productId], references: [id])
+  sale            Sales     @relation(fields: [saleId], references: [id])
+}
+
+model StoreSettings {
+  id                  String   @id @default(uuid())
+  storeId             String   @unique
+  currency            String   @default("USD")
+  timezone            String
+  taxRate             Float    @default(0)
+  taxMode             TaxMode  @default(exclusive)
+  lowStockAlert       Int      @default(10)
+  enableNotifications Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  store               Stores   @relation(fields: [storeId], references: [id])
+}
+
+model UserStoreMap {
+  id        String   @id @default(uuid())
+  userId    String
+  storeId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store     Stores   @relation(fields: [storeId], references: [id])
+  user      Users    @relation(fields: [userId], references: [id])
+
+  @@unique([userId, storeId])
+}
+
+model InviteLinks {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique
+  role      Role
+  userId    String
+  status    Status   @default(pending)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  user      Users    @relation(fields: [userId], references: [id])
+}
+
+model Permission {
+  id            String    @id @default(cuid())
+  userId        String
+  storeId       String?
+  resource      String
+  actions       String[]
+  resourceId    String?
+  granted       Boolean   @default(true)
+  grantedBy     String
+  grantedAt     DateTime  @default(now())
+  expiresAt     DateTime?
+  conditions    Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  grantedByUser Users     @relation("PermissionGrantedBy", fields: [grantedBy], references: [id])
+  store         Stores?   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user          Users     @relation("UserPermissions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId, resource, resourceId])
+  @@index([userId, storeId])
+  @@index([resource])
+  @@map("permissions")
+}
+
+model RoleTemplate {
+  id           String         @id @default(cuid())
+  name         String         @unique
+  description  String?
+  permissions  Json
+  inheritsFrom String?
+  isDefault    Boolean        @default(false)
+  isActive     Boolean        @default(true)
+  priority     Int            @default(0)
+  createdBy    String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  creator      Users          @relation("CreatedRoleTemplates", fields: [createdBy], references: [id])
+  parent       RoleTemplate?  @relation("RoleInheritance", fields: [inheritsFrom], references: [id])
+  children     RoleTemplate[] @relation("RoleInheritance")
+  userRoles    UserRole[]
+
+  @@map("role_templates")
+}
+
+model UserRole {
+  id             String       @id @default(cuid())
+  userId         String
+  roleTemplateId String
+  storeId        String?
+  assignedBy     String
+  assignedAt     DateTime     @default(now())
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  assignedByUser Users        @relation("AssignedUserRoles", fields: [assignedBy], references: [id])
+  roleTemplate   RoleTemplate @relation(fields: [roleTemplateId], references: [id], onDelete: Cascade)
+  user           Users        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleTemplateId, storeId])
+  @@map("user_roles")
+}
+
+model Notifications {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      Users    @relation(fields: [userId], references: [id])
+}
+
+model AuditLogs {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  resource  String
+  details   Json?
+  createdAt DateTime @default(now())
+  user      Users    @relation(fields: [userId], references: [id])
+}
+
+model ApiTokens {
+  id        String    @id @default(uuid())
+  userId    String
+  token     String    @unique
+  name      String
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      Users     @relation(fields: [userId], references: [id])
+}
+
+model PasswordResetTokens {
+  id        String    @id @default(uuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Suppliers {
+  id               String            @id @default(uuid())
+  name             String
+  email            String?
+  phone            String
+  address          String?
+  storeId          String
+  status           Status            @default(active)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  productSuppliers ProductSupplier[]
+  purchaseOrders   PurchaseOrders[]
+  store            Stores            @relation(fields: [storeId], references: [id])
+}
+
+model PurchaseOrders {
+  id         String    @id @default(uuid())
+  productId  String
+  supplierId String
+  userId     String
+  storeId    String
+  quantity   Int
+  price      Float
+  total      Float
+  status     Status    @default(pending)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  product    Products  @relation(fields: [productId], references: [id])
+  store      Stores    @relation(fields: [storeId], references: [id])
+  supplier   Suppliers @relation(fields: [supplierId], references: [id])
+  user       Users     @relation(fields: [userId], references: [id])
+}
+
+model Expenses {
+  id          String   @id @default(uuid())
+  userId      String
+  storeId     String
+  amount      Float
+  description String
+  date        DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  store       Stores   @relation(fields: [storeId], references: [id])
+  user        Users    @relation(fields: [userId], references: [id])
+}
+
+model Reports {
+  id        String   @id @default(uuid())
+  storeId   String
+  type      String
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store     Stores   @relation(fields: [storeId], references: [id])
+}
+
+model ProductSupplier {
+  id         String        @id @default(uuid())
+  productId  String
+  supplierId String
+  costPrice  Float
+  categoryId String?
+  state      SupplierState @default(secondary)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  category   Category?     @relation(fields: [categoryId], references: [id])
+  product    Products      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier   Suppliers     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, supplierId])
+}
+
+model Category {
+  id              String            @id @default(uuid())
+  name            String            @unique
+  code            String?           @unique
+  description     String?
+  parentId        String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  parent          Category?         @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children        Category[]        @relation("CategoryHierarchy")
+  ProductSupplier ProductSupplier[]
+  products        Products[]
+}
+
+model Products {
+  id                     String               @id @default(uuid())
+  name                   String
+  categoryId             String?
+  ean                    String?
+  pluUpc                 String?
+  sku                    String?
+  itemQuantity           Int
+  msrpPrice              Float
+  singleItemSellingPrice Float
+  clientId               String
+  storeId                String
+  discountAmount         Float
+  percentDiscount        Float
+  hasVariants            Boolean              @default(false)
+  packIds                String[]             @default([])
+  variants               Json[]
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  fileUploadId           String?
+  packs                  Pack[]
+  productSuppliers       ProductSupplier[]
+  category               Category?            @relation(fields: [categoryId], references: [id])
+  client                 Clients              @relation(fields: [clientId], references: [id])
+  fileUpload             FileUploadInventory? @relation(fields: [fileUploadId], references: [id])
+  store                  Stores               @relation(fields: [storeId], references: [id])
+  purchaseOrders         PurchaseOrders[]
+  saleAdjustments        SaleAdjustment[]     @relation("ProductAdjustments")
+  replacementAdjustments SaleAdjustment[]     @relation("ReplacementProduct")
+  saleItems              SaleItem[]
+  returns                SaleReturn[]
+}
+
+model Pack {
+  id                     String   @id @default(uuid())
+  productId              String
+  minimumSellingQuantity Int
+  totalPacksQuantity     Int
+  orderedPacksPrice      Float
+  discountAmount         Float
+  percentDiscount        Float
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  product                Products @relation(fields: [productId], references: [id])
+}
+
+model FileUploadInventory {
+  id         String     @id @default(cuid())
+  fileHash   String     @unique
+  fileName   String
+  uploadedAt DateTime   @default(now())
+  storeId    String?
+  status     String     @default("pending")
+  error      String?
+  errorLogs  ErrorLog[]
+  store      Stores?    @relation(fields: [storeId], references: [id])
+  products   Products[]
+}
+
+model ErrorLog {
+  id           String              @id @default(cuid())
+  fileUploadId String
+  rowNumber    Int
+  error        String
+  createdAt    DateTime            @default(now())
+  fileUpload   FileUploadInventory @relation(fields: [fileUploadId], references: [id])
+}
+
+model FileUploadSales {
+  id         String   @id @default(cuid())
+  fileHash   String   @unique
+  fileName   String
+  uploadedAt DateTime @default(now())
+  storeId    String?
+  Store      Stores?  @relation(fields: [storeId], references: [id])
+  Sale       Sales[]
+}
+
+model TaxCode {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  description String
+  taxTypeId   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  taxType     TaxType   @relation(fields: [taxTypeId], references: [id])
+  taxRates    TaxRate[]
+}
+
+model TaxType {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  description String
+  payer       PayerType?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  taxCodes    TaxCode[]
+  taxRates    TaxRate[]
+}
+
+model Region {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  code        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  taxRates    TaxRate[]
+}
+
+model TaxRate {
+  id            String          @id @default(uuid())
+  rate          Float
+  rateType      TaxRateType     @default(PERCENTAGE)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  regionId      String
+  taxTypeId     String
+  taxCodeId     String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  assignments   TaxAssignment[]
+  region        Region          @relation(fields: [regionId], references: [id])
+  taxCode       TaxCode         @relation(fields: [taxCodeId], references: [id])
+  taxType       TaxType         @relation(fields: [taxTypeId], references: [id])
+}
+
+model TaxAssignment {
+  id         String     @id @default(uuid())
+  entityId   String
+  entityType EntityType
+  taxRateId  String
+  assignedAt DateTime   @default(now())
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  taxRate    TaxRate    @relation(fields: [taxRateId], references: [id])
+}
+
+model tenant_credentials {
+  tenant_id     String    @id @db.Uuid
+  database_name String    @db.VarChar(255)
+  username      String    @db.VarChar(255)
+  password      String    @db.VarChar(255)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @default(now()) @db.Timestamp(6)
+}
+
 enum Role {
   super_admin
   admin
@@ -67,12 +714,12 @@ enum PaymentMethod {
 
 enum SaleStatus {
   PENDING
-  SENT_FOR_VALIDATION
-  VALIDATED
   COMPLETED
   CANCELLED
   REFUNDED
   PARTIALLY_RETURNED
+  SENT_FOR_VALIDATION
+  VALIDATED
 }
 
 enum PaymentStatus {
@@ -93,612 +740,6 @@ enum SaleConfirmation {
   CANCELLED
 }
 
-model Clients {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  phone        String?
-  address      String?
-  contactName  String?
-  databaseUrl  String?
-  databaseName String?
-  tier         Tier
-  dataSizeMB   String?
-  businessId   String?
-  status       Status   @default(active)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  users        Users[]
-  stores       Stores[]
-  products     Products[]
-  customers    Customer[]
-  sales        Sales[]
-  business     Business?
-}
-
-model Users {
-  id           String   @id @default(uuid())
-  googleId     String?  @unique
-  firstName    String
-  lastName     String
-  email        String   @unique
-  passwordHash String?
-  googleRefreshToken String?
-  otp          String?
-  otpExpiresAt DateTime?
-  isOtpUsed    Boolean?  @default(false)
-  role         String?
-  clientId     String
-  status       Status   @default(active)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  businessId   String?
-
-  employeeCode String?  @unique
-  position     String?
-  department   String?
-  phone        String?
-
-  client         Clients           @relation(fields: [clientId], references: [id])
-  stores         UserStoreMap[]
-  inviteLinks    InviteLinks[]
-  permissions    Permission[]      @relation("UserPermissions")
-  grantedPermissions Permission[]  @relation("PermissionGrantedBy")
-  createdRoleTemplates RoleTemplate[] @relation("CreatedRoleTemplates")
-  userRoles      UserRole[]
-  assignedUserRoles UserRole[]     @relation("AssignedUserRoles")
-  sales          Sales[]
-  purchaseOrders PurchaseOrders[]
-  expenses       Expenses[]
-  notifications  Notifications[]
-  auditLogs      AuditLogs[]
-  apiTokens      ApiTokens[]
-  passwordResetTokens PasswordResetTokens[]
-  saleAdjustments SaleAdjustment[]
-  processedReturns SaleReturn[]
-  validatedSales  Sales[]         @relation("ValidatedSales")
-  business        Business?         @relation(fields: [businessId], references: [id])
-}
-
-model Stores {
-  id          String   @id @default(uuid())
-  name        String
-  address     String?
-  phone       String?
-  email       String?
-  logoUrl     String?
-  clientId    String
-  status      Status   @default(active)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  businessId  String?
-
-  client          Clients           @relation(fields: [clientId], references: [id])
-  settings        StoreSettings?
-  users           UserStoreMap[]
-  permissions     Permission[]
-  products        Products[]
-  suppliers       Suppliers[]
-  sales           Sales[]
-  purchaseOrders  PurchaseOrders[]
-  expenses        Expenses[]
-  reports         Reports[]
-  FileUploadInventory FileUploadInventory[]
-  FileUploadSales     FileUploadSales[]
-  saleAdjustments SaleAdjustment[]
-  customers       Customer[]
-  business        Business?         @relation(fields: [businessId], references: [id])
-}
-
-model Business {
-  id           String   @id @default(uuid())
-  clientId     String   @unique
-  businessName String
-  contactNo    String
-  website      String?
-  address      String?
-  logoUrl      String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  client       Clients  @relation(fields: [clientId], references: [id])
-  stores       Stores[]
-  invoices     Invoice[]
-  users        Users[]
-}
-
-model SaleAdjustment {
-  id                String           @id @default(uuid())
-  saleId            String
-  productId         String
-  userId            String
-  storeId           String
-  adjustmentType    AdjustmentType
-  damageSubCategory DamageSubCategory?
-  quantity          Int
-  amount            Float
-  addToRevenue      Boolean?
-  addToInventory    Boolean?
-  replacementProductId String?
-  reason            String?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  sale              Sales            @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product           Products         @relation("ProductAdjustments", fields: [productId], references: [id])
-  user              Users            @relation(fields: [userId], references: [id])
-  store             Stores           @relation(fields: [storeId], references: [id])
-  replacementProduct Products?       @relation("ReplacementProduct", fields: [replacementProductId], references: [id])
-}
-
-model Customer {
-  id              String   @id @default(uuid())
-  customerName    String
-  customerAddress String?
-  phoneNumber     String   @unique
-  telephoneNumber String?
-  customerMail    String?
-  website         String?
-  threshold       Float?   @default(0)
-  storeId         String
-  clientId        String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  store           Stores         @relation(fields: [storeId], references: [id])
-  client          Clients        @relation(fields: [clientId], references: [id])
-  sales           Sales[]
-  balanceSheets   BalanceSheet[]
-  invoices        Invoice[]
-}
-
-model Sales {
-  id              String        @id @default(uuid())
-  customerId      String
-  userId          String
-  validatorId     String?
-  storeId         String
-  clientId        String
-  paymentMethod   PaymentMethod
-  totalAmount     Float
-  confirmation    SaleConfirmation @default(NOT_CONFIRMED) 
-  quantitySend    Int
-  allowance       Float?        @default(0)
-  source          InvoiceSource @default(manual)
-  tax             Float         @default(0)
-  status          SaleStatus    @default(PENDING)
-  generateInvoice Boolean       @default(true)
-  cashierName     String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  fileUploadSalesId String?
-  
-  customer        Customer      @relation(fields: [customerId], references: [id])
-  user            Users         @relation(fields: [userId], references: [id])
-  validator       Users?        @relation("ValidatedSales", fields: [validatorId], references: [id])
-  store           Stores        @relation(fields: [storeId], references: [id])
-  client          Clients       @relation(fields: [clientId], references: [id])
-  fileUploadSales FileUploadSales? @relation(fields: [fileUploadSalesId], references: [id])
-  saleItems       SaleItem[]
-  saleAdjustments SaleAdjustment[]
-  invoices        Invoice[]
-  returns         SaleReturn[]
-  balanceSheets   BalanceSheet[]
-}
-
-model SaleItem {
-  id              String   @id @default(uuid())
-  saleId          String
-  productId       String?
-  pluUpc          String
-  productName     String
-  quantity        Int
-  sellingPrice    Float
-  totalPrice      Float
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  sale            Sales    @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product         Products? @relation(fields: [productId], references: [id])
-}
-
-model Invoice {
-  id              String            @id @default(uuid())
-  saleId          String
-  customerId      String
-  businessId      String
-  invoiceNumber   String            @unique
-  customerName    String
-  customerPhone   String
-  customerMail    String?
-  customerWebsite String?
-  customerAddress String?
-  businessName    String
-  businessContact String
-  businessWebsite String?
-  businessAddress String?
-  shippingAddress String?
-  paymentMethod   PaymentMethod
-  totalAmount     Float
-  netAmount       Float
-  tax             Float
-  status          SaleStatus
-  cashierName     String
-  logoUrl         String?
-  qrCode          String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-
-  sale            Sales             @relation(fields: [saleId], references: [id])
-  customer        Customer          @relation(fields: [customerId], references: [id])
-  business        Business          @relation(fields: [businessId], references: [id])
-  customFields    CustomField[]
-}
-
-model CustomField {
-  id          String   @id @default(uuid())
-  invoiceId   String
-  fieldName   String
-  fieldValue  String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-}
-
-model BalanceSheet {
-  id              String        @id @default(uuid())
-  customerId      String
-  saleId          String?
-  remainingAmount Float
-  amountPaid      Float
-  paymentStatus   PaymentStatus @default(UNPAID)
-  description     String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  customer        Customer      @relation(fields: [customerId], references: [id])
-  sale            Sales?        @relation(fields: [saleId], references: [id])
-}
-
-model SaleReturn {
-  id              String        @id @default(uuid())
-  saleId          String
-  productId       String?
-  pluUpc          String
-  quantity        Int
-  returnCategory  String
-  reason          String?
-  processedBy     String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  sale            Sales         @relation(fields: [saleId], references: [id])
-  product         Products?      @relation(fields: [productId], references: [id])
-  processedByUser Users         @relation(fields: [processedBy], references: [id])
-}
-
-model StoreSettings {
-  id                String   @id @default(uuid())
-  storeId          String   @unique
-  currency         String   @default("USD")
-  timezone         String
-  taxRate          Float    @default(0)
-  taxMode          TaxMode  @default(exclusive)
-  lowStockAlert    Int      @default(10)
-  enableNotifications Boolean @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  store            Stores   @relation(fields: [storeId], references: [id])
-}
-
-model UserStoreMap {
-  id        String   @id @default(uuid())
-  userId    String
-  storeId   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user      Users    @relation(fields: [userId], references: [id])
-  store     Stores   @relation(fields: [storeId], references: [id])
-
-  @@unique([userId, storeId])
-}
-
-model InviteLinks {
-  id        String   @id @default(uuid())
-  email     String
-  token     String   @unique
-  role      Role
-  userId    String
-  status    Status   @default(pending)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
-
-  user      Users    @relation(fields: [userId], references: [id])
-}
-
-model Permission {
-  id            String   @id @default(cuid())
-  userId        String
-  storeId       String?
-  resource      String
-  actions       String[]
-  resourceId    String?
-  granted       Boolean  @default(true)
-  grantedBy     String
-  grantedAt     DateTime @default(now())
-  expiresAt     DateTime?
-  conditions    Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  user          Users    @relation("UserPermissions", fields: [userId], references: [id], onDelete: Cascade)
-  store         Stores?  @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  grantedByUser Users    @relation("PermissionGrantedBy", fields: [grantedBy], references: [id])
-
-  @@unique([userId, storeId, resource, resourceId])
-  @@index([userId, storeId])
-  @@index([resource])
-  @@map("permissions")
-}
-
-model RoleTemplate {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  permissions Json
-  inheritsFrom String?
-  isDefault   Boolean  @default(false)
-  isActive    Boolean  @default(true)
-  priority    Int      @default(0)
-  createdBy   String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  creator     Users        @relation("CreatedRoleTemplates", fields: [createdBy], references: [id])
-  parent      RoleTemplate? @relation("RoleInheritance", fields: [inheritsFrom], references: [id])
-  children    RoleTemplate[] @relation("RoleInheritance")
-  userRoles   UserRole[]
-
-  @@map("role_templates")
-}
-
-model UserRole {
-  id             String       @id @default(cuid())
-  userId         String
-  roleTemplateId String
-  storeId        String?
-  assignedBy     String
-  assignedAt     DateTime     @default(now())
-  isActive       Boolean      @default(true)
-  createdAt      DateTime     @default(now())
-
-  user         Users        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  roleTemplate RoleTemplate @relation(fields: [roleTemplateId], references: [id], onDelete: Cascade)
-  assignedByUser Users      @relation("AssignedUserRoles", fields: [assignedBy], references: [id])
-
-  @@unique([userId, roleTemplateId, storeId])
-  @@map("user_roles")
-}
-
-model Notifications {
-  id        String   @id @default(uuid())
-  userId    String
-  title     String
-  message   String
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user      Users    @relation(fields: [userId], references: [id])
-}
-
-model AuditLogs {
-  id        String   @id @default(uuid())
-  userId    String
-  action    String
-  resource  String
-  details   Json?
-  createdAt DateTime @default(now())
-
-  user      Users    @relation(fields: [userId], references: [id])
-}
-
-model ApiTokens {
-  id        String   @id @default(uuid())
-  userId    String
-  token     String   @unique
-  name      String
-  expiresAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user      Users    @relation(fields: [userId], references: [id])
-}
-
-model PasswordResetTokens {
-  id        String   @id @default(uuid())
-  userId    String
-  token     String   @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime @default(now())
-
-  user      Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model Suppliers {
-  id          String          @id @default(uuid())
-  name        String
-  email       String?
-  phone       String
-  address     String?
-  storeId     String
-  status      Status          @default(active)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  store       Stores          @relation(fields: [storeId], references: [id])
-  productSuppliers ProductSupplier[]
-  purchaseOrders  PurchaseOrders[]
-}
-
-model PurchaseOrders {
-  id          String   @id @default(uuid())
-  productId   String
-  supplierId  String
-  userId      String
-  storeId     String
-  quantity    Int
-  price       Float
-  total       Float
-  status      Status   @default(pending)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  product     Products  @relation(fields: [productId], references: [id])
-  supplier    Suppliers @relation(fields: [supplierId], references: [id])
-  user        Users     @relation(fields: [userId], references: [id])
-  store       Stores    @relation(fields: [storeId], references: [id])
-}
-
-model Expenses {
-  id          String   @id @default(uuid())
-  userId      String
-  storeId     String
-  amount      Float
-  description String
-  date        DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user        Users     @relation(fields: [userId], references: [id])
-  store       Stores    @relation(fields: [storeId], references: [id])
-}
-
-model Reports {
-  id          String   @id @default(uuid())
-  storeId     String
-  type        String
-  data        Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  store       Stores    @relation(fields: [storeId], references: [id])
-}
-
-model ProductSupplier {
-  id          String        @id @default(uuid())
-  productId   String
-  supplierId  String
-  costPrice   Float
-  categoryId  String?
-  state       SupplierState @default(secondary)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  category    Category?      @relation(fields: [categoryId], references: [id])
-  product     Products?      @relation(fields: [productId], references: [id], onDelete: Cascade)
-  supplier    Suppliers?     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-
-  @@unique([productId, supplierId])
-}
-
-model Category {
-  id          String    @id @default(uuid())
-  name        String    @unique
-  code        String?   @unique
-  description String?
-  parentId    String?
-  parent      Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children    Category[] @relation("CategoryHierarchy")
-  products    Products[]
-  ProductSupplier ProductSupplier[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-}
-
-model Products {
-  id                    String    @id @default(uuid())
-  name                  String
-  categoryId            String?
-  category              Category? @relation(fields: [categoryId], references: [id])
-  ean                   String?
-  pluUpc                String?   
-  sku                   String?
-  itemQuantity          Int
-  msrpPrice             Float
-  singleItemSellingPrice Float
-  clientId              String
-  storeId               String
-  discountAmount        Float
-  percentDiscount       Float
-  hasVariants           Boolean   @default(false)
-  packIds               String[]  @default([])
-  packs                 Pack[]
-  variants              Json[]    
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  fileUploadId          String?     
-  client                Clients   @relation(fields: [clientId], references: [id])
-  store                 Stores    @relation(fields: [storeId], references: [id])
-  productSuppliers      ProductSupplier[]
-  saleItems             SaleItem[]
-  fileUpload            FileUploadInventory? @relation(fields: [fileUploadId], references: [id])
-  purchaseOrders        PurchaseOrders[]
-  saleAdjustments       SaleAdjustment[]  @relation("ProductAdjustments")
-  replacementAdjustments SaleAdjustment[] @relation("ReplacementProduct")
-  returns               SaleReturn[]
-}
-
-model Pack {
-  id                    String    @id @default(uuid())
-  productId             String
-  minimumSellingQuantity Int
-  totalPacksQuantity    Int
-  orderedPacksPrice     Float
-  discountAmount        Float
-  percentDiscount       Float
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  product               Products  @relation(fields: [productId], references: [id])
-}
-
-model FileUploadInventory {
-  id         String      @id @default(cuid())
-  fileHash   String      @unique
-  fileName   String
-  uploadedAt DateTime    @default(now())
-  storeId    String?
-  status     String      @default("pending")
-  error      String?
-  products   Products[]
-  store      Stores?     @relation(fields: [storeId], references: [id])
-  errorLogs  ErrorLog[]
-}
-
-model ErrorLog {
-  id           String    @id @default(cuid())
-  fileUploadId String
-  rowNumber    Int
-  error        String
-  createdAt    DateTime  @default(now())
-  fileUpload   FileUploadInventory @relation(fields: [fileUploadId], references: [id])
-}
-
-model FileUploadSales {
-  id         String   @id @default(cuid())
-  fileHash   String   @unique
-  fileName   String
-  uploadedAt DateTime @default(now())
-  storeId    String?
-  Store      Stores?   @relation(fields: [storeId], references: [id])
-  Sale       Sales[]
-}
-
-// --- Tax System Enums ---
 enum PayerType {
   SUPPLIER
   STORE_OWNER
@@ -716,70 +757,4 @@ enum EntityType {
 enum TaxRateType {
   PERCENTAGE
   FIXED_AMOUNT
-}
-
-// --- Tax System Models ---
-model TaxCode {
-  id          String     @id @default(uuid())
-  code        String     @unique
-  description String
-  taxTypeId   String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  taxType     TaxType    @relation(fields: [taxTypeId], references: [id])
-  taxRates    TaxRate[]
-}
-
-model TaxType {
-  id          String     @id @default(uuid())
-  name        String     @unique
-  description String
-  payer       PayerType?  
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  taxCodes    TaxCode[]
-  taxRates    TaxRate[]
-}
-
-model Region {
-  id          String     @id @default(uuid())
-  name        String     @unique
-  code        String     @unique
-  description String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  taxRates    TaxRate[]
-}
-
-model TaxRate {
-  id          String      @id @default(uuid())
-  rate        Float
-  rateType    TaxRateType @default(PERCENTAGE)
-  effectiveFrom DateTime
-  effectiveTo   DateTime?
-  regionId    String
-  taxTypeId   String
-  taxCodeId   String
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  region      Region     @relation(fields: [regionId], references: [id])
-  taxType     TaxType    @relation(fields: [taxTypeId], references: [id])
-  taxCode     TaxCode    @relation(fields: [taxCodeId], references: [id])
-  assignments TaxAssignment[]
-}
-
-model TaxAssignment {
-  id            String     @id @default(uuid())
-  entityId      String
-  entityType    EntityType
-  taxRateId     String
-  assignedAt    DateTime   @default(now())
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-
-  taxRate       TaxRate    @relation(fields: [taxRateId], references: [id])
 }
