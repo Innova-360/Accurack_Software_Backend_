@@ -1086,8 +1086,35 @@ export class ProductService {
       }
     }
 
+    // After deleting all products, clean up file upload records
+    try {
+      console.log(`Cleaning up file upload records for store ${storeId}`);
+
+      await prisma.$transaction(async (tx) => {
+        // Delete error logs first (due to foreign key constraint)
+        await tx.errorLog.deleteMany({
+          where: {
+            fileUpload: {
+              storeId: storeId,
+            },
+          },
+        });
+
+        // Delete file upload inventory records
+        const deletedFileUploads = await tx.fileUploadInventory.deleteMany({
+          where: { storeId },
+        });
+
+        console.log(`Deleted ${deletedFileUploads.count} file upload records`);
+      });
+    } catch (error) {
+      console.error('Error cleaning up file upload records:', error);
+      // Don't throw error here as products were already deleted successfully
+      // Just log the error for debugging
+    }
+
     console.log(
-      `Successfully deleted all ${processed} products for store ${storeId}`,
+      `Successfully deleted all ${processed} products and file upload records for store ${storeId}`,
     );
     return;
   }
