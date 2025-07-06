@@ -61,8 +61,12 @@ export class AuthController extends BaseAuthController {
 
   @AuthEndpoint.GetMe()
   @Get('me')
-  getMe(@Req() req) {
-    const userData = this.extractUserData(req.user);
+  async getMe(@Req() req) {
+    // Get user data with permissions
+    const userWithPermissions = await this.authService.getUserWithPermissions(
+      req.user,
+    );
+    const userData = this.extractUserData(userWithPermissions);
     return this.responseService.success(
       'User information retrieved successfully',
       userData,
@@ -170,12 +174,13 @@ export class AuthController extends BaseAuthController {
   @Post('change-password')
   async changePassword(@Body() dto: ChangePasswordDto, @Request() req) {
     return this.handleServiceOperation(
-      () => this.authService.changePassword(
-        req.user.id,
-        dto.currentPassword,
-        dto.newPassword,
-        dto.confirmPassword,
-      ),
+      () =>
+        this.authService.changePassword(
+          req.user.id,
+          dto.currentPassword,
+          dto.newPassword,
+          dto.confirmPassword,
+        ),
       'Password changed successfully',
       200,
     );

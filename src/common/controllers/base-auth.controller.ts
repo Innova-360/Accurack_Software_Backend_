@@ -156,6 +156,7 @@ export abstract class BaseAuthController {
           logoUrl: user.business.logoUrl ?? undefined,
         },
       }),
+      ...(user.permissions && { permissions: user.permissions }), // Only include permissions if they exist
     };
   }
 }
