@@ -131,7 +131,7 @@ export class MultiTenantService {
       // Create DATABASE_URL for the new tenant
       const tenantDatabaseUrl = `postgresql://${userName}:${password}@${
         process.env.DB_HOST || 'localhost'
-      }:${process.env.DB_PORT || '5432'}/${databaseName}`;
+      }:${process.env.DB_PORT || '5432'}/${databaseName}?sslmode=require`;
 
       // Try Method 1: Use Prisma CLI
       try {
