@@ -4,6 +4,8 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaClientService } from '../prisma-client/prisma-client.service';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
+import { MultiTenantService } from '../database/multi-tenant.service';
+import { PrismaClient } from '@prisma/client';
 
 // JWT payload structure
 interface JwtPayload {
@@ -44,6 +46,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private prisma: PrismaClientService,
     private jwtService: JwtService,
+    private multiTenantService: MultiTenantService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
@@ -62,7 +65,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: JwtPayload): Promise<ValidatedUser> {
     try {
-      const user = await this.prisma.users.findUnique({
+      // First, try to find user in master database
+      let user = await this.prisma.users.findUnique({
         where: { id: payload.id },
         select: {
           id: true,
@@ -93,11 +97,66 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         },
       });
 
+      // If user not found in master database and has clientId, check tenant database
+      if (!user && payload.clientId) {
+        try {
+          const credentials = await this.multiTenantService[
+            'getTenantCredentials'
+          ](payload.clientId);
+          if (credentials) {
+            const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
+
+            const tenantPrisma = new PrismaClient({
+              datasources: { db: { url: tenantDatabaseUrl } },
+            });
+
+            try {
+              await tenantPrisma.$connect();
+
+              user = await tenantPrisma.users.findUnique({
+                where: { id: payload.id },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  role: true,
+                  clientId: true,
+                  googleId: true,
+                  status: true,
+                  businessId: true,
+                  createdAt: true,
+                  updatedAt: true,
+                  stores: {
+                    select: {
+                      storeId: true,
+                    },
+                  },
+                  business: {
+                    select: {
+                      id: true,
+                      businessName: true,
+                      contactNo: true,
+                      website: true,
+                      logoUrl: true,
+                    },
+                  },
+                },
+              });
+            } finally {
+              await tenantPrisma.$disconnect();
+            }
+          }
+        } catch (error) {
+          console.error('Error validating user in tenant database:', error);
+        }
+      }
+
       if (!user) {
         throw new UnauthorizedException('User not found or inactive.');
       }
 
-      const storeIds = user.stores.map(s => s.storeId);
+      const storeIds = user.stores.map((s) => s.storeId);
 
       return {
         id: user.id,
@@ -110,7 +169,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         status: user.status,
         businessId: user.businessId ?? undefined,
         stores: storeIds,
-        createdAt: user.createdAt, 
+        createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         ...(user.business && {
           business: {

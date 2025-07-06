@@ -6,6 +6,7 @@ import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { TenantContextService } from 'src/tenant/tenant-context.service';
 
 interface User {
+  id: string,
   businessId: string;
   business: {
     logoUrl?: string;
@@ -41,15 +42,26 @@ export class InvoiceService {
         };
       }
 
+      // Validate required fields
+      if (!businessName || !contactNo) {
+        return {
+          success: false,
+          message: 'Please fill in all required business details to continue. Business name, contact number are mandatory.',
+          showBusinessForm: true,
+          requiredFields: ['businessName', 'contactNo'],
+          data: null,
+        };
+      }
+
       // Create the business record
       const createdBusiness = await prisma.business.create({
         data: {
           clientId: user.clientId,
           businessName,
           contactNo,
-          website,
-          address,
-          logoUrl,
+          website: website || null,
+          address: address || null,
+          logoUrl: logoUrl || null,
         },
       });
 
@@ -62,7 +74,9 @@ export class InvoiceService {
       });
 
       return {
+        success: true,
         message: 'Business information saved successfully and user updated.',
+        showBusinessForm: false,
         data: createdBusiness,
       };
     } catch (error) {
@@ -71,7 +85,9 @@ export class InvoiceService {
       // Handle known Prisma constraint errors
       if (error.code === 'P2002') {
         return {
+          success: false,
           message: 'Business info already exists for this client.',
+          showBusinessForm: false,
           data: null,
         };
       }
@@ -83,14 +99,61 @@ export class InvoiceService {
     }
   }
 
+  async getBusinessInfo(user: any) {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    try {
+      // Check if business exists for this client
+      const business = await prisma.business.findUnique({
+        where: { clientId: user.clientId },
+      });
+
+      if (!business) {
+        return {
+          success: false,
+          message: 'Please fill in all required business details to continue. Business name, contact number, and address are mandatory.',
+          showBusinessForm: true,
+          requiredFields: ['businessName', 'contactNo', 'address'],
+          data: null,
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Business information found.',
+        showBusinessForm: false,
+        data: business,
+      };
+    } catch (error) {
+      console.error('Error getting business info:', error);
+      throw new Error(
+        'An error occurred while retrieving business information: ' +
+          (error.message || 'Unknown error'),
+      );
+    }
+  }
+
   async createInvoice(dto: CreateInvoiceDto, user: User): Promise<Invoice> {
     const prisma = await this.tenantContext.getPrismaClient();
     const { saleId, customFields } = dto;
-    const { businessId } = user;
+    const { id } = user;
 
-    if (!businessId) {
-      throw new NotFoundException('Business ID not found for user');
+    const userExist = await prisma.users.findFirst({
+      where: {id}
+    });
+
+    console.log(user);
+
+    // Check if user exists and business information exists first
+    if (!userExist || !userExist.businessId) {
+      throw new NotFoundException({
+        message: 'Please fill in all required business details to continue. Business name, contact number, and address are mandatory.',
+        showBusinessForm: true,
+        requiredFields: ['businessName', 'contactNo', 'address'],
+        error: 'BUSINESS_INFO_REQUIRED'
+      });
     }
+
     const { logoUrl } = user.business || {};
  
 
@@ -111,7 +174,7 @@ export class InvoiceService {
 
     // Fetch business data
     const business = await prisma.business.findUnique({
-      where: { id: businessId },
+      where: { id: userExist.businessId },
     });
 
     if (!business) {
@@ -135,7 +198,7 @@ export class InvoiceService {
       data: {
         saleId,
         customerId: sale.customerId,
-        businessId,
+        businessId: userExist.businessId,
         invoiceNumber: `INV-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         customerName: sale.customer.customerName,
         customerPhone: sale.customer.phoneNumber,

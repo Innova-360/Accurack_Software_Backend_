@@ -67,6 +67,8 @@ enum PaymentMethod {
 
 enum SaleStatus {
   PENDING
+  SENT_FOR_VALIDATION
+  VALIDATED
   COMPLETED
   CANCELLED
   REFUNDED
@@ -155,6 +157,7 @@ model Users {
   passwordResetTokens PasswordResetTokens[]
   saleAdjustments SaleAdjustment[]
   processedReturns SaleReturn[]
+  validatedSales  Sales[]         @relation("ValidatedSales")
   business        Business?         @relation(fields: [businessId], references: [id])
 }
 
@@ -253,6 +256,7 @@ model Sales {
   id              String        @id @default(uuid())
   customerId      String
   userId          String
+  validatorId     String?
   storeId         String
   clientId        String
   paymentMethod   PaymentMethod
@@ -271,6 +275,7 @@ model Sales {
   
   customer        Customer      @relation(fields: [customerId], references: [id])
   user            Users         @relation(fields: [userId], references: [id])
+  validator       Users?        @relation("ValidatedSales", fields: [validatorId], references: [id])
   store           Stores        @relation(fields: [storeId], references: [id])
   client          Clients       @relation(fields: [clientId], references: [id])
   fileUploadSales FileUploadSales? @relation(fields: [fileUploadSalesId], references: [id])

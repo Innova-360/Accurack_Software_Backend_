@@ -28,6 +28,32 @@ export class InvoiceController extends BaseInvoiceController {
     super(responseService);
   }
 
+
+    @InvoiceEndpoint.setBusinessInfo(businessInfoDto)
+  @Post('set-business/details')
+  async setBusinessInfo(
+    @Param('storeId') storeId: string,
+    @Body() dto: businessInfoDto,
+    @Req() req: any,
+  ) {
+    return this.handleServiceOperation(
+      () => this.invoiceService.setBusinessInfo(storeId, dto, req.user),
+      'Business information operation completed',
+    );
+  }
+
+
+  @InvoiceEndpoint.getBusinessInfo()
+  @Get('get-business/details')
+  async getBusinessInfo(
+    @Req() req: any,
+  ) {
+    return this.handleServiceOperation(
+      () => this.invoiceService.getBusinessInfo(req.user),
+      'Business information operation completed',
+    );
+  }
+
   @InvoiceEndpoint.CreateInvoice(CreateInvoiceDto)
   @Post()
   async createInvoice(
@@ -63,16 +89,5 @@ export class InvoiceController extends BaseInvoiceController {
   }
 
 
-  @InvoiceEndpoint.setBusinessInfo(businessInfoDto)
-  @Post('business-info')
-  async setBusinessInfo(
-    @Param('storeId') storeId: string,
-    @Body() dto: businessInfoDto,
-    @Req() req: any,
-  ) {
-    return this.handleServiceOperation(
-      () => this.invoiceService.setBusinessInfo(storeId, dto, req.user),
-      'Business information operation completed',
-    );
-  }
+
 }
