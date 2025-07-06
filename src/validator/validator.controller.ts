@@ -1,26 +1,43 @@
-// import { Controller, Get, Patch, Body, UseGuards, Req } from '@nestjs/common';
-// import { ValidatorService } from './validator.service';
-// import { UpdatePaymentDto, ValidateOrderDto } from './dto/validator.dto';
-// import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { Controller, Get, Patch, Body, Req } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { ValidatorService } from './validator.service';
+import { UpdatePaymentDto, ValidateOrderDto } from './dto/validator.dto';
+import { BaseValidatorController, ValidatorEndpoint, ResponseService } from '../common';
 
+@ApiTags('validator')
+@Controller('validator/orders')
+export class ValidatorController extends BaseValidatorController {
+  constructor(
+    private readonly validatorService: ValidatorService,
+    responseService: ResponseService,
+  ) {
+    super(responseService);
+  }
 
-// @Controller('validator/orders')
-// @UseGuards(JwtAuthGuard)
-// export class ValidatorController {
-//   constructor(private readonly validatorService: ValidatorService) {}
+  @ValidatorEndpoint.GetOrdersForValidation()
+  @Get()
+  async getOrdersForValidation(@Req() req: any) {
+    return this.handleOrdersOperation(
+      () => this.validatorService.getOrdersForValidation(req.user.id),
+      'Orders for validation retrieved successfully',
+    );
+  }
 
-//   @Get()
-//   getOrdersForValidation(@Req() req: any) {
-//     return this.validatorService.getOrdersForValidation(req.user.id);
-//   }
+  @ValidatorEndpoint.UpdatePayment(UpdatePaymentDto)
+  @Patch('payment')
+  async updatePayment(@Body() updatePaymentDto: UpdatePaymentDto, @Req() req: any) {
+    return this.handlePaymentOperation(
+      () => this.validatorService.updatePayment(updatePaymentDto, req.user.id),
+      'Payment updated successfully',
+    );
+  }
 
-//   @Patch('payment')
-//   updatePayment(@Body() updatePaymentDto: UpdatePaymentDto, @Req() req: any) {
-//     return this.validatorService.updatePayment(updatePaymentDto, req.user.id);
-//   }
-
-//   @Patch('validate')
-//   validateOrder(@Body() validateOrderDto: ValidateOrderDto, @Req() req: any) {
-//     return this.validatorService.validateOrder(validateOrderDto.saleId, req.user.id);
-//   }
-// }
+  @ValidatorEndpoint.ValidateOrder(ValidateOrderDto)
+  @Patch('validate')
+  async validateOrder(@Body() validateOrderDto: ValidateOrderDto, @Req() req: any) {
+    return this.handleValidationOperation(
+      () => this.validatorService.validateOrder(validateOrderDto.saleId, req.user.id),
+      'Order validated successfully',
+    );
+  }
+}

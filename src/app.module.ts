@@ -16,6 +16,8 @@ import { SaleModule } from './sale/sale.module';
 import { TaxModule } from './tax/tax.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { HealthController } from './health/health.controller';
+import { ValidatorModule } from './validator/validator.module';
+import { DriverModule } from './driver/driver.module';
 
 
 @Module({
@@ -33,7 +35,9 @@ import { HealthController } from './health/health.controller';
     InvoiceModule,
     EmployeeModule,
     UsersModule,
-    TaxModule
+    TaxModule,
+    ValidatorModule,
+    DriverModule
   ],
   providers: [
     {

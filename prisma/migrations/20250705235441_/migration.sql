@@ -26,7 +26,7 @@ CREATE TYPE "DamageSubCategory" AS ENUM ('SCRAP', 'RESELLABLE', 'NON_SELLABLE');
 CREATE TYPE "PaymentMethod" AS ENUM ('CASH', 'CARD', 'BANK_TRANSFER', 'CHECK', 'DIGITAL_WALLET');
 
 -- CreateEnum
-CREATE TYPE "SaleStatus" AS ENUM ('PENDING', 'COMPLETED', 'CANCELLED', 'REFUNDED', 'PARTIALLY_RETURNED');
+CREATE TYPE "SaleStatus" AS ENUM ('PENDING', 'SENT_FOR_VALIDATION', 'VALIDATED', 'COMPLETED', 'CANCELLED', 'REFUNDED', 'PARTIALLY_RETURNED');
 
 -- CreateEnum
 CREATE TYPE "PaymentStatus" AS ENUM ('PAID', 'PARTIAL', 'UNPAID', 'OVERDUE');
@@ -168,6 +168,7 @@ CREATE TABLE "Sales" (
     "id" TEXT NOT NULL,
     "customerId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
+    "validatorId" TEXT,
     "storeId" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
     "paymentMethod" "PaymentMethod" NOT NULL,
@@ -762,6 +763,9 @@ ALTER TABLE "Sales" ADD CONSTRAINT "Sales_customerId_fkey" FOREIGN KEY ("custome
 
 -- AddForeignKey
 ALTER TABLE "Sales" ADD CONSTRAINT "Sales_userId_fkey" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Sales" ADD CONSTRAINT "Sales_validatorId_fkey" FOREIGN KEY ("validatorId") REFERENCES "Users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Sales" ADD CONSTRAINT "Sales_storeId_fkey" FOREIGN KEY ("storeId") REFERENCES "Stores"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

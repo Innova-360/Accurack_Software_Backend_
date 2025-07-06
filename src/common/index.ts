@@ -17,6 +17,8 @@ export * from './decorators/tenant-endpoint.decorator';
 export * from './decorators/sale-endpoint.decorator';
 export * from './decorators/use-master-db.decorator';
 export * from './decorators/employee-endpoint.decorator';
+export * from './decorators/validator-endpoint.decorator';
+export * from './decorators/driver-endpoint.decorator';
 
 // Filters
 export * from './filters/global-exception.filter';
@@ -29,7 +31,8 @@ export * from './utils/generateRandomPass.helper';
 export * from './controllers/base-auth.controller';
 export * from './controllers/base-sale.controller';
 export * from './controllers/base-employee.controller';
-
+export * from './controllers/base-validator.controller';
+export * from './controllers/base-driver.controller';
 
 // Guards
 export * from '../guards/permissions.guard';
