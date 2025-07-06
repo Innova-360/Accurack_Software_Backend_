@@ -282,4 +282,34 @@ export const DriverEndpoint = {
       ApiBearerAuth(),
       Version('1'),
     ),
+
+  // Get all drivers endpoint
+  GetDrivers: () =>
+    applyDecorators(
+      ApiOperation({ 
+        summary: 'Get all drivers',
+        description: 'Retrieve a list of all drivers in the system. Only accessible by admins and managers.'
+      }),
+      ApiResponse({
+        status: 200,
+        description: 'Drivers retrieved successfully',
+        schema: successResponseSchema('Drivers retrieved successfully', [
+          {
+            id: 'driver-123',
+            firstName: 'John',
+            lastName: 'Driver',
+            email: 'john.driver@example.com',
+            position: 'driver',
+            status: 'active',
+            clientId: 'client-456',
+            createdAt: '2025-07-05T10:30:00.000Z',
+            updatedAt: '2025-07-05T10:30:00.000Z'
+          }
+        ]),
+      }),
+      ...standardErrorResponses(),
+      UseGuards(JwtAuthGuard),
+      ApiBearerAuth(),
+      Version('1'),
+    ),
 };
