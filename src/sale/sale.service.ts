@@ -207,7 +207,7 @@ export class SaleService {
       }),
       prisma.customer.count({ where }),
     ]);
-    console.log('customers', customers, 'total', total);
+    // console.log('customers', customers, 'total', total);
 
     return {
       customers,
@@ -980,7 +980,7 @@ export class SaleService {
         for (const [plu, quantity] of productSalesCount.entries()) {
           const product = inventoryMap.get(plu);
           console.log('product', product);
-          if (product && product.quantity >= quantity) {
+          if (product && product.itemQuantity >= quantity) {
             await prisma.products.update({
               where: { id: product.id },
               data: { itemQuantity: { decrement: quantity } },

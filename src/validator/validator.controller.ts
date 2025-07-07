@@ -1,8 +1,9 @@
-import { Controller, Get, Patch, Body, Req } from '@nestjs/common';
+import { Controller, Get, Patch, Body, Req, Param, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ValidatorService } from './validator.service';
-import { UpdatePaymentDto, ValidateOrderDto } from './dto/validator.dto';
+import { UpdatePaymentDto } from './dto/validator.dto';
 import { BaseValidatorController, ValidatorEndpoint, ResponseService } from '../common';
+import { PaginationDto } from 'src/driver/dto/driver.dto';
 
 @ApiTags('validator')
 @Controller('validator/orders')
@@ -16,9 +17,9 @@ export class ValidatorController extends BaseValidatorController {
 
   @ValidatorEndpoint.GetOrdersForValidation()
   @Get()
-  async getOrdersForValidation(@Req() req: any) {
+  async getOrdersForValidation(@Req() req: any, @Query() pagination: PaginationDto) {
     return this.handleOrdersOperation(
-      () => this.validatorService.getOrdersForValidation(req.user.id),
+      () => this.validatorService.getOrdersForValidation(req.user.id, pagination),
       'Orders for validation retrieved successfully',
     );
   }
@@ -32,11 +33,11 @@ export class ValidatorController extends BaseValidatorController {
     );
   }
 
-  @ValidatorEndpoint.ValidateOrder(ValidateOrderDto)
+  @ValidatorEndpoint.ValidateOrder()
   @Patch('validate')
-  async validateOrder(@Body() validateOrderDto: ValidateOrderDto, @Req() req: any) {
+  async validateOrder(@Req() req: any, @Param('orderId') orderId: string) {
     return this.handleValidationOperation(
-      () => this.validatorService.validateOrder(validateOrderDto.saleId, req.user.id),
+      () => this.validatorService.validateOrder(orderId, req.user.id),
       'Order validated successfully',
     );
   }
