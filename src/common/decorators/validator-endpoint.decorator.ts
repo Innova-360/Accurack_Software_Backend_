@@ -128,13 +128,12 @@ export const ValidatorEndpoint = {
     ),
 
   // Validate order endpoint
-  ValidateOrder: (dtoType: any) =>
+  ValidateOrder: () =>
     applyDecorators(
       ApiOperation({ 
         summary: 'Validate an order',
         description: 'Mark an order as validated and update balance sheet accordingly'
       }),
-      ApiBody({ type: dtoType }),
       ApiResponse({
         status: 200,
         description: 'Order validated successfully',

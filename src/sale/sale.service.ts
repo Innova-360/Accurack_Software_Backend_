@@ -207,7 +207,7 @@ export class SaleService {
       }),
       prisma.customer.count({ where }),
     ]);
-    console.log('customers', customers, 'total', total);
+    // console.log('customers', customers, 'total', total);
 
     return {
       customers,

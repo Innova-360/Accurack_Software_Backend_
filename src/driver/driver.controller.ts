@@ -6,15 +6,20 @@ import {
   Param,
   Get,
   Req,
+  Query,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { DriverService } from './driver.service';
 import {
   CreateOrderDto,
+  PaginationDto,
   UpdateOrderDto,
-  SendForValidationDto,
 } from './dto/driver.dto';
-import { BaseDriverController, DriverEndpoint, ResponseService } from '../common';
+import {
+  BaseDriverController,
+  DriverEndpoint,
+  ResponseService,
+} from '../common';
 
 @ApiTags('driver')
 @Controller('driver')
@@ -28,12 +33,14 @@ export class DriverController extends BaseDriverController {
 
   @DriverEndpoint.CreateOrder(CreateOrderDto)
   @Post('order')
-  async createOrder(
-    @Body() createOrderDto: CreateOrderDto,
-    @Req() req: any,
-  ) {
+  async createOrder(@Body() createOrderDto: CreateOrderDto, @Req() req: any) {
     return this.handleCreateOrderOperation(
-      () => this.driverService.createOrder(createOrderDto.storeId, createOrderDto, req.user),
+      () =>
+        this.driverService.createOrder(
+          createOrderDto.storeId,
+          createOrderDto,
+          req.user,
+        ),
       'Order created successfully',
     );
   }
@@ -51,32 +58,39 @@ export class DriverController extends BaseDriverController {
     );
   }
 
-  @DriverEndpoint.SendForValidation(SendForValidationDto)
-  @Post('order/validate')
-  async sendForValidation(
-    @Body() sendForValidationDto: SendForValidationDto,
-    @Req() req: any,
-  ) {
+  @DriverEndpoint.SendForValidation()
+  @Post('order/validate/:orderId')
+  async sendForValidation(@Req() req: any, @Param('orderId') orderId: string) {
+    console.log(orderId);
     return this.handleValidationRequestOperation(
-      () => this.driverService.sendForValidation(sendForValidationDto.saleId, req.user),
-      'Order sent for validation successfully',
+    () => this.driverService.sendForValidation(orderId, req.user),
+    'Order sent for validation successfully',
     );
   }
 
   @DriverEndpoint.GetOrders()
   @Get('orders')
-  async getOrders(@Req() req: any) {
+  async getOrders(
+    @Req() req: any,
+    @Param('storeId') storeId: string,
+    @Query() pagination: PaginationDto,
+  ) {
     return this.handleGetOrdersOperation(
-      () => this.driverService.getOrders(req.user),
+      () => this.driverService.getOrders(req.user, storeId, pagination),
       'Orders retrieved successfully',
     );
   }
 
   @DriverEndpoint.GetDrivers()
   @Get('drivers')
-  async getDrivers(@Req() req: any) {
+  async getDrivers(
+    @Req() req: any,
+    @Param('storeId') storeId: string,
+    @Query() pagination: PaginationDto,
+  ) {
+    console.log(storeId);
     return this.handleServiceOperation(
-      () => this.driverService.getDrivers(req.user),
+      () => this.driverService.getDrivers(req.user, storeId, pagination),
       'Drivers retrieved successfully',
     );
   }

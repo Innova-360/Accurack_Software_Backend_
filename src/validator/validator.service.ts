@@ -1,8 +1,17 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
-import { TenantContextService } from 'src/tenant/tenant-context.service';
-import { UpdatePaymentDto, ValidateOrderDto } from './dto/validator.dto';
-import { SaleStatus, PaymentStatus } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { PaymentStatus, SaleStatus } from "@prisma/client";
+import { PrismaClientService } from "../prisma-client/prisma-client.service";
+import { TenantContextService } from "../tenant/tenant-context.service";
+import { UpdatePaymentDto } from "./dto/validator.dto";
+import { PaginationDto } from "../driver/dto/driver.dto";
+
+interface GetOrdersForValidationResponse {
+  orders: any[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
 @Injectable()
 export class ValidatorService {
@@ -11,86 +20,137 @@ export class ValidatorService {
     private readonly tenantContext: TenantContextService,
   ) {}
 
-  async getOrdersForValidation(userId: string) {
+  async getOrdersForValidation(userId: string, pagination: PaginationDto): Promise<GetOrdersForValidationResponse> {
     const prisma = await this.tenantContext.getPrismaClient();
     
-    const user = await prisma.users.findUnique({ where: { id: userId } });
+    const user = await prisma.users.findUnique({ 
+      where: { id: userId },
+      select: { id: true, position: true }
+    });
     if (!user || user.position !== 'validator') {
       throw new ForbiddenException('User is not a validator');
     }
 
-    return prisma.sales.findMany({
-      where: { status: SaleStatus.SENT_FOR_VALIDATION },
-      include: {
-        customer: true,
-        user: true,
-      },
-    });
+    const { page, limit } = pagination;
+    const skip = (page - 1) * limit;
+    const take = limit;
+
+    const [orders, total] = await Promise.all([
+      prisma.orderProcessing.findMany({
+        where: {
+          status: SaleStatus.PENDING_VALIDATION,
+          isValidated: false,
+        },
+        select: {
+          id: true,
+          customerId: true,
+          customerName: true,
+          storeId: true,
+          paymentAmount: true,
+          paymentType: true,
+          status: true,
+          isValidated: true,
+          driverName: true,
+          driverId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.orderProcessing.count({
+        where: {
+          status: SaleStatus.PENDING_VALIDATION,
+          isValidated: false,
+        },
+      }),
+    ]);
+
+    return {
+      orders,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async updatePayment(dto: UpdatePaymentDto, userId: string) {
     const prisma = await this.tenantContext.getPrismaClient();
     
-    const user = await prisma.users.findUnique({ where: { id: userId } });
+    const user = await prisma.users.findUnique({ 
+      where: { id: userId },
+      select: { id: true, position: true }
+    });
     if (!user || user.position !== 'validator') {
       throw new ForbiddenException('User is not a validator');
     }
 
-    const order = await prisma.sales.findUnique({ where: { id: dto.saleId } });
+    const order = await prisma.orderProcessing.findUnique({ where: { id: dto.saleId } });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
-    
-    return prisma.sales.update({
+
+    if (order.isValidated) {
+      throw new BadRequestException('Cannot update validated order');
+    }
+
+    const updatedOrder = await prisma.orderProcessing.update({
       where: { id: dto.saleId },
       data: {
-        totalAmount: dto.paymentAmount,
+        paymentAmount: dto.paymentAmount,
+        paymentType: dto.paymentType,
         updatedAt: new Date(),
       },
-      include: {
-        customer: true,
-      },
     });
+
+    return updatedOrder;
   }
 
-  async validateOrder(saleId: string, userId: string) {
+  async validateOrder(orderId: string, userId: string) {
     const prisma = await this.tenantContext.getPrismaClient();
     
-    const user = await prisma.users.findUnique({ where: { id: userId } });
+    const user = await prisma.users.findUnique({ 
+      where: { id: userId },
+      select: { id: true, position: true }
+    });
     if (!user || user.position !== 'validator') {
       throw new ForbiddenException('User is not a validator');
     }
 
-    const order = await prisma.sales.findUnique({
-      where: { id: saleId },
-      include: { customer: true },
-    });
+    const order = await prisma.orderProcessing.findUnique({ where: { id: orderId } });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
 
-    // Update Sales record
-    const updatedOrder = await prisma.sales.update({
-      where: { id: saleId },
+    if (order.isValidated) {
+      throw new BadRequestException('Order is already validated');
+    }
+
+    const updatedOrder = await prisma.orderProcessing.update({
+      where: { id: orderId },
       data: {
+        isValidated: true,
         status: SaleStatus.VALIDATED,
         validatorId: userId,
         updatedAt: new Date(),
       },
     });
 
-    // Update or create BalanceSheet
     const balanceSheet = await prisma.balanceSheet.findFirst({
-      where: { customerId: order.customerId, saleId: order.id },
+      where: { customerId: order.customerId },
     });
 
     if (balanceSheet) {
       await prisma.balanceSheet.update({
         where: { id: balanceSheet.id },
         data: {
-          amountPaid: { increment: order.totalAmount },
-          remainingAmount: { decrement: order.totalAmount },
-          paymentStatus: order.totalAmount >= balanceSheet.remainingAmount ? PaymentStatus.PAID : PaymentStatus.PARTIAL,
+          amountPaid: { increment: updatedOrder.paymentAmount },
+          remainingAmount: { decrement: updatedOrder.paymentAmount },
+          paymentStatus: updatedOrder.paymentAmount >= balanceSheet.remainingAmount 
+            ? PaymentStatus.PAID 
+            : PaymentStatus.PARTIAL,
           updatedAt: new Date(),
         },
       });
@@ -98,8 +158,7 @@ export class ValidatorService {
       await prisma.balanceSheet.create({
         data: {
           customerId: order.customerId,
-          saleId: order.id,
-          amountPaid: order.totalAmount,
+          amountPaid: updatedOrder.paymentAmount,
           remainingAmount: 0,
           paymentStatus: PaymentStatus.PAID,
           createdAt: new Date(),
