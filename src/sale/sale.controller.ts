@@ -183,6 +183,16 @@ export class SaleController extends BaseSaleController {
     );
   }
 
+  @SaleEndpoint.DeleteAllSales()
+  @Delete('delete/all')
+  async deleteAllSales(@Req() req, @Query('storeId') storeId: string) {
+    const user = req.user;
+    return this.handleSaleOperation(
+      () => this.saleService.deleteAllSales(user, storeId),
+      'All sales deleted successfully',
+    );
+  }
+
   // Return endpoints
   @SaleEndpoint.CreateSaleReturn(CreateSaleReturnDto)
   @Post('returns')

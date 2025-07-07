@@ -495,6 +495,28 @@ export const SaleEndpoint = {
       ),
     ),
 
+  DeleteAllSales: () =>
+    applyDecorators(
+      ApiTags('Sales'),
+      ApiBearerAuth(),
+      ApiOperation({
+        summary: 'Delete all sales for a store',
+        description:
+          'Deletes all sales for a store and cleans up associated file upload records. This will allow the same files to be uploaded again.',
+      }),
+      ApiQuery({ name: 'storeId', description: 'Store ID' }),
+      ApiResponse({
+        status: 200,
+        description: 'All sales deleted successfully',
+        schema: successResponseSchema('All sales deleted successfully'),
+      }),
+      ...standardErrorResponses(),
+      RequirePermissions(
+        PermissionResource.TRANSACTION,
+        PermissionAction.DELETE,
+      ),
+    ),
+
   // Return Management Endpoints
   CreateSaleReturn: (dtoType: any) =>
     applyDecorators(

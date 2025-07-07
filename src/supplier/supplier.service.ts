@@ -530,13 +530,9 @@ export class SupplierService {
       throw new NotFoundException('Supplier not found');
     }
 
-    const products = supplier.productSuppliers
-      .filter((ps) => ps.product !== null)
-      .map((ps) => ps.product);
-
     return {
       message: 'Products retrieved successfully',
-      data: products,
+      data: supplier.productSuppliers,
     };
   }
 

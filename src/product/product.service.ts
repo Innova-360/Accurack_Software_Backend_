@@ -577,32 +577,104 @@ export class ProductService {
     } else if (storeId) {
       where.storeId = storeId;
     }
-    const [products, total] = await Promise.all([
-      prisma.products.findMany({
-        where,
-        include: {
-          packs: true,
-          category: true,
-          productSuppliers: {
-            include: {
-              supplier: true,
+
+    // Get total count first
+    const total = await prisma.products.count({ where });
+
+    // If limit is large (>1000), use batching to prevent connection pool exhaustion
+    if (limit > 1000) {
+      console.log(
+        `Large query detected (limit: ${limit}), using batching approach`,
+      );
+
+      const batchSize = 500; // Process 500 products at a time
+      const allProducts: any[] = [];
+      let currentSkip = skip;
+      let remainingLimit = limit;
+
+      while (remainingLimit > 0 && allProducts.length < limit) {
+        const currentBatchSize = Math.min(batchSize, remainingLimit);
+
+        console.log(
+          `Fetching batch: skip=${currentSkip}, take=${currentBatchSize}`,
+        );
+
+        const batch = await prisma.products.findMany({
+          where,
+          include: {
+            packs: true,
+            category: true,
+            productSuppliers: {
+              include: {
+                supplier: true,
+              },
             },
-          },
-          store: {
-            select: {
-              id: true,
-              name: true,
+            store: {
+              select: {
+                id: true,
+                name: true,
+              },
             },
+            saleItems: true,
+            purchaseOrders: true,
           },
-          saleItems: true,
-          purchaseOrders: true,
+          skip: currentSkip,
+          take: currentBatchSize,
+          orderBy: { createdAt: 'desc' },
+        });
+
+        allProducts.push(...batch);
+        currentSkip += currentBatchSize;
+        remainingLimit -= currentBatchSize;
+
+        // Small delay between batches to prevent overwhelming the database
+        if (remainingLimit > 0 && batch.length === currentBatchSize) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+
+        // Break if no more products
+        if (batch.length < currentBatchSize) {
+          break;
+        }
+      }
+
+      return {
+        products: allProducts.map((product) =>
+          this.formatProductResponse(product),
+        ),
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
         },
-        skip,
-        take: Number(limit),
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.products.count({ where }),
-    ]);
+      };
+    }
+
+    // For smaller queries, use the original approach
+    const products = await prisma.products.findMany({
+      where,
+      include: {
+        packs: true,
+        category: true,
+        productSuppliers: {
+          include: {
+            supplier: true,
+          },
+        },
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        saleItems: true,
+        purchaseOrders: true,
+      },
+      skip,
+      take: Number(limit),
+      orderBy: { createdAt: 'desc' },
+    });
 
     return {
       products: products.map((product) => this.formatProductResponse(product)),
@@ -1086,8 +1158,35 @@ export class ProductService {
       }
     }
 
+    // After deleting all products, clean up file upload records
+    try {
+      console.log(`Cleaning up file upload records for store ${storeId}`);
+
+      await prisma.$transaction(async (tx) => {
+        // Delete error logs first (due to foreign key constraint)
+        await tx.errorLog.deleteMany({
+          where: {
+            fileUpload: {
+              storeId: storeId,
+            },
+          },
+        });
+
+        // Delete file upload inventory records
+        const deletedFileUploads = await tx.fileUploadInventory.deleteMany({
+          where: { storeId },
+        });
+
+        console.log(`Deleted ${deletedFileUploads.count} file upload records`);
+      });
+    } catch (error) {
+      console.error('Error cleaning up file upload records:', error);
+      // Don't throw error here as products were already deleted successfully
+      // Just log the error for debugging
+    }
+
     console.log(
-      `Successfully deleted all ${processed} products for store ${storeId}`,
+      `Successfully deleted all ${processed} products and file upload records for store ${storeId}`,
     );
     return;
   }

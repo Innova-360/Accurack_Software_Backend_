@@ -102,7 +102,7 @@ export class SaleService {
 
   async deleteCustomer(customerId: string) {
     const prisma = await this.tenantContext.getPrismaClient();
-    
+
     // First check if customer exists
     const customer = await prisma.customer.findUnique({
       where: { id: customerId },
@@ -563,6 +563,117 @@ export class SaleService {
       // Delete sale
       await tx.sales.delete({ where: { id: saleId } });
     });
+  }
+
+  async deleteAllSales(user: any, storeId: string): Promise<void> {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    // First, get the total count to check if sales exist
+    const totalCount = await prisma.sales.count({
+      where: { storeId },
+    });
+
+    if (totalCount === 0) {
+      throw new NotFoundException('No sales found for this store.');
+    }
+
+    console.log(
+      `Starting batch deletion of ${totalCount} sales for store ${storeId}`,
+    );
+
+    const batchSize = 500; // Process 500 sales at a time
+    let processed = 0;
+
+    // Process in batches to avoid overwhelming the database
+    while (processed < totalCount) {
+      // Get a batch of sale IDs
+      const saleBatch = await prisma.sales.findMany({
+        where: { storeId },
+        select: { id: true },
+        take: batchSize,
+        skip: 0, // Always take from the beginning since we're deleting
+      });
+
+      if (saleBatch.length === 0) {
+        break; // No more sales to process
+      }
+
+      const saleIds = saleBatch.map((s) => s.id);
+
+      try {
+        // Delete in transaction to ensure consistency
+        await prisma.$transaction(async (tx) => {
+          // Delete related records first
+          await tx.saleItem.deleteMany({
+            where: { saleId: { in: saleIds } },
+          });
+
+          await tx.invoice.deleteMany({
+            where: { saleId: { in: saleIds } },
+          });
+
+          await tx.balanceSheet.deleteMany({
+            where: { saleId: { in: saleIds } },
+          });
+
+          // Delete sale adjustments
+          await tx.saleAdjustment.deleteMany({
+            where: { saleId: { in: saleIds } },
+          });
+
+          // Delete sale returns
+          await tx.saleReturn.deleteMany({
+            where: { saleId: { in: saleIds } },
+          });
+
+          // Finally delete the sales themselves
+          await tx.sales.deleteMany({
+            where: { id: { in: saleIds } },
+          });
+        });
+
+        processed += saleIds.length;
+        console.log(`Deleted batch: ${processed}/${totalCount} sales`);
+
+        // Small delay between batches to prevent database overload
+        if (processed < totalCount) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      } catch (error) {
+        console.error(
+          `Error deleting batch at ${processed}/${totalCount}:`,
+          error,
+        );
+        throw new BadRequestException(
+          `Failed to delete sales at batch ${Math.floor(processed / batchSize) + 1}. ${error.message}`,
+        );
+      }
+    }
+
+    // After deleting all sales, clean up file upload records
+    try {
+      console.log(`Cleaning up sales file upload records for store ${storeId}`);
+
+      await prisma.$transaction(async (tx) => {
+        // Delete file upload sales records
+        const deletedFileUploads = await tx.fileUploadSales.deleteMany({
+          where: { storeId },
+        });
+
+        console.log(
+          `Deleted ${deletedFileUploads.count} sales file upload records`,
+        );
+      });
+    } catch (error) {
+      console.error('Error cleaning up sales file upload records:', error);
+      // Don't throw error here as sales were already deleted successfully
+      // Just log the error for debugging
+    }
+
+    console.log(
+      `Successfully deleted all ${processed} sales and file upload records for store ${storeId}`,
+    );
+    return;
   }
 
   // Sale Returns

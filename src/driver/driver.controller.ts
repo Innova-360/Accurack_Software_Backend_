@@ -17,7 +17,7 @@ import {
 import { BaseDriverController, DriverEndpoint, ResponseService } from '../common';
 
 @ApiTags('driver')
-@Controller('driver/orders')
+@Controller('driver')
 export class DriverController extends BaseDriverController {
   constructor(
     private readonly driverService: DriverService,
@@ -27,7 +27,7 @@ export class DriverController extends BaseDriverController {
   }
 
   @DriverEndpoint.CreateOrder(CreateOrderDto)
-  @Post()
+  @Post('order')
   async createOrder(
     @Body() createOrderDto: CreateOrderDto,
     @Req() req: any,
@@ -39,7 +39,7 @@ export class DriverController extends BaseDriverController {
   }
 
   @DriverEndpoint.UpdateOrder(UpdateOrderDto)
-  @Patch(':id')
+  @Patch('order/:id')
   async updateOrder(
     @Param('id') orderId: string,
     @Body() updateOrderDto: UpdateOrderDto,
@@ -52,7 +52,7 @@ export class DriverController extends BaseDriverController {
   }
 
   @DriverEndpoint.SendForValidation(SendForValidationDto)
-  @Post('validate')
+  @Post('order/validate')
   async sendForValidation(
     @Body() sendForValidationDto: SendForValidationDto,
     @Req() req: any,
@@ -64,11 +64,20 @@ export class DriverController extends BaseDriverController {
   }
 
   @DriverEndpoint.GetOrders()
-  @Get()
+  @Get('orders')
   async getOrders(@Req() req: any) {
     return this.handleGetOrdersOperation(
       () => this.driverService.getOrders(req.user),
       'Orders retrieved successfully',
+    );
+  }
+
+  @DriverEndpoint.GetDrivers()
+  @Get('drivers')
+  async getDrivers(@Req() req: any) {
+    return this.handleServiceOperation(
+      () => this.driverService.getDrivers(req.user),
+      'Drivers retrieved successfully',
     );
   }
 }
