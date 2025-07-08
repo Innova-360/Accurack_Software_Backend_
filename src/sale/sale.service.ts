@@ -25,7 +25,7 @@ import {
   ValidationResult,
 } from 'src/utils/salesFileParser';
 import * as crypto from 'crypto';
-import { chunk } from 'lodash';
+import { chunk, includes } from 'lodash';
 import { InvoiceService } from 'src/invoice/invoice.service';
 import { InvoiceSource, SaleConfirmation } from '@prisma/client';
 
@@ -207,7 +207,7 @@ export class SaleService {
       }),
       prisma.customer.count({ where }),
     ]);
-    console.log('customers', customers, 'total', total);
+    // console.log('customers', customers, 'total', total);
 
     return {
       customers,
@@ -680,13 +680,11 @@ export class SaleService {
   async createSaleReturn(dto: CreateSaleReturnDto, userId: string) {
     const prisma = await this.tenantContext.getPrismaClient();
     return await prisma.$transaction(async (tx) => {
-      // Verify sale and sale item exist
+      // Verify sale exists
       const sale = await tx.sales.findUnique({
         where: { id: dto.saleId },
         include: {
-          saleItems: {
-            where: { productId: dto.productId },
-          },
+          saleItems: true,
           customer: true,
         },
       });
@@ -695,90 +693,208 @@ export class SaleService {
         throw new NotFoundException('Sale not found');
       }
 
-      const saleItem = sale.saleItems[0];
-      if (!saleItem) {
-        throw new NotFoundException('Product not found in this sale');
-      }
-
-      if (dto.quantity > saleItem.quantity) {
-        throw new BadRequestException(
-          'Return quantity cannot exceed purchased quantity',
-        );
-      }
-
-      // Create return record
-      const returnRecord = await tx.saleReturn.create({
-        data: {
-          saleId: dto.saleId,
-          productId: dto.productId,
-          pluUpc: dto.pluUpc,
-          quantity: dto.quantity,
-          returnCategory: dto.returnCategory,
-          reason: dto.reason,
-          processedBy: userId,
-        },
-      });
-
-      // Update inventory based on return category
-      const product = await tx.products.findUnique({
-        where: { id: dto.productId },
-      });
-
-      if (!product) {
-        throw new NotFoundException('Product not found');
-      }
-
-      switch (dto.returnCategory) {
-        case ReturnCategory.SALEABLE:
-        case ReturnCategory.SCRAP:
-          // Add back to inventory
-          await tx.products.update({
-            where: { id: dto.productId },
-            data: {
-              itemQuantity: {
-                increment: dto.quantity,
-              },
-            },
-          });
-          break;
-        // case ReturnCategory.NON_SALEABLE:
-        //   // Remove from inventory (already sold, now damaged)
-        //   await tx.products.update({
-        //     where: { id: dto.productId },
-        //     data: {
-        //       itemQuantity: {
-        //         decrement: Math.min(dto.quantity, product.itemQuantity),
-        //       },
-        //     },
-        //   });
-        //   break;
-      }
-
-      // Update customer balance sheet if sale was paid
       if (!sale.customerId) {
         throw new BadRequestException('Sale does not have a valid customerId');
       }
+
+      // Get last balance for the customer
       const lastBalance = await tx.balanceSheet.findFirst({
         where: { customerId: sale.customerId },
         orderBy: { createdAt: 'desc' },
       });
 
-      if (lastBalance && lastBalance.paymentStatus === PaymentStatus.PAID) {
-        const returnAmount = dto.quantity * saleItem.sellingPrice;
-
-        await tx.balanceSheet.create({
-          data: {
-            customerId: sale.customerId,
-            saleId: dto.saleId,
-            remainingAmount: -returnAmount, // Negative for return
-            amountPaid: 0,
-            paymentStatus: PaymentStatus.PAID,
-            description: `Return #${returnRecord.id} - ${returnAmount}`,
-          },
-        });
+      if (!lastBalance || lastBalance.paymentStatus !== PaymentStatus.PAID) {
+        throw new BadRequestException('Sale is not paid or no balance found');
       }
 
-      return returnRecord;
+      const returnRecords: any = [];
+      let totalRefundAmount = 0;
+
+      // Process each return item
+      for (const item of dto.returnItems) {
+        // Find the corresponding sale item
+        const saleItem = sale.saleItems.find(
+          (si) => si.productId === item.productId,
+        );
+        if (!saleItem) {
+          throw new NotFoundException(
+            `Product ${item.productId} not found in this sale`,
+          );
+        }
+
+        if (item.quantity > saleItem.quantity) {
+          throw new BadRequestException(
+            `Return quantity (${item.quantity}) for product ${item.productId} cannot exceed purchased quantity (${saleItem.quantity})`,
+          );
+        }
+
+        // Create return record
+        const returnRecord = await tx.saleReturn.create({
+          data: {
+            saleId: dto.saleId,
+            productId: item.productId,
+            pluUpc: item.pluUpc,
+            quantity: item.quantity,
+            isProductReturned: item.isProductReturned,
+            refundAmount: item.refundAmount,
+            returnCategory: item.returnCategory,
+            reason: item.reason,
+            processedBy: userId,
+          },
+        });
+
+        // Update inventory only if product is returned and category is SALEABLE or SCRAP
+        if (
+          item.isProductReturned &&
+          item.returnCategory !== ReturnCategory.NON_SALEABLE
+        ) {
+          const product = await tx.products.findUnique({
+            where: { id: item.productId },
+          });
+
+          if (!product) {
+            throw new NotFoundException(`Product ${item.productId} not found`);
+          }
+
+          switch (item.returnCategory) {
+            case ReturnCategory.SALEABLE:
+            case ReturnCategory.SCRAP:
+              await tx.products.update({
+                where: { id: item.productId },
+                data: {
+                  itemQuantity: {
+                    increment: item.quantity,
+                  },
+                },
+              });
+              break;
+          }
+        }
+
+        returnRecords.push(returnRecord);
+        totalRefundAmount += item.refundAmount;
+      }
+
+      // Update balance sheet with total refund amount
+      await tx.balanceSheet.create({
+        data: {
+          customerId: sale.customerId,
+          saleId: dto.saleId,
+          remainingAmount: lastBalance.remainingAmount - totalRefundAmount, // Deduct total refund
+          amountPaid: 0,
+          paymentStatus: PaymentStatus.PAID,
+          description: `Return for sale #${dto.saleId} - ${totalRefundAmount}`,
+        },
+      });
+
+      return {
+        saleId: dto.saleId,
+        returns: returnRecords,
+        totalRefundAmount,
+      };
+    });
+  }
+
+  async getReturnSales(storeId: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    return await prisma.saleReturn.findMany({
+      where: {
+        sale: {
+          storeId: storeId,
+        },
+      },
+      include: {
+        sale: {
+          include: {
+            customer: {
+              select: {
+                id: true,
+                customerName: true,
+                customerAddress: true,
+                phoneNumber: true,
+                telephoneNumber: true,
+                customerMail: true,
+                website: true,
+                threshold: true,
+                storeId: true,
+                clientId: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            },
+            saleItems: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    categoryId: true,
+                    ean: true,
+                    pluUpc: true,
+                    sku: true,
+                    itemQuantity: true,
+                    msrpPrice: true,
+                    singleItemSellingPrice: true,
+                    clientId: true,
+                    storeId: true,
+                    discountAmount: true,
+                    percentDiscount: true,
+                    hasVariants: true,
+                    packIds: true,
+                    variants: true,
+                    createdAt: true,
+                    updatedAt: true,
+                  },
+                },
+              },
+            },
+            client: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            store: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            user: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        product: {
+          select: {
+            id: true,
+            name: true,
+            categoryId: true,
+            ean: true,
+            pluUpc: true,
+            sku: true,
+            itemQuantity: true,
+            msrpPrice: true,
+            singleItemSellingPrice: true,
+            clientId: true,
+            storeId: true,
+            discountAmount: true,
+            percentDiscount: true,
+            hasVariants: true,
+            packIds: true,
+            variants: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
   }
 
@@ -832,6 +948,44 @@ export class SaleService {
 
     const balanceSheets = await prisma.balanceSheet.findMany({
       where: { customerId },
+      include: {
+        sale: {
+          select: {
+            id: true,
+            customerId: true,
+            userId: true,
+            storeId: true,
+            clientId: true,
+            paymentMethod: true,
+            totalAmount: true,
+            quantitySend: true,
+            allowance: true,
+            source: true,
+            tax: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            validatorId: true,
+            saleItems: {
+              select: {
+                id: true,
+                productId: true,
+                pluUpc: true,
+                productName: true,
+                quantity: true,
+                sellingPrice: true,
+                totalPrice: true,
+                createdAt: true,
+                updatedAt: true,
+                product: true,
+              },
+            },
+            customer: true,
+            invoices: true,
+            returns: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: 10,
     });
@@ -883,16 +1037,20 @@ export class SaleService {
     return `${prefix}-${String(sequence).padStart(4, '0')}`;
   }
 
-  async checkSalesFileHash(fileHash: string) {
+  async checkSalesFileHash(fileHash: string, storeId: string) {
     const prisma = await this.tenantContext.getPrismaClient();
     return await prisma.fileUploadSales.findUnique({
-      where: { fileHash },
+      where: {
+        fileHash,
+        storeId,
+      },
     });
   }
 
   async checkSalesFileStatus(
     file: Express.Multer.File,
     user: any,
+    storeId: string,
   ): Promise<string> {
     if (!file) {
       throw new BadRequestException('No file uploaded');
@@ -906,7 +1064,7 @@ export class SaleService {
       .createHash('sha256')
       .update(dataToHash)
       .digest('hex');
-    const existingFile = await this.checkSalesFileHash(fileHash);
+    const existingFile = await this.checkSalesFileHash(fileHash, storeId);
     if (existingFile) {
       throw new ConflictException('This file has already been uploaded');
     }
@@ -980,7 +1138,7 @@ export class SaleService {
         for (const [plu, quantity] of productSalesCount.entries()) {
           const product = inventoryMap.get(plu);
           console.log('product', product);
-          if (product && product.quantity >= quantity) {
+          if (product && product.itemQuantity >= quantity) {
             await prisma.products.update({
               where: { id: product.id },
               data: { itemQuantity: { decrement: quantity } },
@@ -1115,7 +1273,7 @@ export class SaleService {
 
   async addSales(user: any, file: Express.Multer.File, storeId: string) {
     console.log('user', user, 'file', file);
-    const fileHash = await this.checkSalesFileStatus(file, user);
+    const fileHash = await this.checkSalesFileStatus(file, user, storeId);
     const parsedData = parseExcelOrHTML(file);
     console.log('parsedData', parsedData);
     return await this.uploadSalesSheet(

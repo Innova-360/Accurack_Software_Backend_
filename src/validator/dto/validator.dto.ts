@@ -1,30 +1,30 @@
-import { IsNumber, IsUUID } from 'class-validator';
+import { IsString, IsEnum, IsNumber, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { PaymentMethod } from '@prisma/client';
 
 export class UpdatePaymentDto {
   @ApiProperty({
-    description: 'The unique identifier of the sale/order',
-    example: 'uuid-string-here',
-    format: 'uuid'
+    description: 'The unique identifier of the order',
+    example: 'order-uuid-here',
+    format: 'uuid',
   })
   @IsUUID()
   saleId: string;
 
   @ApiProperty({
-    description: 'The new payment amount for the order',
-    example: 175.50,
-    type: 'number'
+    description: 'Updated total amount for the order',
+    example: 175.0,
+    type: 'number',
   })
   @IsNumber()
   paymentAmount: number;
-}
 
-export class ValidateOrderDto {
   @ApiProperty({
-    description: 'The unique identifier of the sale/order to validate',
-    example: 'uuid-string-here',
-    format: 'uuid'
+    description: 'Updated payment method for the order',
+    enum: PaymentMethod,
+    example: 'CARD',
+    enumName: 'PaymentMethod',
   })
-  @IsUUID()
-  saleId: string;
+  @IsEnum(PaymentMethod)
+  paymentType: PaymentMethod;
 }

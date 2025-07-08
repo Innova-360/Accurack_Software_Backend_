@@ -1,8 +1,37 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaClientService } from '../prisma-client/prisma-client.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
-import { CreateOrderDto, UpdateOrderDto } from './dto/driver.dto';
+import { CreateOrderDto, UpdateOrderDto, PaginationDto } from './dto/driver.dto';
 import { SaleStatus } from '@prisma/client';
+
+interface Driver {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  position: string;
+  status: string;
+  clientId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  stores: { storeId: string }[];
+}
+
+interface GetDriversResponse {
+  drivers: Driver[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+interface GetOrdersResponse {
+  orders: any[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
 @Injectable()
 export class DriverService {
@@ -14,10 +43,10 @@ export class DriverService {
   async createOrder(storeId: string, dto: CreateOrderDto, user: any) {
     const prisma = await this.tenantContext.getPrismaClient();
     
-    const userExist = await prisma.users.findUnique({ where: { id: user.id } });
-    if (!userExist || userExist.position !== 'driver') {
-      throw new ForbiddenException('User is not a driver');
-    }
+    const userExist = await prisma.users.findUnique({ 
+      where: { id: user.id },
+      select: { id: true, position: true, clientId: true, firstName: true, lastName: true }
+    });
 
     if (!userExist?.id) {
       throw new NotFoundException('User not found');
@@ -25,115 +54,225 @@ export class DriverService {
     if (!userExist?.clientId) {
       throw new NotFoundException('User clientId not found');
     }
-    return prisma.sales.create({
+
+    const customer = await prisma.customer.findUnique({ 
+      where: { id: dto.customerId },
+      select: { id: true, customerName: true }
+    });
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    const order = await prisma.orderProcessing.create({
       data: {
         customerId: dto.customerId,
-        userId: userExist.id,
-        cashierName: dto.cashierName,
-        totalAmount: dto.totalAmount,
-        paymentMethod: dto.paymentMethod,
-        quantitySend: dto.quantitySend,
-        storeId, 
-        clientId: userExist.clientId, 
+        customerName: customer.customerName,
+        storeId: dto.storeId,
+        paymentAmount: dto.paymentAmount,
+        paymentType: dto.paymentType,
         status: SaleStatus.PENDING,
-      },
-      include: {
-        customer: true,
+        isValidated: false,
+        driverId: dto.driverId,
+        driverName: dto.driverName,
+        clientId: userExist.clientId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     });
-  }
 
+    return order;
+  }
 
   async updateOrder(orderId: string, dto: UpdateOrderDto, user: any) {
     const prisma = await this.tenantContext.getPrismaClient();
     
-    const userExist = await prisma.users.findUnique({ where: { id: user.id } });
+    const userExist = await prisma.users.findUnique({ 
+      where: { id: user.id },
+      select: { id: true, position: true }
+    });
     if (!userExist || userExist.position !== 'driver') {
       throw new ForbiddenException('User is not a driver');
     }
 
-    const order = await prisma.sales.findUnique({ where: { id: orderId } });
+    const order = await prisma.orderProcessing.findUnique({ where: { id: orderId } });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
-    return prisma.sales.update({
+
+    if (order.isValidated) {
+      throw new BadRequestException('Cannot update validated order');
+    }
+
+    const updatedOrder = await prisma.orderProcessing.update({
       where: { id: orderId },
       data: {
-        status: dto.status,
-        totalAmount: dto.totalAmount,
-        paymentMethod: dto.paymentMethod,
+        paymentAmount: dto.paymentAmount,
+        paymentType: dto.paymentType,
+        status: dto.status || order.status,
         updatedAt: new Date(),
       },
-      include: {
-        customer: true,
-      },
     });
+
+    return updatedOrder;
   }
 
-
-  async sendForValidation(saleId: string, user: any) {
+  async sendForValidation(orderId: string, user: any) {
     const prisma = await this.tenantContext.getPrismaClient();
     
-    const userExist = await prisma.users.findUnique({ where: { id: user.id } });
-    if (!userExist || userExist.position !== 'driver') {
-      throw new ForbiddenException('User is not a driver');
-    }
+    const userExist = await prisma.users.findUnique({ 
+      where: { id: user.id },
+      select: { id: true, position: true }
+    });
 
-    const order = await prisma.sales.findUnique({ where: { id: saleId } });
+    const order = await prisma.orderProcessing.findUnique({ where: { id: orderId } });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
-    return prisma.sales.update({
-      where: { id: saleId },
+
+    if (order.isValidated) {
+      throw new BadRequestException('Order is already validated');
+    }
+
+    const updatedOrder = await prisma.orderProcessing.update({
+      where: { id: orderId },
       data: {
-        status: SaleStatus.SENT_FOR_VALIDATION,
+        status: SaleStatus.PENDING_VALIDATION,
         updatedAt: new Date(),
       },
     });
+
+    return updatedOrder;
   }
 
-
-  async getOrders(user: any) {
+  async getOrders(user: any, storeId: string, pagination: PaginationDto): Promise<GetOrdersResponse> {
     const prisma = await this.tenantContext.getPrismaClient();
     
-    const userExist = await prisma.users.findUnique({ where: { id: user.id } });
-    if (!userExist || userExist.position !== 'driver') {
-      throw new ForbiddenException('User is not a driver');
+    const userExist = await prisma.users.findUnique({ 
+      where: { id: user.id },
+      select: { id: true, position: true }
+    });
+    if (!userExist) {
+      throw new NotFoundException('User not found');
     }
 
-    return prisma.sales.findMany({
-      where: { userId: userExist.id },
-      include: {
-        customer: true,
-      },
-    });
+    const { page, limit } = pagination;
+    const skip = (Number(page) - 1) * Number(limit);
+    const take = Number(limit);
+
+    const [orders, total] = await Promise.all([
+      prisma.orderProcessing.findMany({
+        where: {
+          storeId,
+        },
+        select: {
+          id: true,
+          customerId: true,
+          customerName: true,
+          storeId: true,
+          paymentAmount: true,
+          paymentType: true,
+          status: true,
+          isValidated: true,
+          driverName: true,
+          driverId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.orderProcessing.count({
+        where: {
+          storeId,
+        },
+      }),
+    ]);
+
+    return {
+      orders,
+      total,
+      page,
+      limit: Number(limit),
+      totalPages: Math.ceil(total / Number(limit)),
+    };
   }
 
+  async getDrivers(user: any, storeId: string, pagination: PaginationDto): Promise<GetDriversResponse> {
+    try {
+      const prisma = await this.tenantContext.getPrismaClient();
 
-  async getDrivers(user: any) {
-    const prisma = await this.tenantContext.getPrismaClient();
+      const store = await prisma.stores.findFirst({
+        where: { id: storeId },
+      });
 
-    // Only allow admins or managers to get list of drivers
-    if (!user || (user.position !== 'admin' && user.position !== 'manager')) {
-      throw new ForbiddenException('User is not authorized to view drivers list');
+      if (!store) {
+        throw new BadRequestException('Store not found');
+      }
+
+      const { page, limit } = pagination;
+      const skip = (page - 1) * limit;
+      const take = limit;
+
+      const [driversRaw, total] = await Promise.all([
+        prisma.users.findMany({
+          where: {
+            position: 'driver',
+            stores: {
+              some: {
+                storeId: storeId,
+              },
+            },
+          },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            position: true,
+            status: true,
+            clientId: true,
+            createdAt: true,
+            updatedAt: true,
+            stores: {
+              select: {
+                storeId: true,
+              },
+            },
+          },
+          skip,
+          take,
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.users.count({
+          where: {
+            position: 'driver',
+            stores: {
+              some: {
+                storeId: storeId,
+              },
+            },
+          },
+        }),
+      ]);
+
+      const drivers: Driver[] = driversRaw.map((driver) => ({
+        ...driver,
+        position: driver.position ?? '',
+      }));
+
+      return {
+        drivers,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof ForbiddenException) {
+        throw error;
+      }
+      throw new Error('Failed to fetch drivers');
     }
-
-    const drivers = await prisma.users.findMany({
-      where: { position: "driver" },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        position: true,
-        status: true,
-        clientId: true,
-        createdAt: true,
-        updatedAt: true,
-        // Exclude sensitive fields like passwordHash, otp, etc.
-      },
-    });
-
-    return drivers;
   }
 }

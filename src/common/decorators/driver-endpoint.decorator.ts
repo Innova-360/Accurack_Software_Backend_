@@ -188,13 +188,12 @@ export const DriverEndpoint = {
     ),
 
   // Send for validation endpoint
-  SendForValidation: (dtoType: any) =>
+  SendForValidation: () =>
     applyDecorators(
       ApiOperation({ 
         summary: 'Send order for validation',
         description: 'Submit an order for validation by changing its status to SENT_FOR_VALIDATION'
       }),
-      ApiBody({ type: dtoType }),
       ApiResponse({
         status: 200,
         description: 'Order sent for validation successfully',

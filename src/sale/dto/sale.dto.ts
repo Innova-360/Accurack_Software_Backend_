@@ -240,22 +240,29 @@ export class UpdateSaleDto {
   cashierName?: string;
 }
 
-export class CreateSaleReturnDto {
-  @ApiProperty({ description: 'Sale ID' })
-  @IsUUID()
-  saleId: string;
-
+// Define the single return item DTO
+export class SaleReturnItemDto {
   @ApiProperty({ description: 'Product ID' })
   @IsUUID()
-  productId?: string;
+  productId: string;
 
   @ApiProperty({ description: 'Product PLU/UPC' })
+  @IsString()
   pluUpc: string;
+
+  @ApiProperty({ description: 'Product will be returned or not' })
+  @IsBoolean()
+  isProductReturned: boolean;
 
   @ApiProperty({ description: 'Quantity to return' })
   @IsNumber()
   @IsPositive()
   quantity: number;
+
+  @ApiProperty({ description: 'Amount to return' })
+  @IsNumber()
+  @IsPositive()
+  refundAmount: number;
 
   @ApiProperty({ description: 'Return category', enum: ReturnCategory })
   @IsEnum(ReturnCategory)
@@ -265,6 +272,17 @@ export class CreateSaleReturnDto {
   @IsOptional()
   @IsString()
   reason?: string;
+}
+
+// Update CreateSaleReturnDto to accept multiple return items
+export class CreateSaleReturnDto {
+  @ApiProperty({ description: 'Sale ID' })
+  @IsUUID()
+  saleId: string;
+
+  @ApiProperty({ description: 'Array of return items', type: [SaleReturnItemDto] })
+  @IsArray()
+  returnItems: SaleReturnItemDto[];
 }
 
 export class CreatePaymentDto {
