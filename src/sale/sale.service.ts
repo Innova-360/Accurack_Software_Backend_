@@ -25,7 +25,7 @@ import {
   ValidationResult,
 } from 'src/utils/salesFileParser';
 import * as crypto from 'crypto';
-import { chunk } from 'lodash';
+import { chunk, includes } from 'lodash';
 import { InvoiceService } from 'src/invoice/invoice.service';
 import { InvoiceSource, SaleConfirmation } from '@prisma/client';
 
@@ -845,6 +845,44 @@ export class SaleService {
 
     const balanceSheets = await prisma.balanceSheet.findMany({
       where: { customerId },
+      include: {
+        sale: {
+          select: {
+            id: true,
+            customerId: true,
+            userId: true,
+            storeId: true,
+            clientId: true,
+            paymentMethod: true,
+            totalAmount: true,
+            quantitySend: true,
+            allowance: true,
+            source: true,
+            tax: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            validatorId: true,
+            saleItems: {
+              select: {
+                id: true,
+                productId: true,
+                pluUpc: true,
+                productName: true,
+                quantity: true,
+                sellingPrice: true,
+                totalPrice: true,
+                createdAt: true,
+                updatedAt: true,
+                product: true,
+              },
+            },
+            customer: true,
+            invoices: true,
+            returns: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: 10,
     });
