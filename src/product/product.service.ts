@@ -1289,15 +1289,19 @@ export class ProductService {
     return categoryMap;
   }
 
-  async checkInventoryFileHash(fileHash: string) {
+  async checkInventoryFileHash(fileHash: string, storeId: string) {
     const prisma = await this.tenantContext.getPrismaClient();
-    return await prisma.fileUploadInventory.findUnique({
-      where: { fileHash },
+    return await prisma.fileUploadInventory.findFirst({
+      where: {
+        fileHash,
+        storeId,
+      },
     });
   }
   async checkInventoryFileStatus(
     file: Express.Multer.File,
     user: any,
+    storeId: string,
   ): Promise<string> {
     if (!file) {
       throw new BadRequestException('No file uploaded');
@@ -1311,7 +1315,7 @@ export class ProductService {
       .createHash('sha256')
       .update(dataToHash)
       .digest('hex');
-    const existingFile = await this.checkInventoryFileHash(fileHash);
+    const existingFile = await this.checkInventoryFileHash(fileHash, storeId);
     if (existingFile) {
       throw new ConflictException('This file has already been uploaded');
     }
@@ -1766,7 +1770,7 @@ export class ProductService {
 
   async addInventory(user: any, file: Express.Multer.File, storeId: string) {
     console.log('user', user, 'file', file);
-    const fileHash = await this.checkInventoryFileStatus(file, user);
+    const fileHash = await this.checkInventoryFileStatus(file, user, storeId);
     const parsedData = parseExcel(file);
     console.log('parsedData', parsedData);
     return await this.uploadInventorySheet(

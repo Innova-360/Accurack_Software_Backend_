@@ -1037,16 +1037,20 @@ export class SaleService {
     return `${prefix}-${String(sequence).padStart(4, '0')}`;
   }
 
-  async checkSalesFileHash(fileHash: string) {
+  async checkSalesFileHash(fileHash: string, storeId: string) {
     const prisma = await this.tenantContext.getPrismaClient();
     return await prisma.fileUploadSales.findUnique({
-      where: { fileHash },
+      where: {
+        fileHash,
+        storeId,
+      },
     });
   }
 
   async checkSalesFileStatus(
     file: Express.Multer.File,
     user: any,
+    storeId: string,
   ): Promise<string> {
     if (!file) {
       throw new BadRequestException('No file uploaded');
@@ -1060,7 +1064,7 @@ export class SaleService {
       .createHash('sha256')
       .update(dataToHash)
       .digest('hex');
-    const existingFile = await this.checkSalesFileHash(fileHash);
+    const existingFile = await this.checkSalesFileHash(fileHash, storeId);
     if (existingFile) {
       throw new ConflictException('This file has already been uploaded');
     }
@@ -1269,7 +1273,7 @@ export class SaleService {
 
   async addSales(user: any, file: Express.Multer.File, storeId: string) {
     console.log('user', user, 'file', file);
-    const fileHash = await this.checkSalesFileStatus(file, user);
+    const fileHash = await this.checkSalesFileStatus(file, user, storeId);
     const parsedData = parseExcelOrHTML(file);
     console.log('parsedData', parsedData);
     return await this.uploadSalesSheet(
