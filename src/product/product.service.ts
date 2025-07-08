@@ -554,7 +554,7 @@ export class ProductService {
 
   async getProducts(
     user: any,
-    storeId?: string,
+    storeId: string,
     page: number = 1,
     limit: number = 15000,
   ) {
@@ -564,6 +564,17 @@ export class ProductService {
     const prisma = await this.tenantContext.getPrismaClient();
 
     const skip = (Number(page) - 1) * Number(limit);
+
+    if (!storeId && !user.storeId) {
+      throw new BadRequestException('No store specified');
+    }
+
+    if (
+      storeId &&
+      !user.stores?.some((store: any) => store.storeId === storeId)
+    ) {
+      throw new BadRequestException('No access to this store');
+    }
 
     let where: any = {};
 
