@@ -206,6 +206,16 @@ export class SaleController extends BaseSaleController {
     );
   }
 
+
+  @SaleEndpoint.GetReturnSales()
+  @Get('returns')
+  async getReturnSales(@Query('storeId') storeId: string, @Request() req: any) {
+    return this.handleReturnOperation(
+      () => this.saleService.getReturnSales(storeId),
+      'Sale returns retrieved successfully',
+    );
+  }
+
   // Payment endpoints
   @SaleEndpoint.CreatePayment(CreatePaymentDto)
   @Post('payments')

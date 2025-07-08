@@ -546,6 +546,171 @@ export const SaleEndpoint = {
       ),
     ),
 
+
+
+  GetReturnSales: () =>
+    applyDecorators(
+      ApiTags('Sales'),
+      ApiBearerAuth(),
+      ApiOperation({
+        summary: 'Fetch all sale returns for a store',
+        description:
+          'Retrieves all sale return records for a specified store, including sale details, sale items, customer details, and product details.',
+      }),
+      ApiResponse({
+        status: 200,
+        description: 'Sale returns retrieved successfully',
+        schema: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', example: 'return-uuid-1' },
+              saleId: { type: 'string', example: 'sale-uuid-1' },
+              productId: { type: 'string', example: 'product-uuid-1' },
+              pluUpc: { type: 'string', example: '123456789012' },
+              quantity: { type: 'number', example: 2 },
+              returnCategory: { type: 'string', example: 'SALEABLE' },
+              reason: { type: 'string', example: 'Customer changed mind' },
+              processedBy: { type: 'string', example: 'user-uuid-1' },
+              createdAt: { type: 'string', example: '2025-07-08T15:30:00.000Z' },
+              updatedAt: { type: 'string', example: '2025-07-08T15:30:00.000Z' },
+              sale: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', example: 'sale-uuid-1' },
+                  customerId: { type: 'string', example: 'customer-uuid-1' },
+                  userId: { type: 'string', example: 'user-uuid-1' },
+                  storeId: { type: 'string', example: 'store-uuid-1' },
+                  clientId: { type: 'string', example: 'client-uuid-1' },
+                  paymentMethod: { type: 'string', example: 'CREDIT_CARD' },
+                  totalAmount: { type: 'number', example: 150.75 },
+                  confirmation: { type: 'string', example: 'CONFIRMED' },
+                  quantitySend: { type: 'number', example: 5 },
+                  allowance: { type: 'number', example: 10.00 },
+                  source: { type: 'string', example: 'manual' },
+                  tax: { type: 'number', example: 12.50 },
+                  status: { type: 'string', example: 'COMPLETED' },
+                  generateInvoice: { type: 'boolean', example: true },
+                  isProductReturned: { type: 'boolean', example: true },
+                  cashierName: { type: 'string', example: 'John Smith' },
+                  createdAt: { type: 'string', example: '2025-07-08T14:00:00.000Z' },
+                  updatedAt: { type: 'string', example: '2025-07-08T15:30:00.000Z' },
+                  customer: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', example: 'customer-uuid-1' },
+                      customerName: { type: 'string', example: 'Jane Doe' },
+                      customerAddress: { type: 'string', example: '123 Main St, Springfield' },
+                      phoneNumber: { type: 'string', example: '+1234567890' },
+                      telephoneNumber: { type: 'string', example: '+0987654321', nullable: true },
+                      customerMail: { type: 'string', example: 'jane.doe@example.com', nullable: true },
+                      website: { type: 'string', example: 'www.janedoe.com', nullable: true },
+                      threshold: { type: 'number', example: 500.00 },
+                      storeId: { type: 'string', example: 'store-uuid-1' },
+                      clientId: { type: 'string', example: 'client-uuid-1' },
+                      createdAt: { type: 'string', example: '2025-01-01T10:00:00.000Z' },
+                      updatedAt: { type: 'string', example: '2025-07-01T12:00:00.000Z' },
+                    },
+                  },
+                  saleItems: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', example: 'sale-item-uuid-1' },
+                        saleId: { type: 'string', example: 'sale-uuid-1' },
+                        productId: { type: 'string', example: 'product-uuid-1' },
+                        pluUpc: { type: 'string', example: '123456789012' },
+                        productName: { type: 'string', example: 'Wireless Mouse' },
+                        quantity: { type: 'number', example: 2 },
+                        sellingPrice: { type: 'number', example: 25.00 },
+                        totalPrice: { type: 'number', example: 50.00 },
+                        createdAt: { type: 'string', example: '2025-07-08T14:00:00.000Z' },
+                        updatedAt: { type: 'string', example: '2025-07-08T14:00:00.000Z' },
+                        product: {
+                          type: 'object',
+                          properties: {
+                            id: { type: 'string', example: 'product-uuid-1' },
+                            name: { type: 'string', example: 'Wireless Mouse' },
+                            categoryId: { type: 'string', example: 'category-uuid-1', nullable: true },
+                            ean: { type: 'string', example: '1234567890123', nullable: true },
+                            pluUpc: { type: 'string', example: '123456789012', nullable: true },
+                            sku: { type: 'string', example: 'WM123', nullable: true },
+                            itemQuantity: { type: 'number', example: 50 },
+                            msrpPrice: { type: 'number', example: 30.00 },
+                            singleItemSellingPrice: { type: 'number', example: 25.00 },
+                            clientId: { type: 'string', example: 'client-uuid-1' },
+                            storeId: { type: 'string', example: 'store-uuid-1' },
+                            discountAmount: { type: 'number', example: 5.00 },
+                            percentDiscount: { type: 'number', example: 10.00 },
+                            hasVariants: { type: 'boolean', example: false },
+                            packIds: { type: 'array', items: { type: 'string' }, example: [] },
+                            variants: { type: 'array', items: { type: 'object' }, example: [] },
+                            createdAt: { type: 'string', example: '2025-01-01T09:00:00.000Z' },
+                            updatedAt: { type: 'string', example: '2025-07-08T15:30:00.000Z' },
+                          },
+                        },
+                      },
+                    },
+                  },
+                  client: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', example: 'client-uuid-1' },
+                      name: { type: 'string', example: 'Tech Retail Inc.' },
+                    },
+                  },
+                  store: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', example: 'store-uuid-1' },
+                      name: { type: 'string', example: 'Downtown Tech Store' },
+                    },
+                  },
+                  user: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', example: 'user-uuid-1' },
+                      name: { type: 'string', example: 'John Smith' },
+                      },
+                    },
+                  },
+                },
+              product: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', example: 'product-uuid-1' },
+                  name: { type: 'string', example: 'Wireless Mouse' },
+                  categoryId: { type: 'string', example: 'category-uuid-1', nullable: true },
+                  ean: { type: 'string', example: '1234567890123', nullable: true },
+                  pluUpc: { type: 'string', example: '123456789012', nullable: true },
+                  sku: { type: 'string', example: 'WM123', nullable: true },
+                  itemQuantity: { type: 'number', example: 50 },
+                  msrpPrice: { type: 'number', example: 30.00 },
+                  singleItemSellingPrice: { type: 'number', example: 25.00 },
+                  clientId: { type: 'string', example: 'client-uuid-1' },
+                  storeId: { type: 'string', example: 'store-uuid-1' },
+                  discountAmount: { type: 'number', example: 5.00 },
+                  percentDiscount: { type: 'number', example: 10.00 },
+                  hasVariants: { type: 'boolean', example: false },
+                  packIds: { type: 'array', items: { type: 'string' }, example: [] },
+                  variants: { type: 'array', items: { type: 'object' }, example: [] },
+                  createdAt: { type: 'string', example: '2025-01-01T09:00:00.000Z' },
+                  updatedAt: { type: 'string', example: '2025-07-08T15:30:00.000Z' },
+                },
+              },
+            },
+          },
+        },
+      }),
+      ...standardErrorResponses(),
+      RequirePermissions(
+        PermissionResource.TRANSACTION,
+        PermissionAction.READ,
+      ),
+    ),
+
   // Payment Management Endpoints
   CreatePayment: (dtoType: any) =>
     applyDecorators(

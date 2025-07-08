@@ -795,6 +795,109 @@ export class SaleService {
     });
   }
 
+  async getReturnSales(storeId: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    return await prisma.saleReturn.findMany({
+      where: {
+        sale: {
+          storeId: storeId,
+        },
+      },
+      include: {
+        sale: {
+          include: {
+            customer: {
+              select: {
+                id: true,
+                customerName: true,
+                customerAddress: true,
+                phoneNumber: true,
+                telephoneNumber: true,
+                customerMail: true,
+                website: true,
+                threshold: true,
+                storeId: true,
+                clientId: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            },
+            saleItems: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    categoryId: true,
+                    ean: true,
+                    pluUpc: true,
+                    sku: true,
+                    itemQuantity: true,
+                    msrpPrice: true,
+                    singleItemSellingPrice: true,
+                    clientId: true,
+                    storeId: true,
+                    discountAmount: true,
+                    percentDiscount: true,
+                    hasVariants: true,
+                    packIds: true,
+                    variants: true,
+                    createdAt: true,
+                    updatedAt: true,
+                  },
+                },
+              },
+            },
+            client: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            store: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            user: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        product: {
+          select: {
+            id: true,
+            name: true,
+            categoryId: true,
+            ean: true,
+            pluUpc: true,
+            sku: true,
+            itemQuantity: true,
+            msrpPrice: true,
+            singleItemSellingPrice: true,
+            clientId: true,
+            storeId: true,
+            discountAmount: true,
+            percentDiscount: true,
+            hasVariants: true,
+            packIds: true,
+            variants: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
   // Payment Management
   async createPayment(dto: CreatePaymentDto) {
     const prisma = await this.tenantContext.getPrismaClient();
