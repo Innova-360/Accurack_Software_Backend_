@@ -180,6 +180,7 @@ model Sales {
   tax               Float            @default(0)
   status            SaleStatus       @default(PENDING)
   generateInvoice   Boolean          @default(true)
+  isProductReturned Boolean? 
   cashierName       String?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
