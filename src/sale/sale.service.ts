@@ -735,8 +735,8 @@ export class SaleService {
             productId: item.productId,
             pluUpc: item.pluUpc,
             quantity: item.quantity,
-            isProductReturned: item.isProductReturned,
-            refundAmount: item.refundAmount,
+            // isProductReturned: item.isProductReturned,
+            // refundAmount: item.refundAmount,
             returnCategory: item.returnCategory,
             reason: item.reason,
             processedBy: userId,
@@ -864,7 +864,7 @@ export class SaleService {
             user: {
               select: {
                 id: true,
-                name: true,
+                firstName: true,
               },
             },
           },

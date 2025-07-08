@@ -60,7 +60,7 @@ export class ProductController extends BaseProductController {
   @ProductEndpoint.GetProducts()
   async getProducts(
     @Req() req,
-    @Query('storeId') storeId?: string,
+    @Query('storeId') storeId: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 15000,
   ) {
