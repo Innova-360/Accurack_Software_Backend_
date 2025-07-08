@@ -1193,10 +1193,15 @@ export class ProductService {
 
   async assignSupplier(dto: AssignSupplierDto) {
     const prisma = await this.tenantContext.getPrismaClient();
-
     const { supplierId, storeId, products } = dto;
 
-    // Validate input
+    // Validate required fields
+    if (!supplierId) {
+      throw new BadRequestException('Missing supplierId');
+    }
+    if (!storeId) {
+      throw new BadRequestException('Missing storeId');
+    }
     if (!products || (!Array.isArray(products) && !products.productId)) {
       throw new BadRequestException('At least one product must be provided');
     }
@@ -1205,10 +1210,7 @@ export class ProductService {
     const productArray = Array.isArray(products) ? products : [products];
 
     // Fetch and validate store
-    const store = await prisma.stores.findUnique({
-      where: { id: storeId },
-    });
-
+    const store = await prisma.stores.findUnique({ where: { id: storeId } });
     if (!store) {
       throw new NotFoundException('Store not found');
     }
@@ -1218,46 +1220,99 @@ export class ProductService {
       where: { id: supplierId },
       include: { productSuppliers: true },
     });
-
     if (!supplier) {
       throw new NotFoundException('Supplier not found');
     }
+    // Optionally: check if supplier belongs to store
+    if (supplier.storeId && supplier.storeId !== storeId) {
+      throw new BadRequestException('Supplier does not belong to this store');
+    }
 
-    // Process each product
-    const productSuppliers = await Promise.all(
+    // Process each product and collect results
+    const results = await Promise.all(
       productArray.map(async (product) => {
-        const { productId, costPrice } = product;
+        const { productId, costPrice, categoryId } = product;
+        try {
+          // Validate productId
+          if (!productId) {
+            throw new BadRequestException('Missing productId');
+          }
+          // Validate costPrice
+          if (
+            costPrice === undefined ||
+            costPrice === null ||
+            isNaN(Number(costPrice))
+          ) {
+            throw new BadRequestException('Invalid or missing cost price');
+          }
+          // Optionally: validate categoryId if required
+          // if (!categoryId) {
+          //   throw new BadRequestException('Missing categoryId');
+          // }
 
-        // Validate product
-        const existingProduct = await prisma.products.findUnique({
-          where: { id: productId },
-          include: { productSuppliers: true },
-        });
+          // Validate product existence
+          const existingProduct = await prisma.products.findUnique({
+            where: { id: productId },
+            include: { productSuppliers: true },
+          });
+          if (!existingProduct) {
+            throw new NotFoundException(
+              `Product with ID ${productId} not found`,
+            );
+          }
 
-        if (!existingProduct) {
-          throw new NotFoundException(`Product with ID ${productId} not found`);
+          // Check if supplier is already assigned to this product
+          const alreadyAssigned = existingProduct.productSuppliers.some(
+            (ps) => ps.supplierId === supplierId,
+          );
+          if (alreadyAssigned) {
+            throw new ConflictException(
+              `Supplier already assigned to product ${productId}`,
+            );
+          }
+
+          // Determine supplier state
+          const hasSuppliers = existingProduct.productSuppliers.length > 0;
+          const state = hasSuppliers ? 'secondary' : 'primary';
+
+          // Create product-supplier relation
+          const productSupplier = await prisma.productSupplier.create({
+            data: {
+              productId,
+              supplierId,
+              costPrice: Number(costPrice),
+              state,
+              categoryId: categoryId || null,
+            },
+          });
+
+          return { productId, status: 'success', productSupplier };
+        } catch (error) {
+          // Extract error message
+          let errorMessage = 'Unknown error';
+          if (
+            error instanceof BadRequestException ||
+            error instanceof NotFoundException ||
+            error instanceof ConflictException
+          ) {
+            errorMessage = error.message;
+          } else if (error?.message) {
+            errorMessage = error.message;
+          }
+          return { productId, status: 'error', error: errorMessage };
         }
-
-        // Determine supplier state
-        const hasSuppliers = existingProduct.productSuppliers.length > 0;
-        const state = hasSuppliers ? 'secondary' : 'primary';
-
-        // Create product-supplier relation
-        return prisma.productSupplier.create({
-          data: {
-            productId,
-            supplierId,
-            costPrice,
-            state,
-            categoryId: product.categoryId || null,
-          },
-        });
       }),
     );
 
+    // Check if all failed with the same error (optional: throw global error)
+    // const allFailed = results.every(r => r.status === 'error');
+    // if (allFailed) {
+    //   throw new BadRequestException('All supplier assignments failed');
+    // }
+
     return {
-      message: 'Supplier has been added to products',
-      data: { productSuppliers },
+      message: 'Supplier assignment results',
+      results,
     };
   }
 
