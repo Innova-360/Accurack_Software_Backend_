@@ -2,13 +2,18 @@ import {
   Controller,
   Post,
   Get,
+  Put,
   Param,
   Body,
   UseGuards,
   Req,
 } from '@nestjs/common';
 import { InvoiceService } from './invoice.service';
-import { businessInfoDto, CreateInvoiceDto } from './dto/invoice.dto';
+import {
+  businessInfoDto,
+  CreateInvoiceDto,
+  UpdateBusinessInfoDto,
+} from './dto/invoice.dto';
 import { Invoice } from '@prisma/client';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
@@ -28,8 +33,7 @@ export class InvoiceController extends BaseInvoiceController {
     super(responseService);
   }
 
-
-    @InvoiceEndpoint.setBusinessInfo(businessInfoDto)
+  @InvoiceEndpoint.setBusinessInfo(businessInfoDto)
   @Post('set-business/details')
   async setBusinessInfo(
     @Param('storeId') storeId: string,
@@ -42,15 +46,24 @@ export class InvoiceController extends BaseInvoiceController {
     );
   }
 
-
   @InvoiceEndpoint.getBusinessInfo()
   @Get('get-business/details')
-  async getBusinessInfo(
-    @Req() req: any,
-  ) {
+  async getBusinessInfo(@Req() req: any) {
     return this.handleServiceOperation(
       () => this.invoiceService.getBusinessInfo(req.user),
       'Business information operation completed',
+    );
+  }
+
+  @InvoiceEndpoint.updateBusinessInfo(UpdateBusinessInfoDto)
+  @Put('update-business/details')
+  async updateBusinessInfo(
+    @Body() dto: UpdateBusinessInfoDto,
+    @Req() req: any,
+  ) {
+    return this.handleServiceOperation(
+      () => this.invoiceService.updateBusinessInfo(dto, req.user),
+      'Business information updated successfully',
     );
   }
 
@@ -87,7 +100,4 @@ export class InvoiceController extends BaseInvoiceController {
       'Invoices retrieved successfully',
     );
   }
-
-
-
 }
