@@ -65,6 +65,7 @@ export class ProductController extends BaseProductController {
     @Query('limit') limit: number = 15000,
   ) {
     const user = req.user;
+    console.log("   a  ",storeId)
     return this.handleProductOperation(
       () => this.productService.getProducts(user, storeId, page, limit),
       'Products retrieved successfully',

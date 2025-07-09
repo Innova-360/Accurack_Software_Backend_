@@ -48,9 +48,25 @@ export class ProductService {
   private validateProductOperationPermissions(
     user: any,
     operation: 'create' | 'update' | 'delete',
+    storeId?: string,
   ): void {
     if (!user) {
       throw new BadRequestException('User not authenticated');
+    }
+
+    // Super admin has universal access - bypass all permission checks
+    if (user.role === 'super_admin') {
+      return;
+    }
+
+    // For non-super_admin users, validate store access if storeId is provided
+    if (storeId) {
+      const hasStoreAccess = user.stores?.some(
+        (store: any) => store.storeId === storeId,
+      );
+      if (!hasStoreAccess && user.storeId !== storeId) {
+        throw new BadRequestException('No access to this store');
+      }
     }
 
     const allowedRoles = {
@@ -71,11 +87,11 @@ export class ProductService {
       throw new BadRequestException('User not authenticated');
     }
 
+    console.log(user)
+
     if (user.role === 'super_admin') {
       return;
-    }
-
-    if (storeId) {
+    }else{
       const hasStoreAccess = user.stores?.some(
         (store: any) => store.storeId === storeId,
       );
@@ -184,7 +200,7 @@ export class ProductService {
     user: any,
     createProductDto: CreateProductDto,
   ): Promise<ProductResponseDto> {
-    this.validateProductOperationPermissions(user, 'create');
+    this.validateProductOperationPermissions(user, 'create', createProductDto.storeId);
 
     console.log('createproductdto', createProductDto);
 
@@ -565,13 +581,14 @@ export class ProductService {
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    if (!storeId && !user.storeId) {
+    if (!storeId) {
       throw new BadRequestException('No store specified');
     }
 
     if (
       storeId &&
       !user.stores?.some((store: any) => store.storeId === storeId)
+      && user.role !== 'super_admin'
     ) {
       throw new BadRequestException('No access to this store');
     }
@@ -738,7 +755,7 @@ export class ProductService {
     id: string,
     updateProductDto: UpdateProductDto,
   ): Promise<ProductResponseDto> {
-    this.validateProductOperationPermissions(user, 'update');
+    this.validateProductOperationPermissions(user, 'update', updateProductDto.storeId);
 
     // Get the tenant-specific Prisma client
     const prisma = await this.tenantContext.getPrismaClient();
@@ -1041,8 +1058,6 @@ export class ProductService {
   }
 
   async deleteProduct(user: any, id: string): Promise<void> {
-    this.validateProductOperationPermissions(user, 'delete');
-
     // Get the tenant-specific Prisma client
     const prisma = await this.tenantContext.getPrismaClient();
 
@@ -1050,6 +1065,8 @@ export class ProductService {
     if (!product) {
       throw new NotFoundException('Product not found');
     }
+
+    this.validateProductOperationPermissions(user, 'delete', product.storeId);
 
     // Delete associated packs
     await prisma.pack.deleteMany({ where: { productId: id } });
@@ -1090,7 +1107,7 @@ export class ProductService {
   }
 
   async deleteAllProduct(user: any, storeId: string): Promise<void> {
-    this.validateProductOperationPermissions(user, 'delete');
+    this.validateProductOperationPermissions(user, 'delete', storeId);
 
     const prisma = await this.tenantContext.getPrismaClient();
 
@@ -1340,18 +1357,23 @@ export class ProductService {
       }
     }
 
-    // Resolve each category
+    // Resolve each category with auto-create enabled for bulk uploads
     for (const categoryName of uniqueCategories) {
       try {
         const resolvedCategory =
-          await this.categoryService.findOrCreateCategory(categoryName);
+          await this.categoryService.findOrCreateCategory(categoryName, {
+            allowAutoCreate: true, // Enable auto-creation for bulk uploads
+          });
         categoryMap.set(categoryName, resolvedCategory);
+        console.log(`✅ Category resolved: '${categoryName}' -> ID: ${resolvedCategory.id}`);
       } catch (error) {
+        console.error(`❌ Failed to resolve category '${categoryName}':`, error.message);
         // Re-throw category validation errors
         throw error;
       }
     }
 
+    console.log(`📋 Successfully resolved ${categoryMap.size} categories from file`);
     return categoryMap;
   }
 
