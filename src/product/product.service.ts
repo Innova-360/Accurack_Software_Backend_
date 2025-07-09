@@ -87,11 +87,9 @@ export class ProductService {
       throw new BadRequestException('User not authenticated');
     }
 
-    //console.log(user)
-
     if (user.role === 'super_admin') {
       return;
-    }else{
+    } else {
       const hasStoreAccess = user.stores?.some(
         (store: any) => store.storeId === storeId,
       );
@@ -200,7 +198,11 @@ export class ProductService {
     user: any,
     createProductDto: CreateProductDto,
   ): Promise<ProductResponseDto> {
-    this.validateProductOperationPermissions(user, 'create', createProductDto.storeId);
+    this.validateProductOperationPermissions(
+      user,
+      'create',
+      createProductDto.storeId,
+    );
 
     //console.log('createproductdto', createProductDto);
 
@@ -592,8 +594,8 @@ export class ProductService {
 
     if (
       storeId &&
-      !user.stores?.some((store: any) => store.storeId === storeId)
-      && user.role !== 'super_admin'
+      !user.stores?.some((store: any) => store.storeId === storeId) &&
+      user.role !== 'super_admin'
     ) {
       throw new BadRequestException('No access to this store');
     }
@@ -760,7 +762,11 @@ export class ProductService {
     id: string,
     updateProductDto: UpdateProductDto,
   ): Promise<ProductResponseDto> {
-    this.validateProductOperationPermissions(user, 'update', updateProductDto.storeId);
+    this.validateProductOperationPermissions(
+      user,
+      'update',
+      updateProductDto.storeId,
+    );
 
     // Get the tenant-specific Prisma client
     const prisma = await this.tenantContext.getPrismaClient();
@@ -1373,15 +1379,22 @@ export class ProductService {
             allowAutoCreate: true, // Enable auto-creation for bulk uploads
           });
         categoryMap.set(categoryName, resolvedCategory);
-        console.log(`✅ Category resolved: '${categoryName}' -> ID: ${resolvedCategory.id}`);
+        console.log(
+          `✅ Category resolved: '${categoryName}' -> ID: ${resolvedCategory.id}`,
+        );
       } catch (error) {
-        console.error(`❌ Failed to resolve category '${categoryName}':`, error.message);
+        console.error(
+          `❌ Failed to resolve category '${categoryName}':`,
+          error.message,
+        );
         // Re-throw category validation errors
         throw error;
       }
     }
 
-    console.log(`📋 Successfully resolved ${categoryMap.size} categories from file`);
+    console.log(
+      `📋 Successfully resolved ${categoryMap.size} categories from file`,
+    );
     return categoryMap;
   }
 
@@ -1541,21 +1554,40 @@ export class ProductService {
               );
               const hasVariants = hasMatrixAttributes;
 
-              // Validate PLU/UPC uniqueness if provided
+              // Validate PLU/UPC uniqueness if provided (per store)
               if (
                 !hasVariants &&
                 product['PLU/UPC'] &&
                 product['PLU/UPC'].trim()
               ) {
                 const existingProduct = await prisma.products.findFirst({
-                  where: { pluUpc: product['PLU/UPC'].trim() },
+                  where: {
+                    pluUpc: product['PLU/UPC'].trim(),
+                    storeId: store.id,
+                  },
                 });
                 if (existingProduct) {
                   throw new BadRequestException(
-                    `PLU/UPC '${product['PLU/UPC']}' already exists in database`,
+                    `PLU/UPC '${product['PLU/UPC']}' already exists in store '${store.name}'`,
                   );
                 }
-              } // Create the product (without supplier reference for now)
+              }
+
+              // Validate SKU uniqueness if provided (per store)
+              if (!hasVariants && product['SKU'] && product['SKU'].trim()) {
+                const existingSkuProduct = await prisma.products.findFirst({
+                  where: {
+                    sku: product['SKU'].trim(),
+                    storeId: store.id,
+                  },
+                });
+                if (existingSkuProduct) {
+                  throw new BadRequestException(
+                    `SKU '${product['SKU']}' already exists in store '${store.name}'`,
+                  );
+                }
+              }
+              // ...existing code...
               const resolvedCategory = categoryMap.get(product.Category);
               const productData: any = {
                 name: product.ProductName,
@@ -1850,7 +1882,18 @@ export class ProductService {
       }
 
       if (error.code === 'P2002') {
-        throw new ConflictException('Duplicate SKU or PLU found in database');
+        // Prisma unique constraint violation: try to extract field from meta if possible
+        let field = 'SKU or PLU';
+        if (error.meta && error.meta.target) {
+          if (Array.isArray(error.meta.target)) {
+            field = error.meta.target.join(', ');
+          } else {
+            field = error.meta.target;
+          }
+        }
+        throw new ConflictException(
+          `Duplicate ${field} found in this store. Each SKU and PLU/UPC must be unique within a store.`,
+        );
       }
 
       // Handle specific transaction errors
