@@ -6,7 +6,7 @@ import { PrismaClientService } from 'src/prisma-client/prisma-client.service';
 import { TenantContextService } from 'src/tenant/tenant-context.service';
 
 interface User {
-  id: string,
+  id: string;
   businessId: string;
   business: {
     logoUrl?: string;
@@ -46,7 +46,8 @@ export class InvoiceService {
       if (!businessName || !contactNo) {
         return {
           success: false,
-          message: 'Please fill in all required business details to continue. Business name, contact number are mandatory.',
+          message:
+            'Please fill in all required business details to continue. Business name, contact number are mandatory.',
           showBusinessForm: true,
           requiredFields: ['businessName', 'contactNo'],
           data: null,
@@ -111,7 +112,8 @@ export class InvoiceService {
       if (!business) {
         return {
           success: false,
-          message: 'Please fill in all required business details to continue. Business name, contact number, and address are mandatory.',
+          message:
+            'Please fill in all required business details to continue. Business name, contact number, and address are mandatory.',
           showBusinessForm: true,
           requiredFields: ['businessName', 'contactNo', 'address'],
           data: null,
@@ -139,7 +141,7 @@ export class InvoiceService {
     const { id } = user;
 
     const userExist = await prisma.users.findFirst({
-      where: {id}
+      where: { id },
     });
 
     console.log(user);
@@ -147,15 +149,15 @@ export class InvoiceService {
     // Check if user exists and business information exists first
     if (!userExist || !userExist.businessId) {
       throw new NotFoundException({
-        message: 'Please fill in all required business details to continue. Business name, contact number, and address are mandatory.',
+        message:
+          'Please fill in all required business details to continue. Business name, contact number, and address are mandatory.',
         showBusinessForm: true,
         requiredFields: ['businessName', 'contactNo', 'address'],
-        error: 'BUSINESS_INFO_REQUIRED'
+        error: 'BUSINESS_INFO_REQUIRED',
       });
     }
 
     const { logoUrl } = user.business || {};
- 
 
     // Fetch sale with related data
     const sale = await prisma.sales.findUnique({
@@ -292,5 +294,73 @@ export class InvoiceService {
         customFields: true,
       },
     });
+  }
+
+  async updateBusinessInfo(dto: any, user: any) {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    try {
+      // Check if business exists for this client
+      const existingBusiness = await prisma.business.findUnique({
+        where: { clientId: user.clientId },
+      });
+
+      if (!existingBusiness) {
+        return {
+          success: false,
+          message:
+            'Business information not found. Please create business details first.',
+          showBusinessForm: true,
+          data: null,
+        };
+      }
+
+      // Filter out undefined values to only update provided fields
+      const updateData: any = {};
+      if (dto.businessName !== undefined)
+        updateData.businessName = dto.businessName;
+      if (dto.contactNo !== undefined) updateData.contactNo = dto.contactNo;
+      if (dto.website !== undefined) updateData.website = dto.website;
+      if (dto.address !== undefined) updateData.address = dto.address;
+      if (dto.logoUrl !== undefined) updateData.logoUrl = dto.logoUrl;
+
+      // Check if there's actually anything to update
+      if (Object.keys(updateData).length === 0) {
+        return {
+          success: false,
+          message: 'No valid fields provided for update.',
+          data: existingBusiness,
+        };
+      }
+
+      // Update the business record
+      const updatedBusiness = await prisma.business.update({
+        where: { clientId: user.clientId },
+        data: updateData,
+      });
+
+      return {
+        success: true,
+        message: 'Business information updated successfully.',
+        showBusinessForm: false,
+        data: updatedBusiness,
+      };
+    } catch (error) {
+      console.error('Error updating business info:', error);
+
+      // Handle known Prisma errors
+      if (error.code === 'P2025') {
+        return {
+          success: false,
+          message: 'Business information not found.',
+          data: null,
+        };
+      }
+
+      throw new Error(
+        'An error occurred while updating business information: ' +
+          (error.message || 'Unknown error'),
+      );
+    }
   }
 }
