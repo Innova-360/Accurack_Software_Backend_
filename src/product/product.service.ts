@@ -87,7 +87,7 @@ export class ProductService {
       throw new BadRequestException('User not authenticated');
     }
 
-    console.log(user)
+    //console.log(user)
 
     if (user.role === 'super_admin') {
       return;
@@ -202,7 +202,7 @@ export class ProductService {
   ): Promise<ProductResponseDto> {
     this.validateProductOperationPermissions(user, 'create', createProductDto.storeId);
 
-    console.log('createproductdto', createProductDto);
+    //console.log('createproductdto', createProductDto);
 
     const prisma = await this.tenantContext.getPrismaClient();
 
