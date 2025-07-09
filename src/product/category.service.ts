@@ -89,6 +89,7 @@ export class CategoryService {
 
   async findOrCreateCategory(
     categoryName: string,
+    options: { allowAutoCreate?: boolean } = {},
   ): Promise<{ id: string; name: string }> {
     const prisma = await this.tenantContext.getPrismaClient();
 
@@ -101,17 +102,19 @@ export class CategoryService {
       return { id: category.id, name: category.name };
     }
 
-    // Check for fuzzy matches
-    const similarCategories = await this.findSimilarCategories(
-      categoryName,
-      0.7,
-    );
-    if (similarCategories.length > 0) {
-      // Found similar category - throw error with suggestions
-      const suggestions = similarCategories.map((s) => s.item);
-      throw new BadRequestException(
-        `Category '${categoryName}' not found. Did you mean: ${suggestions.join(', ')}? Please correct the file and re-upload.`,
+    // Check for fuzzy matches only if autoCreate is not enabled
+    if (!options.allowAutoCreate) {
+      const similarCategories = await this.findSimilarCategories(
+        categoryName,
+        0.7,
       );
+      if (similarCategories.length > 0) {
+        // Found similar category - throw error with suggestions
+        const suggestions = similarCategories.map((s) => s.item);
+        throw new BadRequestException(
+          `Category '${categoryName}' not found. Did you mean: ${suggestions.join(', ')}? Please correct the file and re-upload.`,
+        );
+      }
     }
 
     // No match found - create new category

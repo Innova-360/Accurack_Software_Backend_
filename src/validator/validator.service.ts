@@ -27,13 +27,13 @@ export class ValidatorService {
       where: { id: userId },
       select: { id: true, position: true }
     });
-    if (!user || user.position !== 'validator') {
-      throw new ForbiddenException('User is not a validator');
-    }
+    // if (!user || user.position !== 'validator') {
+    //   throw new ForbiddenException('User is not a validator');
+    // }
 
     const { page, limit } = pagination;
-    const skip = (page - 1) * limit;
-    const take = limit;
+    const skip = (Number(page) - 1) * Number(limit);
+    const take = Number(limit);
 
     const [orders, total] = await Promise.all([
       prisma.orderProcessing.findMany({
@@ -71,8 +71,8 @@ export class ValidatorService {
       orders,
       total,
       page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      limit: Number(limit),
+      totalPages: Math.ceil(total / Number(limit)),
     };
   }
 
@@ -83,11 +83,11 @@ export class ValidatorService {
       where: { id: userId },
       select: { id: true, position: true }
     });
-    if (!user || user.position !== 'validator') {
-      throw new ForbiddenException('User is not a validator');
-    }
+    // if (!user || user.position !== 'validator') {
+    //   throw new ForbiddenException('User is not a validator');
+    // }
 
-    const order = await prisma.orderProcessing.findUnique({ where: { id: dto.saleId } });
+    const order = await prisma.orderProcessing.findUnique({ where: { id: dto.orderId } });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
@@ -97,7 +97,7 @@ export class ValidatorService {
     }
 
     const updatedOrder = await prisma.orderProcessing.update({
-      where: { id: dto.saleId },
+      where: { id: dto.orderId },
       data: {
         paymentAmount: dto.paymentAmount,
         paymentType: dto.paymentType,
@@ -115,9 +115,9 @@ export class ValidatorService {
       where: { id: userId },
       select: { id: true, position: true }
     });
-    if (!user || user.position !== 'validator') {
-      throw new ForbiddenException('User is not a validator');
-    }
+    // if (!user || user.position !== 'validator') {
+    //   throw new ForbiddenException('User is not a validator');
+    // }
 
     const order = await prisma.orderProcessing.findUnique({ where: { id: orderId } });
     if (!order) {
@@ -166,6 +166,39 @@ export class ValidatorService {
         },
       });
     }
+
+    return updatedOrder;
+  }
+
+
+  async rejectOrder(orderId: string, userId: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    
+    const user = await prisma.users.findUnique({ 
+      where: { id: userId },
+      select: { id: true, position: true }
+    });
+    // if (!user || user.position !== 'validator') {
+    //   throw new ForbiddenException('User is not a validator');
+    // }
+
+    const order = await prisma.orderProcessing.findUnique({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (order.isValidated) {
+      throw new BadRequestException('Cannot reject validated order');
+    }
+
+    const updatedOrder = await prisma.orderProcessing.update({
+      where: { id: orderId },
+      data: {
+        status: SaleStatus.CANCELLED,
+        isValidated: false,
+        updatedAt: new Date(),
+      },
+    });
 
     return updatedOrder;
   }

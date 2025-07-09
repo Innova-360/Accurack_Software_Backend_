@@ -1,7 +1,16 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaClientService } from '../prisma-client/prisma-client.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
-import { CreateOrderDto, UpdateOrderDto, PaginationDto } from './dto/driver.dto';
+import {
+  CreateOrderDto,
+  UpdateOrderDto,
+  PaginationDto,
+} from './dto/driver.dto';
 import { SaleStatus } from '@prisma/client';
 
 interface Driver {
@@ -14,7 +23,7 @@ interface Driver {
   clientId: string;
   createdAt: Date;
   updatedAt: Date;
-  stores: { storeId: string }[];
+  // stores: { storeId: string }[];
 }
 
 interface GetDriversResponse {
@@ -42,10 +51,16 @@ export class DriverService {
 
   async createOrder(storeId: string, dto: CreateOrderDto, user: any) {
     const prisma = await this.tenantContext.getPrismaClient();
-    
-    const userExist = await prisma.users.findUnique({ 
+
+    const userExist = await prisma.users.findUnique({
       where: { id: user.id },
-      select: { id: true, position: true, clientId: true, firstName: true, lastName: true }
+      select: {
+        id: true,
+        position: true,
+        clientId: true,
+        firstName: true,
+        lastName: true,
+      },
     });
 
     if (!userExist?.id) {
@@ -55,9 +70,9 @@ export class DriverService {
       throw new NotFoundException('User clientId not found');
     }
 
-    const customer = await prisma.customer.findUnique({ 
+    const customer = await prisma.customer.findUnique({
       where: { id: dto.customerId },
-      select: { id: true, customerName: true }
+      select: { id: true, customerName: true },
     });
     if (!customer) {
       throw new NotFoundException('Customer not found');
@@ -85,16 +100,18 @@ export class DriverService {
 
   async updateOrder(orderId: string, dto: UpdateOrderDto, user: any) {
     const prisma = await this.tenantContext.getPrismaClient();
-    
-    const userExist = await prisma.users.findUnique({ 
+
+    const userExist = await prisma.users.findUnique({
       where: { id: user.id },
-      select: { id: true, position: true }
+      select: { id: true, position: true },
     });
     if (!userExist || userExist.position !== 'driver') {
       throw new ForbiddenException('User is not a driver');
     }
 
-    const order = await prisma.orderProcessing.findUnique({ where: { id: orderId } });
+    const order = await prisma.orderProcessing.findUnique({
+      where: { id: orderId },
+    });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
@@ -118,13 +135,15 @@ export class DriverService {
 
   async sendForValidation(orderId: string, user: any) {
     const prisma = await this.tenantContext.getPrismaClient();
-    
-    const userExist = await prisma.users.findUnique({ 
+
+    const userExist = await prisma.users.findUnique({
       where: { id: user.id },
-      select: { id: true, position: true }
+      select: { id: true, position: true },
     });
 
-    const order = await prisma.orderProcessing.findUnique({ where: { id: orderId } });
+    const order = await prisma.orderProcessing.findUnique({
+      where: { id: orderId },
+    });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
@@ -144,25 +163,42 @@ export class DriverService {
     return updatedOrder;
   }
 
-  async getOrders(user: any, storeId: string, pagination: PaginationDto): Promise<GetOrdersResponse> {
+  async getOrders(
+    user: any,
+    storeId: string,
+    page: number,
+    limit: number,
+    search?: string,
+  ): Promise<GetOrdersResponse> {
     const prisma = await this.tenantContext.getPrismaClient();
-    
-    const userExist = await prisma.users.findUnique({ 
+
+    const userExist = await prisma.users.findUnique({
       where: { id: user.id },
-      select: { id: true, position: true }
+      select: { id: true, position: true },
     });
     if (!userExist) {
       throw new NotFoundException('User not found');
     }
 
-    const { page, limit } = pagination;
-    const skip = (Number(page) - 1) * Number(limit);
-    const take = Number(limit);
+    const skip = (page - 1) * limit;
+    const take = limit;
+
+    // Build search condition only if search term is provided
+    const searchCondition = search
+      ? {
+          OR: [
+            { customerName: { contains: search, mode: 'insensitive' as const } },
+            { driverName: { contains: search, mode: 'insensitive' as const } },
+            { id: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : {};
 
     const [orders, total] = await Promise.all([
       prisma.orderProcessing.findMany({
         where: {
           storeId,
+          ...searchCondition,
         },
         select: {
           id: true,
@@ -185,6 +221,7 @@ export class DriverService {
       prisma.orderProcessing.count({
         where: {
           storeId,
+          ...searchCondition,
         },
       }),
     ]);
@@ -193,12 +230,16 @@ export class DriverService {
       orders,
       total,
       page,
-      limit: Number(limit),
-      totalPages: Math.ceil(total / Number(limit)),
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
   }
 
-  async getDrivers(user: any, storeId: string, pagination: PaginationDto): Promise<GetDriversResponse> {
+  async getDrivers(
+    user: any,
+    storeId: string,
+    pagination: PaginationDto,
+  ): Promise<GetDriversResponse> {
     try {
       const prisma = await this.tenantContext.getPrismaClient();
 
@@ -214,13 +255,16 @@ export class DriverService {
       const skip = (page - 1) * limit;
       const take = limit;
 
-      const [driversRaw, total] = await Promise.all([
+      console.log(store);
+
+      const [driversRaw] = await Promise.all([
         prisma.users.findMany({
           where: {
             position: 'driver',
+            role: 'employee',
             stores: {
               some: {
-                storeId: storeId,
+                storeId: store.id,
               },
             },
           },
@@ -228,33 +272,37 @@ export class DriverService {
             id: true,
             firstName: true,
             lastName: true,
+            role: true,
             email: true,
             position: true,
             status: true,
             clientId: true,
             createdAt: true,
             updatedAt: true,
-            stores: {
-              select: {
-                storeId: true,
-              },
-            },
+            // stores: {
+            //   select: {
+            //     storeId: true,
+            //   },
+            // },
           },
-          skip,
-          take,
-          orderBy: { createdAt: 'desc' },
+          // skip,
+          // take,
+          // orderBy: { createdAt: 'desc' },
         }),
         prisma.users.count({
           where: {
             position: 'driver',
+            role: 'employee',
             stores: {
               some: {
-                storeId: storeId,
+                storeId: store.id,
               },
             },
           },
         }),
       ]);
+
+      console.log(driversRaw);
 
       const drivers: Driver[] = driversRaw.map((driver) => ({
         ...driver,
@@ -263,13 +311,16 @@ export class DriverService {
 
       return {
         drivers,
-        total,
+        total: 10,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.ceil(10 / limit),
       };
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof ForbiddenException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ForbiddenException
+      ) {
         throw error;
       }
       throw new Error('Failed to fetch drivers');

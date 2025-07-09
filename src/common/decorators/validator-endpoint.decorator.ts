@@ -205,4 +205,37 @@ export const ValidatorEndpoint = {
       ApiBearerAuth(),
       Version('1'),
     ),
+
+  // Reject order endpoint
+  RejectOrder: () =>
+    applyDecorators(
+      ApiOperation({
+        summary: 'Reject an order',
+        description: 'Mark an order as rejected by a validator'
+      }),
+      ApiParam({
+        name: 'id',
+        description: 'Order ID to reject',
+        type: String,
+        example: 'order-123',
+      }),
+      ApiResponse({
+        status: 200,
+        description: 'Order rejected successfully',
+        schema: successResponseSchema('Order rejected successfully', {
+          id: 'order-123',
+          status: 'REJECTED',
+          totalAmount: 175.00,
+          customer: {
+            id: 'customer-456',
+            customerName: 'John Doe'
+          },
+          updatedAt: '2025-07-05T10:30:00.000Z'
+        }),
+      }),
+      ...standardErrorResponses(),
+      UseGuards(JwtAuthGuard),
+      ApiBearerAuth(),
+      Version('1'),
+    ),
 };

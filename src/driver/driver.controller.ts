@@ -63,8 +63,8 @@ export class DriverController extends BaseDriverController {
   async sendForValidation(@Req() req: any, @Param('orderId') orderId: string) {
     console.log(orderId);
     return this.handleValidationRequestOperation(
-    () => this.driverService.sendForValidation(orderId, req.user),
-    'Order sent for validation successfully',
+      () => this.driverService.sendForValidation(orderId, req.user),
+      'Order sent for validation successfully',
     );
   }
 
@@ -72,11 +72,23 @@ export class DriverController extends BaseDriverController {
   @Get('orders')
   async getOrders(
     @Req() req: any,
-    @Param('storeId') storeId: string,
-    @Query() pagination: PaginationDto,
+    @Query('storeId') storeId: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('search') search?: string,
   ) {
-    return this.handleGetOrdersOperation(
-      () => this.driverService.getOrders(req.user, storeId, pagination),
+    // Handle search query - ignore if not provided or empty
+    const searchTerm = search && search.trim() !== '' ? search.trim() : undefined;
+    
+    return await this.handleGetOrdersOperation(
+      () =>
+        this.driverService.getOrders(
+          req.user,
+          storeId,
+          Number(page),
+          Number(limit),
+          searchTerm,
+        ),
       'Orders retrieved successfully',
     );
   }
