@@ -9,7 +9,15 @@ export class UpdatePaymentDto {
     format: 'uuid',
   })
   @IsUUID()
-  saleId: string;
+  orderId: string;
+
+  // @ApiProperty({
+  //   description: 'The unique identifier of the store',
+  //   example: 'store-uuid-here',
+  //   format: 'uuid',
+  // })
+  // @IsUUID()
+  // storeId: string;
 
   @ApiProperty({
     description: 'Updated total amount for the order',

@@ -305,7 +305,6 @@ export class ProductService {
     try {
       const createData: any = {
         name: createProductDto.name,
-        categoryId: createProductDto.categoryId,
         ean: createProductDto.ean || null,
         sku: createProductDto.sku || null,
         itemQuantity: createProductDto.itemQuantity,
@@ -318,6 +317,12 @@ export class ProductService {
         hasVariants: createProductDto.hasVariants || false,
         packIds: [],
         variants: [],
+        // Use category relation
+        ...(createProductDto.categoryId && {
+          category: {
+            connect: { id: createProductDto.categoryId },
+          },
+        }),
       };
 
       if (!createProductDto.hasVariants && createProductDto.pluUpc) {
@@ -949,8 +954,11 @@ export class ProductService {
 
     if (updateProductDto.name !== undefined)
       updateData.name = updateProductDto.name;
-    if (updateProductDto.categoryId !== undefined)
-      updateData.categoryId = updateProductDto.categoryId;
+    if (updateProductDto.categoryId !== undefined) {
+      updateData.category = {
+        connect: { id: updateProductDto.categoryId },
+      };
+    }
     if (updateProductDto.ean !== undefined)
       updateData.ean = updateProductDto.ean;
     if (updateProductDto.sku !== undefined)
@@ -1551,7 +1559,6 @@ export class ProductService {
               const resolvedCategory = categoryMap.get(product.Category);
               const productData: any = {
                 name: product.ProductName,
-                categoryId: resolvedCategory?.id || null,
                 ean: product.EAN || '',
                 // Only set pluUpc if product doesn't have variants
                 pluUpc: hasVariants
@@ -1584,6 +1591,12 @@ export class ProductService {
                 store: {
                   connect: { id: store.id },
                 },
+                // Add category relation if available
+                ...(resolvedCategory && {
+                  category: {
+                    connect: { id: resolvedCategory.id },
+                  },
+                }),
               };
 
               // Remove old supplierId logic since we now use ProductSupplier relationship

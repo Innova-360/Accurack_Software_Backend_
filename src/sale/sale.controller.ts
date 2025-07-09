@@ -147,6 +147,7 @@ export class SaleController extends BaseSaleController {
     @Query('storeId') storeId: string,
     @Query() query: SaleQueryDto,
   ) {
+    console.log(storeId)
     return this.handleSaleOperation(
       () => this.saleService.getSales(query, storeId),
       'Sales retrieved successfully',

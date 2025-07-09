@@ -34,10 +34,20 @@ export class ValidatorController extends BaseValidatorController {
   }
 
   @ValidatorEndpoint.ValidateOrder()
-  @Patch('validate')
+  @Patch('validate/:orderId')
   async validateOrder(@Req() req: any, @Param('orderId') orderId: string) {
     return this.handleValidationOperation(
       () => this.validatorService.validateOrder(orderId, req.user.id),
+      'Order validated successfully',
+    );
+  }
+
+
+  @ValidatorEndpoint.RejectOrder()
+  @Patch('reject/:orderId')
+  async rejectOrder(@Req() req: any, @Param('orderId') orderId: string) {
+    return this.handleValidationOperation(
+      () => this.validatorService.rejectOrder(orderId, req.user.id),
       'Order validated successfully',
     );
   }

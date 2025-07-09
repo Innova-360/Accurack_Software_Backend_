@@ -400,7 +400,7 @@ export class SaleService {
   async getSales(query: SaleQueryDto, storeId: string) {
     const prisma = await this.tenantContext.getPrismaClient();
     const {
-      page = '1',
+      page = '1', 
       limit = '20',
       customerId,
       status,
@@ -458,6 +458,8 @@ export class SaleService {
       }),
       prisma.sales.count({ where }),
     ]);
+
+    console.log(sales)
 
     return {
       sales,
