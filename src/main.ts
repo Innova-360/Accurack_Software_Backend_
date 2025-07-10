@@ -6,11 +6,15 @@ import { EnvValidation } from './utils/env-validation';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as cookieParser from 'cookie-parser';
 import { ResponseInterceptor, GlobalExceptionFilter } from './common';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 import * as dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
+
+const execAsync = promisify(exec);
 
 async function bootstrap() {
   // Validate critical environment variables before starting the app
@@ -19,6 +23,36 @@ async function bootstrap() {
   // Validate optional configurations
   EnvValidation.validateEmailConfig();
   EnvValidation.validateGoogleOAuthConfig();
+
+  // Run database migrations before starting the application
+  console.log('🔄 Running database migrations...');
+  try {
+    const { stdout, stderr } = await execAsync('npx prisma migrate deploy', {
+      timeout: 60000, // 60 seconds timeout
+      env: { ...process.env }
+    });
+    
+    if (stderr && !stderr.includes('warnings') && !stderr.includes('info')) {
+      console.warn('⚠️ Migration warnings:', stderr);
+    }
+    
+    console.log('✅ Database migrations completed successfully');
+    if (stdout) {
+      console.log('📊 Migration output:', stdout.trim());
+    }
+  } catch (error) {
+    console.error('❌ Database migration failed:', error.message);
+    console.error('🔍 Migration error details:', error);
+    
+    // In production, we might want to exit gracefully
+    if (process.env.NODE_ENV === 'production') {
+      console.error('🚨 Exiting due to migration failure in production');
+      process.exit(1);
+    } else {
+      console.warn('⚠️ Continuing in development mode despite migration failure');
+    }
+  }
+
   const app = await NestFactory.create(AppModule);
   // Add cookie parser middleware
   app.use(cookieParser());
