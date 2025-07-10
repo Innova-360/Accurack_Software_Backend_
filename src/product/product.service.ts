@@ -1869,7 +1869,7 @@ export class ProductService {
       try {
         const prisma = await this.tenantContext.getPrismaClient();
         const fileUpload = await prisma.fileUploadInventory.findUnique({
-          where: { fileHash },
+          where: { storeId_fileHash: { storeId, fileHash } },
         });
         if (fileUpload) {
           await prisma.fileUploadInventory.update({

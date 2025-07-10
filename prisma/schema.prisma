@@ -562,15 +562,17 @@ model Pack {
 
 model FileUploadInventory {
   id         String     @id @default(cuid())
-  fileHash   String     @unique
+  fileHash   String     
   fileName   String
   uploadedAt DateTime   @default(now())
-  storeId    String?
+  storeId    String
   status     String     @default("pending")
   error      String?
   errorLogs  ErrorLog[]
   store      Stores?    @relation(fields: [storeId], references: [id])
   products   Products[]
+  
+  @@unique([storeId, fileHash])
 }
 
 model ErrorLog {
