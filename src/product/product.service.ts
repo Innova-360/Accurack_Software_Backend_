@@ -10,6 +10,7 @@ import {
   ProductResponseDto,
   AssignSupplierDto,
 } from './dto/product.dto';
+import { UpdateProductQuantityDto } from './dto/update-product-quantity.dto';
 import {
   parseExcel,
   ValidationResult,
@@ -1025,6 +1026,56 @@ export class ProductService {
 
       return this.formatProductResponse(finalProduct);
     }
+
+    return this.formatProductResponse(updatedProduct);
+  }
+
+  async updateQuantity(
+    user: any,
+    id: string,
+    quantity: number,
+  ): Promise<ProductResponseDto> {
+    this.validateProductOperationPermissions(user, 'update');
+
+    // Get the tenant-specific Prisma client
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    // Check if product exists
+    const product = await prisma.products.findUnique({ where: { id } });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    // Validate store access
+    this.validateProductAccess(user, product.storeId);
+
+    // Validate quantity is positive
+    if (quantity < 1) {
+      throw new BadRequestException('Quantity must be at least 1');
+    }
+
+    // Update only the quantity
+    const updatedProduct = await prisma.products.update({
+      where: { id },
+      data: {
+        itemQuantity: quantity,
+        updatedAt: new Date(),
+      },
+      include: {
+        category: true,
+        store: true,
+        client: true,
+        packs: true,
+        productSuppliers: {
+          include: {
+            supplier: true,
+            category: true,
+          },
+        },
+        saleItems: true,
+        purchaseOrders: true,
+      },
+    });
 
     return this.formatProductResponse(updatedProduct);
   }

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Query,
   Body,
@@ -32,6 +33,7 @@ import {
   UpdateProductDto,
   AssignSupplierDto,
 } from './dto/product.dto';
+import { UpdateProductQuantityDto } from './dto/update-product-quantity.dto';
 
 import { PermissionsGuard } from '../guards/permissions.guard';
 
@@ -106,6 +108,25 @@ export class ProductController extends BaseProductController {
     return this.handleProductOperation(
       () => this.productService.updateProduct(user, id, updateProductDto),
       'Product updated successfully',
+    );
+  }
+
+  @ProductEndpoint.UpdateQuantity(UpdateProductQuantityDto)
+  @Patch(':id/quantity')
+  async updateProductQuantity(
+    @Req() req,
+    @Param('id') id: string,
+    @Body() updateQuantityDto: UpdateProductQuantityDto,
+  ) {
+    const user = req.user;
+    return this.handleProductOperation(
+      () =>
+        this.productService.updateQuantity(
+          user,
+          id,
+          updateQuantityDto.quantity,
+        ),
+      'Product quantity updated successfully',
     );
   }
 

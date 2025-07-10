@@ -262,6 +262,14 @@ class VariantDto {
 }
 
 export class CreateProductDto {
+  @ApiPropertyOptional({
+    example: 'A premium blend of Arabica coffee beans.',
+    description: 'Optional description of the product',
+  })
+  @IsString()
+  @IsOptional()
+  description?: string;
+
   @ApiProperty({
     example: 'Premium Coffee Beans',
     description: 'Name of the product',
