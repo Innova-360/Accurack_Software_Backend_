@@ -319,11 +319,9 @@ export class ProductService {
         hasVariants: createProductDto.hasVariants || false,
         packIds: [],
         variants: [],
-        // Use category relation
+        // Use categoryId directly
         ...(createProductDto.categoryId && {
-          category: {
-            connect: { id: createProductDto.categoryId },
-          },
+          categoryId: createProductDto.categoryId,
         }),
       };
 
