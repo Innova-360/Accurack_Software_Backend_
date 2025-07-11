@@ -1942,4 +1942,115 @@ export class ProductService {
       uploadedAt: fileUpload.uploadedAt,
     };
   }
+
+  async updateVariantQuantity(
+    user: any,
+    pluUpc: string,
+    quantity: number,
+  ): Promise<{ success: boolean; message: string; data: any }> {
+    this.validateProductOperationPermissions(user, 'update');
+
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    // Build where clause based on user permissions
+    let where: any = {};
+    if (user.role !== 'super_admin') {
+      where.clientId = user.clientId;
+      if (user.storeId) {
+        where.storeId = user.storeId;
+      }
+    }
+
+    // Find the product containing the variant with the given PLU/UPC
+    const products = await prisma.products.findMany({
+      where: {
+        ...where,
+        hasVariants: true,
+      },
+      include: {
+        packs: true,
+        category: true,
+        productSuppliers: {
+          include: {
+            supplier: true,
+          },
+        },
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        saleItems: true,
+        purchaseOrders: true,
+      },
+    });
+
+    // Find the product that contains the variant with the given PLU/UPC
+    let product: any = null;
+    for (const p of products) {
+      const variants = p.variants as any[];
+      if (variants && variants.some((variant) => variant.pluUpc === pluUpc)) {
+        product = p;
+        break;
+      }
+    }
+
+    if (!product) {
+      throw new NotFoundException(
+        `Product with variant PLU/UPC '${pluUpc}' not found`,
+      );
+    }
+
+    // Find and update the specific variant
+    const variants = product.variants as any[];
+    const variantIndex = variants.findIndex(
+      (variant) => variant.pluUpc === pluUpc,
+    );
+
+    if (variantIndex === -1) {
+      throw new NotFoundException(`Variant with PLU/UPC '${pluUpc}' not found`);
+    }
+
+    // Update the variant quantity
+    const updatedVariants = [...variants];
+    updatedVariants[variantIndex] = {
+      ...updatedVariants[variantIndex],
+      quantity,
+    };
+
+    // Update the product with the modified variants
+    const updatedProduct = await prisma.products.update({
+      where: { id: product.id },
+      data: {
+        variants: updatedVariants,
+      },
+      include: {
+        packs: true,
+        category: true,
+        productSuppliers: {
+          include: {
+            supplier: true,
+          },
+        },
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        saleItems: true,
+        purchaseOrders: true,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Variant quantity updated successfully',
+      data: {
+        product: this.formatProductResponse(updatedProduct),
+        updatedVariant: updatedVariants[variantIndex],
+      },
+    };
+  }
 }

@@ -755,4 +755,56 @@ export const ProductEndpoint = {
       ...standardErrorResponses(),
       ApiBearerAuth(),
     ),
+
+  UpdateVariantQuantity: (dtoType: any) =>
+    applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.UPDATE,
+        PermissionScope.STORE,
+      ),
+      ApiOperation({
+        summary: 'Update variant quantity by PLU/UPC',
+        description:
+          'Updates the quantity of a specific product variant by PLU/UPC. Requires product update permissions.',
+      }),
+      ApiBody({ type: dtoType }),
+      ApiResponse({
+        status: 200,
+        description: 'Variant quantity updated successfully',
+        schema: successResponseSchema('Variant quantity updated successfully', {
+          id: 'uuid-product-id',
+          name: 'Premium Coffee Beans',
+          variant: {
+            name: 'Dark Roast',   
+            pluUpc: 'UPC123456',
+            quantity: 50,
+            price: 25.99,
+          },
+        }),
+      }),
+      ApiResponse({
+        status: 400,
+        description: 'Bad request - Invalid quantity or PLU/UPC',
+        schema: errorResponseSchema(400, 'Quantity must be at least 0'),
+      }),
+      ApiResponse({
+        status: 403,
+        description: 'Forbidden - insufficient permissions',
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to update products',
+        ),
+      }),
+      ApiResponse({
+        status: 404,
+        description: 'Product with variant not found',
+        schema: errorResponseSchema(
+          404,
+          'Product with variant PLU/UPC not found',
+        ),
+      }),
+      ...standardErrorResponses(),
+      ApiBearerAuth('JWT-auth'),
+    ),
 };

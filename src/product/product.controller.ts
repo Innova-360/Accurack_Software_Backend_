@@ -32,6 +32,7 @@ import {
   CreateProductDto,
   UpdateProductDto,
   AssignSupplierDto,
+  UpdateVariantQuantityDto,
 } from './dto/product.dto';
 import { UpdateProductQuantityDto } from './dto/update-product-quantity.dto';
 
@@ -228,6 +229,25 @@ export class ProductController extends BaseProductController {
     return this.handleProductOperation(
       () => this.productService.addInventory(req.user, file, storeId ?? ''),
       'Inventory uploaded successfully',
+    );
+  }
+
+  @ProductEndpoint.UpdateVariantQuantity(UpdateVariantQuantityDto)
+  @Patch('variant-quantity/:pluUpc')
+  async updateVariantQuantity(
+    @Req() req,
+    @Param('pluUpc') pluUpc: string,
+    @Body() updateVariantQuantityDto: UpdateVariantQuantityDto,
+  ) {
+    const user = req.user;
+    return this.handleProductOperation(
+      () =>
+        this.productService.updateVariantQuantity(
+          user,
+          pluUpc,
+          updateVariantQuantityDto.quantity,
+        ),
+      'Variant quantity updated successfully',
     );
   }
 }

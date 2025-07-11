@@ -937,3 +937,5 @@ export class SearchProductDto {
   @IsOptional()
   storeId?: string;
 }
+
+export { UpdateVariantQuantityDto } from './update-variant-quantity.dto';
