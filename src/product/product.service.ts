@@ -3,6 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  InternalServerErrorException,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   CreateProductDto,
@@ -769,282 +771,251 @@ export class ProductService {
     // Get the tenant-specific Prisma client
     const prisma = await this.tenantContext.getPrismaClient();
 
-    const product = await prisma.products.findUnique({ where: { id } });
-    if (!product) {
-      throw new NotFoundException('Product not found');
-    }
-
-    // Validate PLU/UPC uniqueness based on hasVariants
-    if (
-      updateProductDto.hasVariants === false &&
-      updateProductDto.pluUpc &&
-      updateProductDto.pluUpc !== product.pluUpc
-    ) {
-      await this.validatePluUniqueness(async (plu: string) => {
-        const existing = await prisma.products.findFirst({
-          where: {
-            pluUpc: plu,
-            NOT: { id },
-          },
-        });
-        return !!existing;
-      }, updateProductDto.pluUpc);
-    }
-
-    // Validate PLU uniqueness for variants (if product has variants)
-    if (updateProductDto.hasVariants && updateProductDto.variants) {
-      await this.validateVariantPluUniqueness(updateProductDto.variants, id);
-    }
-
-    // Validate clientId and storeId if being updated
-    if (updateProductDto.clientId) {
-      const client = await prisma.clients.findUnique({
-        where: { id: updateProductDto.clientId },
-      });
-      if (!client) {
-        throw new BadRequestException(
-          'Invalid clientId - client does not exist',
-        );
+    try {
+      const product = await prisma.products.findUnique({ where: { id } });
+      if (!product) {
+        throw new NotFoundException('Product not found');
       }
-    }
 
-    if (updateProductDto.storeId) {
-      const store = await prisma.stores.findUnique({
-        where: { id: updateProductDto.storeId },
-      });
-      if (!store) {
-        throw new BadRequestException('Invalid storeId - store does not exist');
-      }
+      // Validate PLU/UPC uniqueness based on hasVariants
       if (
-        updateProductDto.clientId &&
-        store.clientId !== updateProductDto.clientId
+        updateProductDto.hasVariants === false &&
+        updateProductDto.pluUpc &&
+        updateProductDto.pluUpc !== product.pluUpc
       ) {
-        throw new BadRequestException(
-          'Store does not belong to the specified client',
-        );
+        await this.validatePluUniqueness(async (plu: string) => {
+          const existing = await prisma.products.findFirst({
+            where: {
+              pluUpc: plu,
+              NOT: { id },
+            },
+          });
+          return !!existing;
+        }, updateProductDto.pluUpc);
       }
-    }
 
-    let packIds: string[] = [];
-    let variantsWithPacks: any[] = [];
-
-    // Validate pack and variant constraints
-    if (
-      updateProductDto.hasVariants === true &&
-      updateProductDto.packs &&
-      updateProductDto.packs?.length > 0
-    ) {
-      throw new BadRequestException(
-        'Packs cannot be provided at product level when hasVariants is true',
-      );
-    }
-    if (
-      updateProductDto.hasVariants === false &&
-      updateProductDto.variants &&
-      updateProductDto.variants?.length > 0
-    ) {
-      throw new BadRequestException(
-        'Variants must be empty when hasVariants is false',
-      );
-    }
-
-    // Validate PLU/UPC logic based on hasVariants
-    if (updateProductDto.hasVariants === true) {
-      // For variant products, PLU/UPC should be empty at product level
-      if (updateProductDto.pluUpc) {
-        throw new BadRequestException(
-          'PLU/UPC must be empty for products with variants. Each variant should have its own PLU/UPC.',
-        );
+      // Validate PLU uniqueness for variants (if product has variants)
+      if (updateProductDto.hasVariants && updateProductDto.variants) {
+        await this.validateVariantPluUniqueness(updateProductDto.variants, id);
       }
-      // Ensure variants exist if hasVariants is true
-      if (
-        !updateProductDto.variants ||
-        updateProductDto.variants.length === 0
-      ) {
-        throw new BadRequestException(
-          'At least one variant must be provided when hasVariants is true',
-        );
-      }
-    }
 
-    // Validate ProductSupplier relationships (optional - products can exist without suppliers)
-    if (
-      updateProductDto.productSuppliers &&
-      updateProductDto.productSuppliers.length > 0
-    ) {
-      // Validate that suppliers exist
-      for (const ps of updateProductDto.productSuppliers) {
-        const supplier = await prisma.suppliers.findUnique({
-          where: { id: ps.supplierId },
+      // Validate clientId and storeId if being updated
+      if (updateProductDto.clientId) {
+        const client = await prisma.clients.findUnique({
+          where: { id: updateProductDto.clientId },
         });
-        if (!supplier) {
+        if (!client) {
           throw new BadRequestException(
-            `Supplier with ID '${ps.supplierId}' does not exist`,
+            'Invalid clientId - client does not exist',
           );
         }
       }
 
-      // Validate that at least one supplier is marked as primary
-      const primarySuppliers = updateProductDto.productSuppliers.filter(
-        (ps) => ps.state === 'primary',
-      );
-      if (primarySuppliers.length === 0) {
-        throw new BadRequestException(
-          'At least one supplier must be marked as primary',
-        );
-      }
-      if (primarySuppliers.length > 1) {
-        throw new BadRequestException(
-          'Only one supplier can be marked as primary',
-        );
-      }
-    }
-
-    // Delete existing packs to avoid duplicates
-    await prisma.pack.deleteMany({ where: { productId: id } });
-
-    // Handle pack updates based on hasVariants
-    if (updateProductDto.hasVariants && updateProductDto.variants) {
-      variantsWithPacks = await Promise.all(
-        updateProductDto.variants.map(async (variant) => {
-          let variantPackIds: string[] = [];
-          if (variant.packs && variant.packs.length > 0) {
-            const createdPacks = await Promise.all(
-              variant.packs.map((pack) =>
-                prisma.pack.create({
-                  data: {
-                    productId: id,
-                    minimumSellingQuantity: pack.minimumSellingQuantity,
-                    totalPacksQuantity: pack.totalPacksQuantity,
-                    orderedPacksPrice: pack.orderedPacksPrice,
-                    discountAmount: Number(pack.discountAmount),
-                    percentDiscount: Number(pack.percentDiscount),
-                  },
-                  select: { id: true },
-                }),
-              ),
-            );
-            variantPackIds = createdPacks.map((pack) => pack.id);
-          }
-          return {
-            name: variant.name,
-            price: variant.price,
-            pluUpc: variant.pluUpc,
-            packIds: variantPackIds,
-          };
-        }),
-      );
-    } else if (updateProductDto.packs && updateProductDto.packs.length > 0) {
-      const createdPacks = await Promise.all(
-        updateProductDto.packs.map((pack) =>
-          prisma.pack.create({
-            data: {
-              productId: id,
-              minimumSellingQuantity: pack.minimumSellingQuantity,
-              totalPacksQuantity: pack.totalPacksQuantity,
-              orderedPacksPrice: pack.orderedPacksPrice,
-              discountAmount: Number(pack.discountAmount),
-              percentDiscount: Number(pack.percentDiscount),
-            },
-            select: { id: true },
-          }),
-        ),
-      );
-      packIds = createdPacks.map((pack) => pack.id);
-    }
-
-    // Prepare update data with proper typing
-    const updateData: any = {};
-
-    if (updateProductDto.name !== undefined)
-      updateData.name = updateProductDto.name;
-    if (updateProductDto.categoryId !== undefined) {
-      updateData.category = {
-        connect: { id: updateProductDto.categoryId },
-      };
-    }
-    if (updateProductDto.ean !== undefined)
-      updateData.ean = updateProductDto.ean;
-    if (updateProductDto.sku !== undefined)
-      updateData.sku = updateProductDto.sku;
-    if (updateProductDto.itemQuantity !== undefined)
-      updateData.itemQuantity = updateProductDto.itemQuantity;
-    if (updateProductDto.msrpPrice !== undefined)
-      updateData.msrpPrice = updateProductDto.msrpPrice;
-    if (updateProductDto.singleItemSellingPrice !== undefined)
-      updateData.singleItemSellingPrice =
-        updateProductDto.singleItemSellingPrice;
-    if (updateProductDto.discountAmount !== undefined)
-      updateData.discountAmount = updateProductDto.discountAmount;
-    if (updateProductDto.percentDiscount !== undefined)
-      updateData.percentDiscount = updateProductDto.percentDiscount;
-    if (updateProductDto.clientId !== undefined)
-      updateData.clientId = updateProductDto.clientId;
-    if (updateProductDto.storeId !== undefined)
-      updateData.storeId = updateProductDto.storeId;
-    if (updateProductDto.hasVariants !== undefined)
-      updateData.hasVariants = updateProductDto.hasVariants;
-
-    // Handle pluUpc based on hasVariants logic
-    if (updateProductDto.hasVariants === true) {
-      // Clear pluUpc for variant products
-      updateData.pluUpc = null;
-    } else if (
-      updateProductDto.hasVariants === false &&
-      updateProductDto.pluUpc !== undefined
-    ) {
-      // Set pluUpc for non-variant products
-      updateData.pluUpc = updateProductDto.pluUpc;
-    }
-
-    // Set packIds and variants
-    updateData.packIds = updateProductDto.hasVariants ? [] : packIds;
-    updateData.variants = updateProductDto.hasVariants ? variantsWithPacks : [];
-
-    const updatedProduct = await prisma.products.update({
-      where: { id },
-      data: updateData,
-      include: {
-        packs: true,
-        productSuppliers: {
-          include: {
-            supplier: true,
-          },
-        },
-        store: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        saleItems: true,
-        purchaseOrders: true,
-      },
-    });
-
-    // Update ProductSupplier relationships if provided
-    if (updateProductDto.productSuppliers) {
-      // Delete existing ProductSupplier relationships
-      await prisma.productSupplier.deleteMany({
-        where: { productId: id },
-      });
-
-      // Create new ProductSupplier relationships
-      if (updateProductDto.productSuppliers.length > 0) {
-        await prisma.productSupplier.createMany({
-          data: updateProductDto.productSuppliers.map((ps) => ({
-            productId: id,
-            supplierId: ps.supplierId,
-            costPrice: ps.costPrice,
-            categoryId: updateProductDto.categoryId,
-            state: ps.state,
-          })),
+      if (updateProductDto.storeId) {
+        const store = await prisma.stores.findUnique({
+          where: { id: updateProductDto.storeId },
         });
+        if (!store) {
+          throw new BadRequestException('Invalid storeId - store does not exist');
+        }
+        if (
+          updateProductDto.clientId &&
+          store.clientId !== updateProductDto.clientId
+        ) {
+          throw new BadRequestException(
+            'Store does not belong to the specified client',
+          );
+        }
       }
 
-      // Fetch the updated product with new supplier relationships
-      const finalProduct = await prisma.products.findUnique({
+      let packIds: string[] = [];
+      let variantsWithPacks: any[] = [];
+
+      // Validate pack and variant constraints
+      if (
+        updateProductDto.hasVariants === true &&
+        updateProductDto.packs &&
+        updateProductDto.packs?.length > 0
+      ) {
+        throw new BadRequestException(
+          'Packs cannot be provided at product level when hasVariants is true',
+        );
+      }
+      if (
+        updateProductDto.hasVariants === false &&
+        updateProductDto.variants &&
+        updateProductDto.variants?.length > 0
+      ) {
+        throw new BadRequestException(
+          'Variants must be empty when hasVariants is false',
+        );
+      }
+
+      // Validate PLU/UPC logic based on hasVariants
+      if (updateProductDto.hasVariants === true) {
+        // For variant products, PLU/UPC should be empty at product level
+        if (updateProductDto.pluUpc) {
+          throw new BadRequestException(
+            'PLU/UPC must be empty for products with variants. Each variant should have its own PLU/UPC.',
+          );
+        }
+        // Ensure variants exist if hasVariants is true
+        if (
+          !updateProductDto.variants ||
+          updateProductDto.variants.length === 0
+        ) {
+          throw new BadRequestException(
+            'At least one variant must be provided when hasVariants is true',
+          );
+        }
+      }
+
+      // Validate ProductSupplier relationships (optional - products can exist without suppliers)
+      if (
+        updateProductDto.productSuppliers &&
+        updateProductDto.productSuppliers.length > 0
+      ) {
+        // Validate that suppliers exist
+        for (const ps of updateProductDto.productSuppliers) {
+          const supplier = await prisma.suppliers.findUnique({
+            where: { id: ps.supplierId },
+          });
+          if (!supplier) {
+            throw new BadRequestException(
+              `Supplier with ID '${ps.supplierId}' does not exist`,
+            );
+          }
+        }
+
+        // Validate that at least one supplier is marked as primary
+        const primarySuppliers = updateProductDto.productSuppliers.filter(
+          (ps) => ps.state === 'primary',
+        );
+        if (primarySuppliers.length === 0) {
+          throw new BadRequestException(
+            'At least one supplier must be marked as primary',
+          );
+        }
+        if (primarySuppliers.length > 1) {
+          throw new BadRequestException(
+            'Only one supplier can be marked as primary',
+          );
+        }
+      }
+
+      // Delete existing packs to avoid duplicates
+      await prisma.pack.deleteMany({ where: { productId: id } });
+
+      // Handle pack updates based on hasVariants
+      if (updateProductDto.hasVariants && updateProductDto.variants) {
+        variantsWithPacks = await Promise.all(
+          updateProductDto.variants.map(async (variant) => {
+            let variantPackIds: string[] = [];
+            if (variant.packs && variant.packs.length > 0) {
+              const createdPacks = await Promise.all(
+                variant.packs.map((pack) =>
+                  prisma.pack.create({
+                    data: {
+                      productId: id,
+                      minimumSellingQuantity: pack.minimumSellingQuantity,
+                      totalPacksQuantity: pack.totalPacksQuantity,
+                      orderedPacksPrice: pack.orderedPacksPrice,
+                      discountAmount: Number(pack.discountAmount),
+                      percentDiscount: Number(pack.percentDiscount),
+                    },
+                    select: { id: true },
+                  }),
+                ),
+              );
+              variantPackIds = createdPacks.map((pack) => pack.id);
+            }
+            return {
+              name: variant.name,
+              price: variant.price,
+              pluUpc: variant.pluUpc,
+              packIds: variantPackIds,
+            };
+          }),
+        );
+      } else if (updateProductDto.packs && updateProductDto.packs.length > 0) {
+        const createdPacks = await Promise.all(
+          updateProductDto.packs.map((pack) =>
+            prisma.pack.create({
+              data: {
+                productId: id,
+                minimumSellingQuantity: pack.minimumSellingQuantity,
+                totalPacksQuantity: pack.totalPacksQuantity,
+                orderedPacksPrice: pack.orderedPacksPrice,
+                discountAmount: Number(pack.discountAmount),
+                percentDiscount: Number(pack.percentDiscount),
+              },
+              select: { id: true },
+            }),
+          ),
+        );
+        packIds = createdPacks.map((pack) => pack.id);
+      }
+
+      // Prepare update data with proper Prisma relation syntax
+      const updateData: any = {};
+
+      if (updateProductDto.name !== undefined)
+        updateData.name = updateProductDto.name;
+      if (updateProductDto.categoryId !== undefined) {
+        updateData.category = {
+          connect: { id: updateProductDto.categoryId },
+        };
+      }
+      if (updateProductDto.ean !== undefined)
+        updateData.ean = updateProductDto.ean;
+      if (updateProductDto.sku !== undefined)
+        updateData.sku = updateProductDto.sku;
+      if (updateProductDto.itemQuantity !== undefined)
+        updateData.itemQuantity = updateProductDto.itemQuantity;
+      if (updateProductDto.msrpPrice !== undefined)
+        updateData.msrpPrice = updateProductDto.msrpPrice;
+      if (updateProductDto.singleItemSellingPrice !== undefined)
+        updateData.singleItemSellingPrice =
+          updateProductDto.singleItemSellingPrice;
+      if (updateProductDto.discountAmount !== undefined)
+        updateData.discountAmount = updateProductDto.discountAmount;
+      if (updateProductDto.percentDiscount !== undefined)
+        updateData.percentDiscount = updateProductDto.percentDiscount;
+      
+      // Use proper Prisma relation syntax for client and store
+      if (updateProductDto.clientId !== undefined) {
+        updateData.client = {
+          connect: { id: updateProductDto.clientId },
+        };
+      }
+      if (updateProductDto.storeId !== undefined) {
+        updateData.store = {
+          connect: { id: updateProductDto.storeId },
+        };
+      }
+      
+      if (updateProductDto.hasVariants !== undefined)
+        updateData.hasVariants = updateProductDto.hasVariants;
+
+      // Handle pluUpc based on hasVariants logic
+      if (updateProductDto.hasVariants === true) {
+        // Clear pluUpc for variant products
+        updateData.pluUpc = null;
+      } else if (
+        updateProductDto.hasVariants === false &&
+        updateProductDto.pluUpc !== undefined
+      ) {
+        // Set pluUpc for non-variant products
+        updateData.pluUpc = updateProductDto.pluUpc;
+      }
+
+      // Set packIds and variants
+      updateData.packIds = updateProductDto.hasVariants ? [] : packIds;
+      updateData.variants = updateProductDto.hasVariants ? variantsWithPacks : [];
+
+      const updatedProduct = await prisma.products.update({
         where: { id },
+        data: updateData,
         include: {
           packs: true,
           productSuppliers: {
@@ -1063,10 +1034,268 @@ export class ProductService {
         },
       });
 
-      return this.formatProductResponse(finalProduct);
-    }
+      // Update ProductSupplier relationships if provided
+      if (updateProductDto.productSuppliers) {
+        // Delete existing ProductSupplier relationships
+        await prisma.productSupplier.deleteMany({
+          where: { productId: id },
+        });
 
-    return this.formatProductResponse(updatedProduct);
+        // Create new ProductSupplier relationships
+        if (updateProductDto.productSuppliers.length > 0) {
+          await prisma.productSupplier.createMany({
+            data: updateProductDto.productSuppliers.map((ps) => ({
+              productId: id,
+              supplierId: ps.supplierId,
+              costPrice: ps.costPrice,
+              categoryId: updateProductDto.categoryId,
+              state: ps.state,
+            })),
+          });
+        }
+
+        // Fetch the updated product with new supplier relationships
+        const finalProduct = await prisma.products.findUnique({
+          where: { id },
+          include: {
+            packs: true,
+            productSuppliers: {
+              include: {
+                supplier: true,
+              },
+            },
+            store: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            saleItems: true,
+            purchaseOrders: true,
+          },
+        });
+
+        return this.formatProductResponse(finalProduct);
+      }
+
+      return this.formatProductResponse(updatedProduct);
+    } catch (error) {
+      // Enhanced error handling with detailed logging
+      console.error('Product update error:', {
+        productId: id,
+        userId: user.id,
+        error: error.message,
+        code: error.code,
+        meta: error.meta,
+        stack: error.stack,
+      });
+
+      // Handle specific Prisma errors
+      if (error.code) {
+        switch (error.code) {
+          case 'P2002':
+            // Unique constraint violation
+            const field = error.meta?.target?.[0] || 'field';
+            throw new BadRequestException(
+              `Product with this ${field} already exists in this store`,
+            );
+          
+          case 'P2003':
+            // Foreign key constraint violation
+            if (error.meta?.field_name === 'clientId') {
+              throw new BadRequestException(
+                'Invalid client ID - client does not exist',
+              );
+            }
+            if (error.meta?.field_name === 'storeId') {
+              throw new BadRequestException(
+                'Invalid store ID - store does not exist',
+              );
+            }
+            if (error.meta?.field_name === 'categoryId') {
+              throw new BadRequestException(
+                'Invalid category ID - category does not exist',
+              );
+            }
+            throw new BadRequestException(
+              'Invalid reference - related record not found',
+            );
+          
+          case 'P2025':
+            // Record not found
+            throw new NotFoundException('Product not found');
+          
+          case 'P2014':
+            // Invalid ID provided
+            throw new BadRequestException('Invalid product ID format');
+          
+          case 'P2011':
+            // Null constraint violation
+            const nullField = error.meta?.field_name || 'field';
+            throw new BadRequestException(
+              `Required field '${nullField}' cannot be null`,
+            );
+          
+          case 'P2012':
+            // Missing required value
+            const missingField = error.meta?.field_name || 'field';
+            throw new BadRequestException(
+              `Required field '${missingField}' is missing`,
+            );
+          
+          case 'P2013':
+            // Missing required argument
+            const missingArg = error.meta?.argument_name || 'argument';
+            throw new BadRequestException(
+              `Required argument '${missingArg}' is missing`,
+            );
+          
+          case 'P2015':
+            // Related record not found
+            throw new BadRequestException(
+              'Related record not found - please check your references',
+            );
+          
+          case 'P2016':
+            // Query interpretation error
+            throw new BadRequestException(
+              'Invalid query structure - please check your request format',
+            );
+          
+          case 'P2017':
+            // Relation violation
+            throw new BadRequestException(
+              'Relation constraint violation - please check related records',
+            );
+          
+          case 'P2018':
+            // Connected records not found
+            throw new BadRequestException(
+              'Connected records not found - please check your references',
+            );
+          
+          case 'P2019':
+            // Input error
+            throw new BadRequestException(
+              'Invalid input data - please check your request format',
+            );
+          
+          case 'P2020':
+            // Value out of range
+            throw new BadRequestException(
+              'Value out of valid range - please check your input values',
+            );
+          
+          case 'P2021':
+            // Table does not exist
+            throw new InternalServerErrorException(
+              'Database table not found - please contact support',
+            );
+          
+          case 'P2022':
+            // Column does not exist
+            throw new InternalServerErrorException(
+              'Database column not found - please contact support',
+            );
+          
+          case 'P2023':
+            // Column data type mismatch
+            throw new BadRequestException(
+              'Data type mismatch - please check your input values',
+            );
+          
+          case 'P2024':
+            // Connection error
+            throw new InternalServerErrorException(
+              'Database connection error - please try again later',
+            );
+          
+          case 'P2026':
+            // Current database provider doesn't support a feature
+            throw new InternalServerErrorException(
+              'Database feature not supported - please contact support',
+            );
+          
+          case 'P2027':
+            // Multiple errors occurred
+            throw new BadRequestException(
+              'Multiple validation errors occurred - please check all fields',
+            );
+          
+          case 'P2030':
+            // Fulltext index not found
+            throw new BadRequestException(
+              'Search index not found - please contact support',
+            );
+          
+          case 'P2031':
+            // MongoDB requires a $ sign
+            throw new BadRequestException(
+              'Invalid MongoDB query format',
+            );
+          
+          case 'P2033':
+            // Number overflow
+            throw new BadRequestException(
+              'Number overflow - value is too large',
+            );
+          
+          case 'P2034':
+            // Transaction failed
+            throw new InternalServerErrorException(
+              'Transaction failed - please try again',
+            );
+          
+          case 'P2037':
+            // Too many database connections
+            throw new InternalServerErrorException(
+              'Database connection limit reached - please try again later',
+            );
+          
+          default:
+            // Unknown Prisma error
+            throw new InternalServerErrorException(
+              `Database operation failed: ${error.message}`,
+            );
+        }
+      }
+
+      // Handle NestJS exceptions
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error;
+      }
+
+      // Handle validation errors
+      if (error.name === 'ValidationError') {
+        throw new BadRequestException(
+          `Validation error: ${error.message}`,
+        );
+      }
+
+      // Handle connection errors
+      if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+        throw new InternalServerErrorException(
+          'Database connection failed - please try again later',
+        );
+      }
+
+      // Handle timeout errors
+      if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
+        throw new InternalServerErrorException(
+          'Operation timed out - please try again',
+        );
+      }
+
+      // Generic error handling
+      console.error('Unhandled product update error:', error);
+      throw new InternalServerErrorException(
+        'An unexpected error occurred while updating the product. Please try again or contact support.',
+      );
+    }
   }
 
   async deleteProduct(user: any, id: string): Promise<void> {
