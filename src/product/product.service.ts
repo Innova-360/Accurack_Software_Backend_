@@ -621,7 +621,10 @@ export class ProductService {
           },
           skip: currentSkip,
           take: currentBatchSize,
-          orderBy: { createdAt: 'desc' },
+          orderBy: [
+            { updatedAt: 'desc' },
+            { createdAt: 'desc' }
+          ],
         });
 
         allProducts.push(...batch);
@@ -674,7 +677,10 @@ export class ProductService {
       },
       skip,
       take: Number(limit),
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+        { updatedAt: 'desc' },
+        { createdAt: 'desc' }
+      ],
     });
 
     return {
