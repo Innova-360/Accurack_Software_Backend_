@@ -816,7 +816,9 @@ export class ProductService {
           where: { id: updateProductDto.storeId },
         });
         if (!store) {
-          throw new BadRequestException('Invalid storeId - store does not exist');
+          throw new BadRequestException(
+            'Invalid storeId - store does not exist',
+          );
         }
         if (
           updateProductDto.clientId &&
@@ -981,7 +983,7 @@ export class ProductService {
         updateData.discountAmount = updateProductDto.discountAmount;
       if (updateProductDto.percentDiscount !== undefined)
         updateData.percentDiscount = updateProductDto.percentDiscount;
-      
+
       // Use proper Prisma relation syntax for client and store
       if (updateProductDto.clientId !== undefined) {
         updateData.client = {
@@ -993,7 +995,7 @@ export class ProductService {
           connect: { id: updateProductDto.storeId },
         };
       }
-      
+
       if (updateProductDto.hasVariants !== undefined)
         updateData.hasVariants = updateProductDto.hasVariants;
 
@@ -1011,7 +1013,9 @@ export class ProductService {
 
       // Set packIds and variants
       updateData.packIds = updateProductDto.hasVariants ? [] : packIds;
-      updateData.variants = updateProductDto.hasVariants ? variantsWithPacks : [];
+      updateData.variants = updateProductDto.hasVariants
+        ? variantsWithPacks
+        : [];
 
       const updatedProduct = await prisma.products.update({
         where: { id },
@@ -1099,7 +1103,7 @@ export class ProductService {
             throw new BadRequestException(
               `Product with this ${field} already exists in this store`,
             );
-          
+
           case 'P2003':
             // Foreign key constraint violation
             if (error.meta?.field_name === 'clientId') {
@@ -1120,138 +1124,136 @@ export class ProductService {
             throw new BadRequestException(
               'Invalid reference - related record not found',
             );
-          
+
           case 'P2025':
             // Record not found
             throw new NotFoundException('Product not found');
-          
+
           case 'P2014':
             // Invalid ID provided
             throw new BadRequestException('Invalid product ID format');
-          
+
           case 'P2011':
             // Null constraint violation
             const nullField = error.meta?.field_name || 'field';
             throw new BadRequestException(
               `Required field '${nullField}' cannot be null`,
             );
-          
+
           case 'P2012':
             // Missing required value
             const missingField = error.meta?.field_name || 'field';
             throw new BadRequestException(
               `Required field '${missingField}' is missing`,
             );
-          
+
           case 'P2013':
             // Missing required argument
             const missingArg = error.meta?.argument_name || 'argument';
             throw new BadRequestException(
               `Required argument '${missingArg}' is missing`,
             );
-          
+
           case 'P2015':
             // Related record not found
             throw new BadRequestException(
               'Related record not found - please check your references',
             );
-          
+
           case 'P2016':
             // Query interpretation error
             throw new BadRequestException(
               'Invalid query structure - please check your request format',
             );
-          
+
           case 'P2017':
             // Relation violation
             throw new BadRequestException(
               'Relation constraint violation - please check related records',
             );
-          
+
           case 'P2018':
             // Connected records not found
             throw new BadRequestException(
               'Connected records not found - please check your references',
             );
-          
+
           case 'P2019':
             // Input error
             throw new BadRequestException(
               'Invalid input data - please check your request format',
             );
-          
+
           case 'P2020':
             // Value out of range
             throw new BadRequestException(
               'Value out of valid range - please check your input values',
             );
-          
+
           case 'P2021':
             // Table does not exist
             throw new InternalServerErrorException(
               'Database table not found - please contact support',
             );
-          
+
           case 'P2022':
             // Column does not exist
             throw new InternalServerErrorException(
               'Database column not found - please contact support',
             );
-          
+
           case 'P2023':
             // Column data type mismatch
             throw new BadRequestException(
               'Data type mismatch - please check your input values',
             );
-          
+
           case 'P2024':
             // Connection error
             throw new InternalServerErrorException(
               'Database connection error - please try again later',
             );
-          
+
           case 'P2026':
             // Current database provider doesn't support a feature
             throw new InternalServerErrorException(
               'Database feature not supported - please contact support',
             );
-          
+
           case 'P2027':
             // Multiple errors occurred
             throw new BadRequestException(
               'Multiple validation errors occurred - please check all fields',
             );
-          
+
           case 'P2030':
             // Fulltext index not found
             throw new BadRequestException(
               'Search index not found - please contact support',
             );
-          
+
           case 'P2031':
             // MongoDB requires a $ sign
-            throw new BadRequestException(
-              'Invalid MongoDB query format',
-            );
-          
+            throw new BadRequestException('Invalid MongoDB query format');
+
           case 'P2033':
             // Number overflow
             throw new BadRequestException(
               'Number overflow - value is too large',
             );
-          
+
           case 'P2034':
             // Transaction failed
             throw new InternalServerErrorException(
               'Transaction failed - please try again',
             );
-          
+
           case 'P2037':
             // Too many database connections
             throw new InternalServerErrorException(
               'Database connection limit reached - please try again later',
             );
-          
+
           default:
             // Unknown Prisma error
             throw new InternalServerErrorException(
@@ -1271,9 +1273,7 @@ export class ProductService {
 
       // Handle validation errors
       if (error.name === 'ValidationError') {
-        throw new BadRequestException(
-          `Validation error: ${error.message}`,
-        );
+        throw new BadRequestException(`Validation error: ${error.message}`);
       }
 
       // Handle connection errors
@@ -2095,8 +2095,11 @@ export class ProductService {
 
       try {
         const prisma = await this.tenantContext.getPrismaClient();
-        const fileUpload = await prisma.fileUploadInventory.findUnique({
-          where: { storeId_fileHash: { storeId, fileHash } },
+        const fileUpload = await prisma.fileUploadInventory.findFirst({
+          where: {
+            storeId: storeId,
+            fileHash: fileHash,
+          },
         });
         if (fileUpload) {
           await prisma.fileUploadInventory.update({

@@ -368,6 +368,17 @@ export class ChangePasswordDto {
   })
   @IsString()
   @IsNotEmpty()
-  @MinLength(8, { message: 'Confirm password must be at least 8 characters long' })
+  @MinLength(8, {
+    message: 'Confirm password must be at least 8 characters long',
+  })
   confirmPassword: string;
+}
+
+export class ResendOtpDto {
+  @ApiProperty({
+    description: 'User email address to resend OTP',
+    example: 'user@example.com',
+  })
+  @IsEmail()
+  email: string;
 }

@@ -208,6 +208,41 @@ export const AuthEndpoint = {
       Version('1'),
     ),
 
+  // Resend OTP
+  ResendOTP: (dtoType: any) =>
+    applyDecorators(
+      ApiOperation({
+        summary: 'Resend OTP for email verification',
+        description:
+          "Generates and sends a new OTP code to the user's email address for account verification",
+      }),
+      ApiBody({ type: dtoType }),
+      ApiResponse({
+        status: 200,
+        description: 'New OTP sent successfully',
+        schema: successResponseSchema(
+          'A new OTP has been sent to your email address.',
+        ),
+      }),
+      ApiResponse({
+        status: 400,
+        description: 'Bad Request - Invalid email or account already verified',
+        schema: errorResponseSchema(
+          400,
+          'Account is already verified. Please login instead.',
+        ),
+      }),
+      ApiResponse({
+        status: 404,
+        description: 'User not found (silently handled for security)',
+        schema: successResponseSchema(
+          'If an account exists, a new OTP has been sent to your email.',
+        ),
+      }),
+      ...standardErrorResponses(),
+      Version('1'),
+    ),
+
   // Token refresh
   RefreshToken: (dtoType: any) =>
     applyDecorators(

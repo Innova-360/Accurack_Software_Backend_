@@ -387,6 +387,104 @@ export class AuthService {
     }
   }
 
+  async resendOtp(email: string): Promise<{ message: string }> {
+    try {
+      // Validate email
+      if (!email) {
+        throw new BadRequestException('Email is required');
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new BadRequestException('Invalid email format');
+      }
+
+      // Find user with this email
+      const user = await this.prisma.users.findUnique({
+        where: { email },
+        select: {
+          id: true,
+          firstName: true,
+          email: true,
+          status: true,
+          isOtpUsed: true,
+        },
+      });
+
+      if (!user) {
+        // Silently return to prevent email enumeration
+        return {
+          message:
+            'If an account exists, a new OTP has been sent to your email.',
+        };
+      }
+
+      if (user.status !== Status.active) {
+        throw new BadRequestException('User account is not active');
+      }
+
+      // Check if OTP is already verified
+      if (user.isOtpUsed) {
+        throw new BadRequestException(
+          'Account is already verified. Please login instead.',
+        );
+      }
+
+      // Generate new OTP
+      const otp = this.generateOtp();
+      const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiration
+
+      // Update user with new OTP
+      await this.prisma.users.update({
+        where: { id: user.id },
+        data: {
+          otp,
+          otpExpiresAt,
+          isOtpUsed: false,
+        },
+      });
+
+      // Send OTP email
+      await this.mailService.sendMail({
+        to: email,
+        subject: 'Your New OTP Code - Accurack',
+        html: `
+          <h2>Your New OTP Code</h2>
+          <p>Hi ${user.firstName},</p>
+          <p>You requested a new OTP code. Here is your verification code:</p>
+          <h3 style="color: #007bff; font-size: 24px; letter-spacing: 2px;">${otp}</h3>
+          <p>This code will expire in 10 minutes.</p>
+          <p>If you didn't request this, please ignore this email.</p>
+        `,
+      });
+
+      // Create audit log
+      await this.prisma.auditLogs.create({
+        data: {
+          userId: user.id,
+          action: 'otp_resent',
+          resource: 'auth',
+          details: {
+            email,
+            timestamp: new Date().toISOString(),
+          },
+        },
+      });
+
+      return { message: 'A new OTP has been sent to your email address.' };
+    } catch (error) {
+      // Log error for debugging
+      console.error('Resend OTP error:', error);
+
+      // Handle specific errors
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      throw new BadRequestException('Failed to resend OTP');
+    }
+  }
+
   /**
    * Helper method to find user across master and tenant databases
    */

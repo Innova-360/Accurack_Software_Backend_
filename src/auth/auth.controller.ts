@@ -23,6 +23,7 @@ import {
   FixClientRecordDto,
   FixUserRecordDto,
   ChangePasswordDto,
+  ResendOtpDto,
 } from './dto/auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -106,6 +107,16 @@ export class AuthController extends BaseAuthController {
     return this.handleServiceOperation(
       () => this.authService.verifyOTP(body.email, body.otp),
       'OTP verified successfully',
+      200,
+    );
+  }
+
+  @AuthEndpoint.ResendOTP(ResendOtpDto)
+  @Post('resend-otp')
+  async resendOtp(@Body() dto: ResendOtpDto) {
+    return this.handleServiceOperation(
+      () => this.authService.resendOtp(dto.email),
+      'OTP resent successfully',
       200,
     );
   }
