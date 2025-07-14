@@ -2243,6 +2243,7 @@ export class ProductService {
         store: { select: { id: true, name: true } },
         saleItems: true,
         purchaseOrders: true,
+        category: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
