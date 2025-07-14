@@ -55,9 +55,32 @@ export class AuthController extends BaseAuthController {
   @AuthEndpoint.GoogleCallback()
   @Get('google/callback')
   async googleAuthRedirect(@Req() req, @Res() res: Response) {
-    return this.handleGoogleAuth(res, () =>
-      this.authService.googleLogin(req.user),
-    );
+    try {
+      const result = await this.authService.googleLogin(req.user);
+      const accessToken = result.access_token;
+      const refreshToken = result.refresh_token;
+
+      if (accessToken && refreshToken) {
+        // Set Google-specific cookies (same as normal login for consistency)
+        res.cookie('accessToken', accessToken, {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'none',
+        });
+        res.cookie('refreshToken', refreshToken, {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'none',
+        });
+      }
+
+      // Redirect to frontend dashboard (or use process.env.FRONTEND_URL)
+      const redirectUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      return res.redirect(redirectUrl);
+    } catch (error) {
+      // Fallback to error handler from base controller
+      return this['handleAuthError'](error, res);
+    }
   }
 
   @AuthEndpoint.GetMe()
