@@ -26,8 +26,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
     ThrottlerModule.forRoot({
       throttlers: [
         {
-          ttl: 60_000, // 60 seconds in milliseconds
-          limit: 100,  // max 100 requests per 60 seconds per IP
+          ttl: 10_000, // 10 seconds in milliseconds
+          limit: 30,  // max 100 requests per 60 seconds per IP
         },
       ],
     }),
