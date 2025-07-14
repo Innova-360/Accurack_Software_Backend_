@@ -18,10 +18,19 @@ import { InvoiceModule } from './invoice/invoice.module';
 import { HealthController } from './health/health.controller';
 import { ValidatorModule } from './validator/validator.module';
 import { DriverModule } from './driver/driver.module';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          ttl: 60_000, // 60 seconds in milliseconds
+          limit: 100,  // max 100 requests per 60 seconds per IP
+        },
+      ],
+    }),
     CommonModule,
     AuthModule,
     PrismaClientModule,
