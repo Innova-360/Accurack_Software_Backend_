@@ -27,6 +27,8 @@ export enum SaleStatus {
   CANCELLED = 'CANCELLED',
   REFUNDED = 'REFUNDED',
   PARTIALLY_RETURNED = 'PARTIALLY_RETURNED',
+  CONFIRMED = 'CONFIRMED',
+  SHIPPED = 'SHIPPED',
 }
 
 export enum ReturnCategory {

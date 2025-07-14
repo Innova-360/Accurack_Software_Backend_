@@ -79,8 +79,9 @@ export const ValidatorEndpoint = {
           {
             id: 'order-123',
             totalAmount: 150.50,
-            status: 'SENT_FOR_VALIDATION',
-            paymentMethod: 'cash',
+            status: 'PENDING',
+            paymentMethod: 'CASH',
+            availableStatuses: ['PENDING', 'COMPLETED', 'CANCELLED', 'REFUNDED', 'PARTIALLY_RETURNED', 'PENDING_VALIDATION', 'VALIDATED', 'SENT_FOR_VALIDATION', 'CONFIRMED', 'SHIPPED'],
             customer: {
               id: 'customer-456',
               customerName: 'John Doe',
@@ -230,6 +231,63 @@ export const ValidatorEndpoint = {
             id: 'customer-456',
             customerName: 'John Doe'
           },
+          updatedAt: '2025-07-05T10:30:00.000Z'
+        }),
+      }),
+      ...standardErrorResponses(),
+      UseGuards(JwtAuthGuard),
+      ApiBearerAuth(),
+      Version('1'),
+    ),
+
+  ConfirmOrder: () =>
+    applyDecorators(
+      ApiOperation({
+        summary: 'Confirm an order',
+        description: 'Mark a validated order as confirmed'
+      }),
+      ApiParam({
+        name: 'orderId',
+        description: 'Order ID to confirm',
+        type: String,
+        example: 'order-123',
+      }),
+      ApiResponse({
+        status: 200,
+        description: 'Order confirmed successfully',
+        schema: successResponseSchema('Order confirmed successfully', {
+          id: 'order-123',
+          status: 'CONFIRMED',
+          totalAmount: 175.00,
+          updatedAt: '2025-07-05T10:30:00.000Z'
+        }),
+      }),
+      ...standardErrorResponses(),
+      UseGuards(JwtAuthGuard),
+      ApiBearerAuth(),
+      Version('1'),
+    ),
+
+  // Ship order endpoint
+  ShipOrder: () =>
+    applyDecorators(
+      ApiOperation({
+        summary: 'Ship an order',
+        description: 'Mark a confirmed order as shipped'
+      }),
+      ApiParam({
+        name: 'orderId',
+        description: 'Order ID to ship',
+        type: String,
+        example: 'order-123',
+      }),
+      ApiResponse({
+        status: 200,
+        description: 'Order shipped successfully',
+        schema: successResponseSchema('Order shipped successfully', {
+          id: 'order-123',
+          status: 'SHIPPED',
+          totalAmount: 175.00,
           updatedAt: '2025-07-05T10:30:00.000Z'
         }),
       }),

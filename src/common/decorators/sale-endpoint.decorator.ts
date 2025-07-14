@@ -307,64 +307,118 @@ export const SaleEndpoint = {
         description: 'Request body for setting sale confirmation status',
         type: 'object',
         examples: {
-          confirmSale: {
-            summary: 'Confirm Sale Example',
-            description: 'Example for confirming a sale',
+          pendingSale: {
+            summary: 'Pending Sale Example',
+            description: 'Example for pending sale status',
             value: {
-              setStatus: 'CONFIRMED',
+              setStatus: 'PENDING',
+              availableStatuses: ['PENDING', 'COMPLETED', 'CANCELLED', 'REFUNDED', 'PARTIALLY_RETURNED', 'PENDING_VALIDATION', 'VALIDATED', 'SENT_FOR_VALIDATION', 'CONFIRMED', 'SHIPPED'],
               sale: {
                 id: 'sale_123',
-                customerId: 'cust_456',
-                storeId: 'store_789',
-                clientId: 'client_101',
-                paymentMethod: 'CREDIT_CARD',
-                source: 'website',
-                allowance: 10.0,
-                tax: 5.0,
-                totalAmount: 100.0,
-                cashierName: 'John Doe',
-                saleItems: [
-                  {
-                    productId: 'prod_001',
-                    pluUpc: '123456789',
-                    productName: 'Sample Product',
-                    quantity: 2,
-                    sellingPrice: 40.0,
-                    totalPrice: 80.0,
-                  },
-                ],
-              },
-            },
+                status: 'PENDING'
+              }
+            }
           },
-          cancelSale: {
-            summary: 'Cancel Sale Example',
-            description: 'Example for cancelling a sale',
+          completedSale: {
+            summary: 'Completed Sale Example',
+            description: 'Example for completed sale status',
+            value: {
+              setStatus: 'COMPLETED',
+              sale: {
+                id: 'sale_123',
+                status: 'COMPLETED'
+              }
+            }
+          },
+          cancelledSale: {
+            summary: 'Cancelled Sale Example',
+            description: 'Example for cancelled sale status',
             value: {
               setStatus: 'CANCELLED',
               sale: {
                 id: 'sale_123',
-                customerId: 'cust_456',
-                storeId: 'store_789',
-                clientId: 'client_101',
-                paymentMethod: 'CREDIT_CARD',
-                source: 'website',
-                allowance: 10.0,
-                tax: 5.0,
-                totalAmount: 100.0,
-                cashierName: 'John Doe',
-                saleItems: [
-                  {
-                    productId: 'prod_001',
-                    pluUpc: '123456789',
-                    productName: 'Sample Product',
-                    quantity: 2,
-                    sellingPrice: 40.0,
-                    totalPrice: 80.0,
-                  },
-                ],
-              },
-            },
+                status: 'CANCELLED'
+              }
+            }
           },
+          refundedSale: {
+            summary: 'Refunded Sale Example',
+            description: 'Example for refunded sale status',
+            value: {
+              setStatus: 'REFUNDED',
+              sale: {
+                id: 'sale_123',
+                status: 'REFUNDED'
+              }
+            }
+          },
+          partiallyReturnedSale: {
+            summary: 'Partially Returned Sale Example',
+            description: 'Example for partially returned sale status',
+            value: {
+              setStatus: 'PARTIALLY_RETURNED',
+              sale: {
+                id: 'sale_123',
+                status: 'PARTIALLY_RETURNED'
+              }
+            }
+          },
+          pendingValidationSale: {
+            summary: 'Pending Validation Sale Example',
+            description: 'Example for pending validation sale status',
+            value: {
+              setStatus: 'PENDING_VALIDATION',
+              sale: {
+                id: 'sale_123',
+                status: 'PENDING_VALIDATION'
+              }
+            }
+          },
+          validatedSale: {
+            summary: 'Validated Sale Example',
+            description: 'Example for validated sale status',
+            value: {
+              setStatus: 'VALIDATED',
+              sale: {
+                id: 'sale_123',
+                status: 'VALIDATED'
+              }
+            }
+          },
+          sentForValidationSale: {
+            summary: 'Sent For Validation Sale Example',
+            description: 'Example for sent for validation sale status',
+            value: {
+              setStatus: 'SENT_FOR_VALIDATION',
+              sale: {
+                id: 'sale_123',
+                status: 'SENT_FOR_VALIDATION'
+              }
+            }
+          },
+          confirmedSale: {
+            summary: 'Confirmed Sale Example',
+            description: 'Example for confirmed sale status',
+            value: {
+              setStatus: 'CONFIRMED',
+              sale: {
+                id: 'sale_123',
+                status: 'CONFIRMED'
+              }
+            }
+          },
+          shippedSale: {
+            summary: 'Shipped Sale Example - UNCOMMITTED',
+            description: 'Example for shipped sale status (uncommitted)',
+            value: {
+              setStatus: 'SHIPPED',
+              sale: {
+                id: 'sale_123',
+                status: 'SHIPPED',
+                note: 'This status is uncommitted and may change'
+              }
+            }
+          }
         },
       }),
     ),

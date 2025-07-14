@@ -50,9 +50,6 @@
     "git:latest": "git fetch --all && git reset --hard origin/main",
     "git:latest:dev": "git fetch --all && git reset --hard origin/dev"
   },
-  "prisma": {
-    "seed": "ts-node prisma/seed-category.ts"
-  },
   "dependencies": {
     "@nestjs-modules/mailer": "^2.0.2",
     "@nestjs/common": "^11.0.1",
