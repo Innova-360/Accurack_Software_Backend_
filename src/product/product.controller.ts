@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Query,
   Body,
@@ -31,7 +32,9 @@ import {
   CreateProductDto,
   UpdateProductDto,
   AssignSupplierDto,
+  UpdateVariantQuantityDto,
 } from './dto/product.dto';
+import { UpdateProductQuantityDto } from './dto/update-product-quantity.dto';
 
 import { PermissionsGuard } from '../guards/permissions.guard';
 
@@ -107,6 +110,25 @@ export class ProductController extends BaseProductController {
     return this.handleProductOperation(
       () => this.productService.updateProduct(user, id, updateProductDto),
       'Product updated successfully',
+    );
+  }
+
+  @ProductEndpoint.UpdateQuantity(UpdateProductQuantityDto)
+  @Patch(':id/quantity')
+  async updateProductQuantity(
+    @Req() req,
+    @Param('id') id: string,
+    @Body() updateQuantityDto: UpdateProductQuantityDto,
+  ) {
+    const user = req.user;
+    return this.handleProductOperation(
+      () =>
+        this.productService.updateQuantity(
+          user,
+          id,
+          updateQuantityDto.quantity,
+        ),
+      'Product quantity updated successfully',
     );
   }
 
@@ -208,6 +230,25 @@ export class ProductController extends BaseProductController {
     return this.handleProductOperation(
       () => this.productService.addInventory(req.user, file, storeId ?? ''),
       'Inventory uploaded successfully',
+    );
+  }
+
+  @ProductEndpoint.UpdateVariantQuantity(UpdateVariantQuantityDto)
+  @Patch('variant-quantity/:pluUpc')
+  async updateVariantQuantity(
+    @Req() req,
+    @Param('pluUpc') pluUpc: string,
+    @Body() updateVariantQuantityDto: UpdateVariantQuantityDto,
+  ) {
+    const user = req.user;
+    return this.handleProductOperation(
+      () =>
+        this.productService.updateVariantQuantity(
+          user,
+          pluUpc,
+          updateVariantQuantityDto.quantity,
+        ),
+      'Variant quantity updated successfully',
     );
   }
 }

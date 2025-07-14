@@ -12,6 +12,7 @@ import {
   ProductResponseDto,
   AssignSupplierDto,
 } from './dto/product.dto';
+import { UpdateProductQuantityDto } from './dto/update-product-quantity.dto';
 import {
   parseExcel,
   ValidationResult,
@@ -580,6 +581,8 @@ export class ProductService {
     storeId: string,
     page: number = 1,
     limit: number = 15000,
+    sortBy: 'name' | 'createdAt' | 'updatedAt' = 'createdAt',
+    sortOrder: 'asc' | 'desc' = 'desc',
   ) {
     this.validateProductAccess(user, storeId);
 
@@ -655,7 +658,10 @@ export class ProductService {
           },
           skip: currentSkip,
           take: currentBatchSize,
-          orderBy: { createdAt: 'desc' },
+          orderBy: [
+            { [sortBy]: sortOrder },
+            { createdAt: 'desc' }
+          ],
         });
 
         allProducts.push(...batch);
@@ -708,7 +714,10 @@ export class ProductService {
       },
       skip,
       take: Number(limit),
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+        { [sortBy]: sortOrder },
+        { createdAt: 'desc' }
+      ],
     });
 
     return {
@@ -1296,6 +1305,55 @@ export class ProductService {
         'An unexpected error occurred while updating the product. Please try again or contact support.',
       );
     }
+  }
+
+  async updateQuantity(
+    user: any,
+    id: string,
+    quantity: number,
+  ): Promise<ProductResponseDto> {
+    this.validateProductOperationPermissions(user, 'update');
+
+    // Get the tenant-specific Prisma client
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    // Check if product exists
+    const product = await prisma.products.findUnique({ where: { id } });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    // Validate store access
+    this.validateProductAccess(user, product.storeId);
+
+    // Validate quantity is positive
+    if (quantity < 1) {
+      throw new BadRequestException('Quantity must be at least 1');
+    }
+
+    // Update only the quantity
+    const updatedProduct = await prisma.products.update({
+      where: { id },
+      data: {
+        itemQuantity: quantity,
+      },
+      include: {
+        category: true,
+        store: true,
+        client: true,
+        packs: true,
+        productSuppliers: {
+          include: {
+            supplier: true,
+            category: true,
+          },
+        },
+        saleItems: true,
+        purchaseOrders: true,
+      },
+    });
+
+    return this.formatProductResponse(updatedProduct);
   }
 
   async deleteProduct(user: any, id: string): Promise<void> {
@@ -2212,6 +2270,117 @@ export class ProductService {
       error: fileUpload.error,
       fileName: fileUpload.fileName,
       uploadedAt: fileUpload.uploadedAt,
+    };
+  }
+
+  async updateVariantQuantity(
+    user: any,
+    pluUpc: string,
+    quantity: number,
+  ): Promise<{ success: boolean; message: string; data: any }> {
+    this.validateProductOperationPermissions(user, 'update');
+
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    // Build where clause based on user permissions
+    let where: any = {};
+    if (user.role !== 'super_admin') {
+      where.clientId = user.clientId;
+      if (user.storeId) {
+        where.storeId = user.storeId;
+      }
+    }
+
+    // Find the product containing the variant with the given PLU/UPC
+    const products = await prisma.products.findMany({
+      where: {
+        ...where,
+        hasVariants: true,
+      },
+      include: {
+        packs: true,
+        category: true,
+        productSuppliers: {
+          include: {
+            supplier: true,
+          },
+        },
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        saleItems: true,
+        purchaseOrders: true,
+      },
+    });
+
+    // Find the product that contains the variant with the given PLU/UPC
+    let product: any = null;
+    for (const p of products) {
+      const variants = p.variants as any[];
+      if (variants && variants.some((variant) => variant.pluUpc === pluUpc)) {
+        product = p;
+        break;
+      }
+    }
+
+    if (!product) {
+      throw new NotFoundException(
+        `Product with variant PLU/UPC '${pluUpc}' not found`,
+      );
+    }
+
+    // Find and update the specific variant
+    const variants = product.variants as any[];
+    const variantIndex = variants.findIndex(
+      (variant) => variant.pluUpc === pluUpc,
+    );
+
+    if (variantIndex === -1) {
+      throw new NotFoundException(`Variant with PLU/UPC '${pluUpc}' not found`);
+    }
+
+    // Update the variant quantity
+    const updatedVariants = [...variants];
+    updatedVariants[variantIndex] = {
+      ...updatedVariants[variantIndex],
+      quantity,
+    };
+
+    // Update the product with the modified variants
+    const updatedProduct = await prisma.products.update({
+      where: { id: product.id },
+      data: {
+        variants: updatedVariants,
+      },
+      include: {
+        packs: true,
+        category: true,
+        productSuppliers: {
+          include: {
+            supplier: true,
+          },
+        },
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        saleItems: true,
+        purchaseOrders: true,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Variant quantity updated successfully',
+      data: {
+        product: this.formatProductResponse(updatedProduct),
+        updatedVariant: updatedVariants[variantIndex],
+      },
     };
   }
 }

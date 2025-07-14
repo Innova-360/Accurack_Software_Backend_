@@ -456,6 +456,66 @@ export const ProductEndpoint = {
       ApiBearerAuth('JWT-auth'),
     ),
 
+  UpdateQuantity: (dtoType: any) =>
+    applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.UPDATE,
+        PermissionScope.STORE,
+      ),
+      ApiOperation({
+        summary: 'Update product quantity',
+        description:
+          'Updates the quantity of an existing product. Requires product update permissions.',
+      }),
+      ApiBody({ type: dtoType }),
+      ApiResponse({
+        status: 200,
+        description: 'Product quantity updated successfully',
+        type: ProductResponseDto,
+        schema: successResponseSchema('Product quantity updated successfully', {
+          id: 'uuid-product-id',
+          name: 'Premium Coffee Beans',
+          category: 'Beverages',
+          ean: '1234567890123',
+          pluUpc: 'UPC123456',
+          supplierId: 'uuid-supplier-id',
+          sku: 'COFFEE-001',
+          singleItemCostPrice: 20.99,
+          itemQuantity: 100,
+          msrpPrice: 35.99,
+          singleItemSellingPrice: 30.99,
+          clientId: 'uuid-client-id',
+          storeId: 'uuid-store-id',
+          hasVariants: false,
+          packIds: [],
+          packs: [],
+          createdAt: '2025-06-20T22:39:00.000Z',
+          updatedAt: '2025-06-20T22:39:00.000Z',
+        }),
+      }),
+      ApiResponse({
+        status: 400,
+        description: 'Bad request - Invalid quantity',
+        schema: errorResponseSchema(400, 'Quantity must be at least 1'),
+      }),
+      ApiResponse({
+        status: 403,
+        description: 'Forbidden - insufficient permissions',
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to update products',
+        ),
+      }),
+      ApiResponse({
+        status: 404,
+        description: 'Product not found',
+        schema: errorResponseSchema(404, 'Product not found'),
+      }),
+      ...standardErrorResponses(),
+      ApiBearerAuth('JWT-auth'),
+    ),
+
   DeleteProduct: () =>
     applyDecorators(
       RequirePermissions(
@@ -525,7 +585,6 @@ export const ProductEndpoint = {
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),
     ),
-
 
   DeleteAllProduct: () =>
     applyDecorators(
@@ -597,16 +656,16 @@ export const ProductEndpoint = {
       ApiBearerAuth('JWT-auth'),
     ),
 
-
   AssignSupplier() {
     return applyDecorators(
       ApiTags('Products'),
-      ApiOperation({ 
+      ApiOperation({
         summary: 'Assign supplier to products',
-        description: 'Assigns a supplier to one or more products with specified cost price and state (primary/secondary).'
+        description:
+          'Assigns a supplier to one or more products with specified cost price and state (primary/secondary).',
       }),
-      ApiResponse({ 
-        status: HttpStatus.OK, 
+      ApiResponse({
+        status: HttpStatus.OK,
         description: 'Supplier successfully assigned to products',
         schema: {
           example: {
@@ -620,21 +679,21 @@ export const ProductEndpoint = {
                   costPrice: 19.99,
                   state: 'primary',
                   createdAt: '2025-06-30T20:43:00.000Z',
-                  updatedAt: '2025-06-30T20:43:00.000Z'
-                }
-              ]
-            }
-          }
-        }
+                  updatedAt: '2025-06-30T20:43:00.000Z',
+                },
+              ],
+            },
+          },
+        },
       }),
-      ApiResponse({ 
-        status: HttpStatus.NOT_FOUND, 
-        description: 'Store or supplier not found'
+      ApiResponse({
+        status: HttpStatus.NOT_FOUND,
+        description: 'Store or supplier not found',
       }),
-      ApiResponse({ 
-        status: HttpStatus.BAD_REQUEST, 
-        description: 'Invalid input data or product not found'
-      })
+      ApiResponse({
+        status: HttpStatus.BAD_REQUEST,
+        description: 'Invalid input data or product not found',
+      }),
     );
   },
 
@@ -652,7 +711,8 @@ export const ProductEndpoint = {
       }),
       ApiQuery({
         name: 'q',
-        description: 'Search query to find products by name, SKU, PLU/UPC, or EAN',
+        description:
+          'Search query to find products by name, SKU, PLU/UPC, or EAN',
         example: 'iPhone',
         type: String,
       }),
@@ -675,21 +735,76 @@ export const ProductEndpoint = {
             ean: '1234567890123',
             category: 'Electronics',
             sellingPrice: 999.99,
-            costPrice: 750.00,
+            costPrice: 750.0,
             quantity: 50,
             store: {
               id: 'uuid-store-id',
-              name: 'Electronics Store'
-            }
-          }
+              name: 'Electronics Store',
+            },
+          },
         ]),
       }),
       ApiResponse({
         status: 404,
         description: 'No products found',
-        schema: errorResponseSchema(404, 'No products found matching the search criteria'),
+        schema: errorResponseSchema(
+          404,
+          'No products found matching the search criteria',
+        ),
       }),
       ...standardErrorResponses(),
       ApiBearerAuth(),
+    ),
+
+  UpdateVariantQuantity: (dtoType: any) =>
+    applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.UPDATE,
+        PermissionScope.STORE,
+      ),
+      ApiOperation({
+        summary: 'Update variant quantity by PLU/UPC',
+        description:
+          'Updates the quantity of a specific product variant by PLU/UPC. Requires product update permissions.',
+      }),
+      ApiBody({ type: dtoType }),
+      ApiResponse({
+        status: 200,
+        description: 'Variant quantity updated successfully',
+        schema: successResponseSchema('Variant quantity updated successfully', {
+          id: 'uuid-product-id',
+          name: 'Premium Coffee Beans',
+          variant: {
+            name: 'Dark Roast',   
+            pluUpc: 'UPC123456',
+            quantity: 50,
+            price: 25.99,
+          },
+        }),
+      }),
+      ApiResponse({
+        status: 400,
+        description: 'Bad request - Invalid quantity or PLU/UPC',
+        schema: errorResponseSchema(400, 'Quantity must be at least 0'),
+      }),
+      ApiResponse({
+        status: 403,
+        description: 'Forbidden - insufficient permissions',
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to update products',
+        ),
+      }),
+      ApiResponse({
+        status: 404,
+        description: 'Product with variant not found',
+        schema: errorResponseSchema(
+          404,
+          'Product with variant PLU/UPC not found',
+        ),
+      }),
+      ...standardErrorResponses(),
+      ApiBearerAuth('JWT-auth'),
     ),
 };
