@@ -32,6 +32,7 @@ import {
   AuthEndpoint,
   UseMasterDB,
 } from '../common';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -105,6 +106,7 @@ export class AuthController extends BaseAuthController {
   }
 
   @AuthEndpoint.SignupSuperAdmin(SignupSuperAdminDto)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('signup/super-admin')
   async signupSuperAdmin(@Body() dto: SignupSuperAdminDto) {
     return this.handleServiceOperation(
@@ -145,6 +147,7 @@ export class AuthController extends BaseAuthController {
   }
 
   @AuthEndpoint.LoginEndpoint(LoginDto)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('login')
   async login(@Body() dto: LoginDto, @Res() res) {
     const resp = await this.authService.login(dto);
@@ -185,6 +188,7 @@ export class AuthController extends BaseAuthController {
   }
 
   @AuthEndpoint.ForgotPassword(ForgotPasswordDto)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('forgot-password')
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.handleServiceOperation(
