@@ -202,4 +202,50 @@ export class ValidatorService {
 
     return updatedOrder;
   }
+
+  async confirmOrder(orderId: string, userId: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    
+    const order = await prisma.orderProcessing.findUnique({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (order.status !== SaleStatus.VALIDATED) {
+      throw new BadRequestException('Order must be validated before confirmation');
+    }
+
+    const updatedOrder = await prisma.orderProcessing.update({
+      where: { id: orderId },
+      data: {
+        status: SaleStatus.CONFIRMED,
+        updatedAt: new Date(),
+      },
+    });
+
+    return updatedOrder;
+  }
+
+  async shipOrder(orderId: string, userId: string) {
+    const prisma = await this.tenantContext.getPrismaClient();
+    
+    const order = await prisma.orderProcessing.findUnique({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (order.status !== SaleStatus.CONFIRMED) {
+      throw new BadRequestException('Order must be confirmed before shipping');
+    }
+
+    const updatedOrder = await prisma.orderProcessing.update({
+      where: { id: orderId },
+      data: {
+        status: SaleStatus.SHIPPED,
+        updatedAt: new Date(),
+      },
+    });
+
+    return updatedOrder;
+  }
 }

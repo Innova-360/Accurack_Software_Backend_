@@ -48,7 +48,25 @@ export class ValidatorController extends BaseValidatorController {
   async rejectOrder(@Req() req: any, @Param('orderId') orderId: string) {
     return this.handleValidationOperation(
       () => this.validatorService.rejectOrder(orderId, req.user.id),
-      'Order validated successfully',
+      'Order rejected successfully',
+    );
+  }
+
+  @ValidatorEndpoint.ConfirmOrder()
+  @Patch('confirm/:orderId')
+  async confirmOrder(@Req() req: any, @Param('orderId') orderId: string) {
+    return this.handleValidationOperation(
+      () => this.validatorService.confirmOrder(orderId, req.user.id),
+      'Order confirmed successfully',
+    );
+  }
+
+  @ValidatorEndpoint.ShipOrder()
+  @Patch('ship/:orderId')
+  async shipOrder(@Req() req: any, @Param('orderId') orderId: string) {
+    return this.handleValidationOperation(
+      () => this.validatorService.shipOrder(orderId, req.user.id),
+      'Order shipped successfully',
     );
   }
 }
