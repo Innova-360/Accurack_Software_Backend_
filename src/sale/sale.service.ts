@@ -17,6 +17,7 @@ import {
   SaleStatus,
   ReturnCategory,
   PaymentStatus,
+  PackType,
 } from './dto/sale.dto';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import {
@@ -221,7 +222,7 @@ export class SaleService {
   async createSale(dto: CreateSaleDto, user: any) {
     const prisma = await this.tenantContext.getPrismaClient();
 
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       // Find or create customer
       let customer = await tx.customer.findUnique({
         where: { phoneNumber: dto.customerPhone },
@@ -245,21 +246,58 @@ export class SaleService {
         });
       }
 
-      // Validate products and update inventory
+      // Validate products, pack types, and update inventory
       for (const item of dto.saleItems) {
         const product = await tx.products.findUnique({
           where: { id: item.productId },
+          include: { packs: true },
         });
         if (!product) {
           throw new NotFoundException(
             `Product with ID ${item.pluUpc} not found`,
           );
         }
+
+        // Validate pack type compatibility
+        if (item.packType === PackType.ITEM) {
+          // Check if single-item sales are allowed
+          if (!product.singleItemSellingPrice || product.singleItemSellingPrice <= 0) {
+            throw new BadRequestException(
+              `Product ${product.name} does not support single-item sales`,
+            );
+          }
+        } else if (item.packType === PackType.BOX) {
+          // Check if packs are available
+          if (!product.packs || product.packs.length === 0) {
+            throw new BadRequestException(
+              `Product ${product.name} does not have any packs available`,
+            );
+          }
+          // If packId is specified, validate it exists
+          if (item.packId) {
+            const pack = product.packs.find(p => p.id === item.packId);
+            if (!pack) {
+              throw new BadRequestException(
+                `Pack with ID ${item.packId} not found for product ${product.name}`,
+              );
+            }
+            // Validate pack quantity and pricing
+            if (pack.totalPacksQuantity <= 0) {
+              throw new BadRequestException(
+                `Pack ${item.packId} has zero or negative quantity`,
+              );
+            }
+          }
+        }
+
+        // Check inventory availability
         if (product.itemQuantity < item.quantity) {
           throw new BadRequestException(
             `Insufficient inventory for product ${product.name}`,
           );
         }
+        
+        // Update inventory
         await tx.products.update({
           where: { id: item.productId },
           data: { itemQuantity: { decrement: item.quantity } },
@@ -302,20 +340,12 @@ export class SaleService {
               quantity: item.quantity,
               sellingPrice: item.sellingPrice,
               totalPrice: item.totalPrice,
+              packType: item.packType,
+              packId: item.packId,
             },
           }),
         ),
       );
-
-      // Generate invoice if requested
-      let invoice: any = null;
-      if (dto.generateInvoice && !isWebsite) {
-        const invoiceNumber = await this.generateInvoiceNumber();
-        invoice = await this.invoiceService.createInvoice(
-          { saleId: sale.id },
-          user,
-        );
-      }
 
       // Update customer balance sheet
       await tx.balanceSheet.create({
@@ -329,8 +359,36 @@ export class SaleService {
         },
       });
 
-      return { sale, invoice, customer };
+      return { sale, customer };
     });
+
+    // Generate invoice after transaction completes
+    let invoice: any = null;
+    const isWebsite = dto.source === InvoiceSource.website;
+    if (dto.generateInvoice && !isWebsite) {
+      // Check if business info is provided in DTO for invoice generation
+      if (dto.companyName && dto.companyNo && dto.companyAddress) {
+        // Create or update business info if provided
+        const businessData = {
+          businessName: dto.companyName,
+          contactNo: dto.companyNo,
+          address: dto.companyAddress,
+          website: dto.companyMail ? `mailto:${dto.companyMail}` : undefined,
+          logoUrl: undefined,
+        };
+        
+        // Set business info before creating invoice
+        await this.invoiceService.setBusinessInfo(dto.storeId, businessData, user);
+      }
+      
+      const invoiceNumber = await this.generateInvoiceNumber();
+      invoice = await this.invoiceService.createInvoice(
+        { saleId: result.sale.id },
+        user,
+      );
+    }
+
+    return { ...result, invoice };
   }
 
   async setSaleConfirmation(

@@ -250,7 +250,141 @@ export const SaleEndpoint = {
         description:
           'Creates a new sale with automatic inventory updates, customer creation/lookup, and invoice generation',
       }),
-      ApiBody({ type: dtoType }),
+      ApiBody({ 
+        type: dtoType,
+        examples: {
+          itemSale: {
+            summary: 'Sale with individual items (ITEM pack type)',
+            description: 'Example for selling individual items - requires singleItemSellingPrice > 0',
+            value: {
+              customerPhone: '+1234567890',
+              customerData: {
+                customerName: 'John Doe',
+                phoneNumber: '+1234567890',
+                customerAddress: '123 Main St',
+                telephoneNumber: '+1234567890',
+                customerMail: 'm@gmail.com',
+                storeId: 'acdaaeb2-7623-49fe-acdd-659ab6fdeb4b',
+                clientId: 'c82b7611-3d69-425b-998e-54188eb6b3ca'
+              },
+              storeId: 'acdaaeb2-7623-49fe-acdd-659ab6fdeb4b',
+              clientId: 'c82b7611-3d69-425b-998e-54188eb6b3ca',
+              paymentMethod: 'CASH',
+              totalAmount: 50,
+              tax: 5,
+              allowance: 0,
+              cashierName: 'Store Manager',
+              source: 'manual',
+              generateInvoice: true,
+              companyName: 'Accurack Tech Store',
+              companyMail: 'info@accurack.com',
+              companyAddress: '456 Business Ave, Tech City',
+              companyNo: '+1-555-0123',
+              shippingAddress: '456 Business Ave, Tech City',
+              saleItems: [{
+                productId: '550e8400-e29b-41d4-a716-446655440002',
+                pluUpc: '1234567890123',
+                productName: 'Wireless Mouse',
+                quantity: 2,
+                sellingPrice: 25,
+                totalPrice: 50,
+                packType: 'ITEM'
+              }]
+            }
+          },
+          boxSale: {
+            summary: 'Sale with box/pack items (BOX pack type)',
+            description: 'Example for selling box/pack items - requires product to have packs array',
+            value: {
+              customerPhone: '+1234567891',
+              customerData: {
+                customerName: 'Jane Smith',
+                phoneNumber: '+1234567891',
+                customerAddress: '456 Oak Ave',
+                telephoneNumber: '+1234567891',
+                customerMail: 'jane@gmail.com',
+                storeId: 'acdaaeb2-7623-49fe-acdd-659ab6fdeb4b',
+                clientId: 'c82b7611-3d69-425b-998e-54188eb6b3ca'
+              },
+              storeId: 'acdaaeb2-7623-49fe-acdd-659ab6fdeb4b',
+              clientId: 'c82b7611-3d69-425b-998e-54188eb6b3ca',
+              paymentMethod: 'CARD',
+              totalAmount: 200,
+              tax: 20,
+              allowance: 10,
+              cashierName: 'Store Manager',
+              source: 'manual',
+              generateInvoice: true,
+              companyName: 'Accurack Tech Store',
+              companyMail: 'info@accurack.com',
+              companyAddress: '456 Business Ave, Tech City',
+              companyNo: '+1-555-0123',
+              shippingAddress: '456 Business Ave, Tech City',
+              saleItems: [{
+                productId: '550e8400-e29b-41d4-a716-446655440003',
+                pluUpc: '9876543210987',
+                productName: 'Laptop Box (12 units)',
+                quantity: 1,
+                sellingPrice: 200,
+                totalPrice: 200,
+                packType: 'BOX',
+                packId: '550e8400-e29b-41d4-a716-446655440004'
+              }]
+            }
+          },
+          mixedSale: {
+            summary: 'Mixed sale (both ITEM and BOX types)',
+            description: 'Example with both individual items and box items in same sale',
+            value: {
+              customerPhone: '+1234567892',
+              customerData: {
+                customerName: 'Mike Johnson',
+                phoneNumber: '+1234567892',
+                customerAddress: '789 Pine St',
+                telephoneNumber: '+1234567892',
+                customerMail: 'mike@gmail.com',
+                storeId: 'acdaaeb2-7623-49fe-acdd-659ab6fdeb4b',
+                clientId: 'c82b7611-3d69-425b-998e-54188eb6b3ca'
+              },
+              storeId: 'acdaaeb2-7623-49fe-acdd-659ab6fdeb4b',
+              clientId: 'c82b7611-3d69-425b-998e-54188eb6b3ca',
+              paymentMethod: 'CASH',
+              totalAmount: 275,
+              tax: 25,
+              allowance: 0,
+              cashierName: 'Store Manager',
+              source: 'manual',
+              generateInvoice: true,
+              companyName: 'Accurack Tech Store',
+              companyMail: 'info@accurack.com',
+              companyAddress: '456 Business Ave, Tech City',
+              companyNo: '+1-555-0123',
+              shippingAddress: '456 Business Ave, Tech City',
+              saleItems: [
+                {
+                  productId: '550e8400-e29b-41d4-a716-446655440002',
+                  pluUpc: '1234567890123',
+                  productName: 'Wireless Mouse',
+                  quantity: 3,
+                  sellingPrice: 25,
+                  totalPrice: 75,
+                  packType: 'ITEM'
+                },
+                {
+                  productId: '550e8400-e29b-41d4-a716-446655440003',
+                  pluUpc: '9876543210987',
+                  productName: 'Keyboard Box (6 units)',
+                  quantity: 1,
+                  sellingPrice: 200,
+                  totalPrice: 200,
+                  packType: 'BOX',
+                  packId: '550e8400-e29b-41d4-a716-446655440005'
+                }
+              ]
+            }
+          }
+        }
+      }),
       ApiResponse({
         status: 201,
         description: 'Sale created successfully',

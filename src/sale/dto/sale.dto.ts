@@ -99,6 +99,11 @@ export class UpdateCustomerDto {
   customerMail?: string;
 }
 
+export enum PackType {
+  ITEM = 'ITEM',
+  BOX = 'BOX',
+}
+
 export class SaleItemDto {
   @ApiProperty({ description: 'Product ID' })
   @IsUUID()
@@ -125,6 +130,15 @@ export class SaleItemDto {
   @IsNumber()
   @IsPositive()
   totalPrice: number;
+
+  @ApiProperty({ description: 'Pack type', enum: PackType })
+  @IsEnum(PackType)
+  packType: PackType;
+
+  @ApiPropertyOptional({ description: 'Pack ID if pack type is BOX' })
+  @IsOptional()
+  @IsString()
+  packId?: string;
 }
 
 export class CreateSaleDto {

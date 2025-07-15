@@ -208,6 +208,8 @@ model SaleItem {
   quantity     Int
   sellingPrice Float
   totalPrice   Float
+  packType     PackType  @default(ITEM)
+  packId       String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   product      Products? @relation(fields: [productId], references: [id])
@@ -794,3 +796,9 @@ enum TaxRateType {
   PERCENTAGE
   FIXED_AMOUNT
 }
+
+enum PackType {
+  ITEM
+  BOX
+}
+
