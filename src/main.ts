@@ -24,34 +24,34 @@ async function bootstrap() {
   EnvValidation.validateEmailConfig();
   EnvValidation.validateGoogleOAuthConfig();
 
-  // Run database migrations before starting the application
-  console.log('🔄 Running database migrations...');
-  try {
-    const { stdout, stderr } = await execAsync('npx prisma migrate deploy', {
-      timeout: 60000, // 60 seconds timeout
-      env: { ...process.env }
-    });
+  // // Run database migrations before starting the application
+  // console.log('🔄 Running database migrations...');
+  // try {
+  //   const { stdout, stderr } = await execAsync('npx prisma migrate deploy', {
+  //     timeout: 60000, // 60 seconds timeout
+  //     env: { ...process.env }
+  //   });
     
-    if (stderr && !stderr.includes('warnings') && !stderr.includes('info')) {
-      console.warn('⚠️ Migration warnings:', stderr);
-    }
+  //   if (stderr && !stderr.includes('warnings') && !stderr.includes('info')) {
+  //     console.warn('⚠️ Migration warnings:', stderr);
+  //   }
     
-    console.log('✅ Database migrations completed successfully');
-    if (stdout) {
-      console.log('📊 Migration output:', stdout.trim());
-    }
-  } catch (error) {
-    console.error('❌ Database migration failed:', error.message);
-    console.error('🔍 Migration error details:', error);
+  //   console.log('✅ Database migrations completed successfully');
+  //   if (stdout) {
+  //     console.log('📊 Migration output:', stdout.trim());
+  //   }
+  // } catch (error) {
+  //   console.error('❌ Database migration failed:', error.message);
+  //   console.error('🔍 Migration error details:', error);
     
-    // In production, we might want to exit gracefully
-    if (process.env.NODE_ENV === 'production') {
-      console.error('🚨 Exiting due to migration failure in production');
-      process.exit(1);
-    } else {
-      console.warn('⚠️ Continuing in development mode despite migration failure');
-    }
-  }
+  //   // In production, we might want to exit gracefully
+  //   if (process.env.NODE_ENV === 'production') {
+  //     console.error('🚨 Exiting due to migration failure in production');
+  //     process.exit(1);
+  //   } else {
+  //     console.warn('⚠️ Continuing in development mode despite migration failure');
+  //   }
+  // }
 
   const app = await NestFactory.create(AppModule);
   // Add cookie parser middleware

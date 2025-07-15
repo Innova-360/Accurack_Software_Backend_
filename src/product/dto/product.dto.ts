@@ -938,4 +938,80 @@ export class SearchProductDto {
   storeId?: string;
 }
 
+export class AdvancedSearchProductDto {
+  @ApiPropertyOptional({
+    example: 'iPhone',
+    description: 'Search query to find products by name, SKU, PLU/UPC, or EAN',
+  })
+  @IsString()
+  @IsOptional()
+  query?: string;
+
+  @ApiPropertyOptional({
+    example: 'uuid-store-id',
+    description: 'Optional store ID to filter products by specific store',
+  })
+  @IsString()
+  @IsOptional()
+  storeId?: string;
+
+  @ApiPropertyOptional({
+    example: 'uuid-category-id',
+    description: 'Optional category ID to filter products by category',
+  })
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
+
+  @ApiPropertyOptional({
+    example: 10.99,
+    description: 'Minimum price filter',
+  })
+  @IsNumber()
+  @IsOptional()
+  minPrice?: number;
+
+  @ApiPropertyOptional({
+    example: 99.99,
+    description: 'Maximum price filter',
+  })
+  @IsNumber()
+  @IsOptional()
+  maxPrice?: number;
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Filter for products in stock (true) or out of stock (false)',
+  })
+  @IsBoolean()
+  @IsOptional()
+  inStock?: boolean;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Filter for products with variants (true) or without variants (false)',
+  })
+  @IsBoolean()
+  @IsOptional()
+  hasVariants?: boolean;
+
+  @ApiPropertyOptional({
+    example: 50,
+    description: 'Number of results per page (default: 50, max: 100)',
+    default: 50,
+  })
+  @IsNumber()
+  @IsOptional()
+  limit?: number;
+
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Page number for pagination (default: 1)',
+    default: 1,
+  })
+  @IsNumber()
+  @IsOptional()
+  page?: number;
+}
+
 export { UpdateVariantQuantityDto } from './update-variant-quantity.dto';

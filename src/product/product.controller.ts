@@ -22,6 +22,7 @@ import {
   ApiBody,
   ApiOperation,
   ApiResponse,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { ProductService } from './product.service';
 import { BaseProductController } from '../common/controllers/base-product.controller';
@@ -64,13 +65,12 @@ export class ProductController extends BaseProductController {
   async getProducts(
     @Req() req,
     @Query('storeId') storeId: string,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 15000,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '15000',
   ) {
     const user = req.user;
-    console.log("   a  ",storeId)
     return this.handleProductOperation(
-      () => this.productService.getProducts(user, storeId, page, limit),
+      () => this.productService.getProducts(user, storeId, Number(page), Number(limit)),
       'Products retrieved successfully',
     );
   }
@@ -85,6 +85,74 @@ export class ProductController extends BaseProductController {
     const user = req.user;
     return this.handleProductOperation(
       () => this.productService.searchProducts(user, query, storeId),
+      'Products found successfully',
+    );
+  }
+
+  @Get('search/advanced')
+  @ApiOperation({ 
+    summary: 'Advanced product search with filters',
+    description: 'Search products with advanced filtering options including category, price range, stock status, and variants'
+  })
+  @ApiQuery({ name: 'query', required: false, type: String })
+  @ApiQuery({ name: 'storeId', required: false, type: String })
+  @ApiQuery({ name: 'categoryId', required: false, type: String })
+  @ApiQuery({ name: 'minPrice', required: false, type: String, description: 'Minimum price as string (will be converted to number)' })
+  @ApiQuery({ name: 'maxPrice', required: false, type: String, description: 'Maximum price as string (will be converted to number)' })
+  @ApiQuery({ name: 'inStock', required: false, type: String, description: 'Stock filter as string: "true" or "false"' })
+  @ApiQuery({ name: 'hasVariants', required: false, type: String, description: 'Variant filter as string: "true" or "false"' })
+  @ApiQuery({ name: 'limit', required: false, type: String, description: 'Limit as string (will be converted to number)' })
+  @ApiQuery({ name: 'page', required: false, type: String, description: 'Page as string (will be converted to number)' })
+  async searchProductsAdvanced(
+    @Req() req,
+    @Query('query') query?: string,
+    @Query('storeId') storeId?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('minPrice') minPrice?: string,
+    @Query('maxPrice') maxPrice?: string,
+    @Query('inStock') inStock?: string,
+    @Query('hasVariants') hasVariants?: string,
+    @Query('limit') limit?: string,
+    @Query('page') page?: string,
+  ) {
+    const user = req.user;
+    const searchOptions = {
+      query,
+      storeId,
+      categoryId,
+      minPrice: minPrice ? Number(minPrice) : undefined,
+      maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      inStock: inStock !== undefined ? inStock === 'true' : undefined,
+      hasVariants: hasVariants !== undefined ? hasVariants === 'true' : undefined,
+      limit: limit ? Number(limit) : undefined,
+      page: page ? Number(page) : undefined,
+    };
+    
+    return this.handleProductOperation(
+      () => this.productService.searchProductsAdvanced(user, searchOptions),
+      'Products found successfully',
+    );
+  }
+
+  @Get('search/fuzzy')
+  @ApiOperation({ 
+    summary: 'Fuzzy product search',
+    description: 'Search products with fuzzy matching to handle typos and partial matches'
+  })
+  @ApiQuery({ name: 'q', required: true, type: String, description: 'Search query' })
+  @ApiQuery({ name: 'storeId', required: false, type: String, description: 'Store ID to filter by' })
+  @ApiQuery({ name: 'threshold', required: false, type: String, description: 'Fuzzy matching threshold as string (0.1-1.0, default: 0.4)' })
+  async searchProductsFuzzy(
+    @Req() req,
+    @Query('q') query: string,
+    @Query('storeId') storeId?: string,
+    @Query('threshold') threshold?: string,
+  ) {
+    const user = req.user;
+    const fuzzyThreshold = threshold ? Number(threshold) : 0.4;
+    
+    return this.handleProductOperation(
+      () => this.productService.searchProductsFuzzy(user, query, storeId, fuzzyThreshold),
       'Products found successfully',
     );
   }

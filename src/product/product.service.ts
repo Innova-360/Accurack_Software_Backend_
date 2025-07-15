@@ -2215,39 +2215,378 @@ export class ProductService {
   }
 
   async searchProducts(user: any, query: string, storeId?: string) {
-    this.validateProductAccess(user, storeId);
+    // Validate user authentication
+    if (!user) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    // Validate query
+    if (!query || query.trim() === '') {
+      throw new BadRequestException('Search query is required');
+    }
+
     const prisma = await this.tenantContext.getPrismaClient();
+    
+    // Build where clause for search
     let where: any = {
       OR: [
-        { name: { contains: query, mode: 'insensitive' } },
-        { sku: { contains: query, mode: 'insensitive' } },
-        { pluUpc: { contains: query, mode: 'insensitive' } },
-        { ean: { contains: query, mode: 'insensitive' } },
+        { name: { contains: query.trim(), mode: 'insensitive' } },
+        { sku: { contains: query.trim(), mode: 'insensitive' } },
+        { pluUpc: { contains: query.trim(), mode: 'insensitive' } },
+        { ean: { contains: query.trim(), mode: 'insensitive' } },
       ],
     };
-    if (user.role !== 'super_admin') {
+
+    // Handle store and client filtering based on user role and permissions
+    if (user.role === 'super_admin') {
+      // Super admin can search across all stores
       if (storeId) {
         where.storeId = storeId;
-      } else if (user.storeId) {
-        where.storeId = user.storeId;
       }
+    } else {
+      // Regular users are restricted to their client and stores
       where.clientId = user.clientId;
-    } else if (storeId) {
-      where.storeId = storeId;
+      
+      if (storeId) {
+        // Check if user has access to the specified store
+        const hasStoreAccess = user.stores?.some(
+          (store: any) => store.storeId === storeId,
+        );
+        
+        if (!hasStoreAccess && user.storeId !== storeId) {
+          throw new BadRequestException('No access to this store');
+        }
+        
+        where.storeId = storeId;
+      } else if (user.storeId) {
+        // If no storeId provided, use user's default store
+        where.storeId = user.storeId;
+      } else if (user.stores && user.stores.length > 0) {
+        // If user has multiple stores, search across all accessible stores
+        where.storeId = {
+          in: user.stores.map((store: any) => store.storeId)
+        };
+      } else {
+        // User has no store access
+        throw new BadRequestException('No store access available');
+      }
     }
+
+    // Execute search with proper includes
     const products = await prisma.products.findMany({
       where,
       include: {
         packs: true,
-        productSuppliers: { include: { supplier: true } },
-        store: { select: { id: true, name: true } },
+        productSuppliers: { 
+          include: { 
+            supplier: true 
+          } 
+        },
+        store: { 
+          select: { 
+            id: true, 
+            name: true 
+          } 
+        },
         saleItems: true,
         purchaseOrders: true,
-        category: { select: { id: true, name: true } },
+        category: { 
+          select: { 
+            id: true, 
+            name: true 
+          } 
+        },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+        // Prioritize exact matches first
+        { name: 'asc' },
+        { createdAt: 'desc' }
+      ],
+      take: 100, // Limit results to prevent performance issues
     });
+
+    // Format and return results
     return products.map((product) => this.formatProductResponse(product));
+  }
+
+  async searchProductsAdvanced(
+    user: any, 
+    options: {
+      query?: string;
+      storeId?: string;
+      categoryId?: string;
+      minPrice?: number;
+      maxPrice?: number;
+      inStock?: boolean;
+      hasVariants?: boolean;
+      limit?: number;
+      page?: number;
+    }
+  ) {
+    // Validate user authentication
+    if (!user) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    const prisma = await this.tenantContext.getPrismaClient();
+    
+    // Build where clause for search
+    let where: any = {};
+
+    // Add search query if provided
+    if (options.query && options.query.trim() !== '') {
+      where.OR = [
+        { name: { contains: options.query.trim(), mode: 'insensitive' } },
+        { sku: { contains: options.query.trim(), mode: 'insensitive' } },
+        { pluUpc: { contains: options.query.trim(), mode: 'insensitive' } },
+        { ean: { contains: options.query.trim(), mode: 'insensitive' } },
+      ];
+    }
+
+    // Handle store and client filtering based on user role and permissions
+    if (user.role === 'super_admin') {
+      // Super admin can search across all stores
+      if (options.storeId) {
+        where.storeId = options.storeId;
+      }
+    } else {
+      // Regular users are restricted to their client and stores
+      where.clientId = user.clientId;
+      
+      if (options.storeId) {
+        // Check if user has access to the specified store
+        const hasStoreAccess = user.stores?.some(
+          (store: any) => store.storeId === options.storeId,
+        );
+        
+        if (!hasStoreAccess && user.storeId !== options.storeId) {
+          throw new BadRequestException('No access to this store');
+        }
+        
+        where.storeId = options.storeId;
+      } else if (user.storeId) {
+        // If no storeId provided, use user's default store
+        where.storeId = user.storeId;
+      } else if (user.stores && user.stores.length > 0) {
+        // If user has multiple stores, search across all accessible stores
+        where.storeId = {
+          in: user.stores.map((store: any) => store.storeId)
+        };
+      } else {
+        // User has no store access
+        throw new BadRequestException('No store access available');
+      }
+    }
+
+    // Add category filter
+    if (options.categoryId) {
+      where.categoryId = options.categoryId;
+    }
+
+    // Add price range filter
+    if (options.minPrice !== undefined || options.maxPrice !== undefined) {
+      where.singleItemSellingPrice = {};
+      if (options.minPrice !== undefined) {
+        where.singleItemSellingPrice.gte = options.minPrice;
+      }
+      if (options.maxPrice !== undefined) {
+        where.singleItemSellingPrice.lte = options.maxPrice;
+      }
+    }
+
+    // Add stock filter
+    if (options.inStock === true) {
+      where.itemQuantity = { gt: 0 };
+    } else if (options.inStock === false) {
+      where.itemQuantity = { lte: 0 };
+    }
+
+    // Add variant filter
+    if (options.hasVariants !== undefined) {
+      where.hasVariants = options.hasVariants;
+    }
+
+    // Pagination
+    const limit = options.limit || 50;
+    const page = options.page || 1;
+    const skip = (page - 1) * limit;
+
+    // Get total count for pagination
+    const total = await prisma.products.count({ where });
+
+    // Execute search with proper includes
+    const products = await prisma.products.findMany({
+      where,
+      include: {
+        packs: true,
+        productSuppliers: { 
+          include: { 
+            supplier: true 
+          } 
+        },
+        store: { 
+          select: { 
+            id: true, 
+            name: true 
+          } 
+        },
+        saleItems: true,
+        purchaseOrders: true,
+        category: { 
+          select: { 
+            id: true, 
+            name: true 
+          } 
+        },
+      },
+      orderBy: [
+        { name: 'asc' },
+        { createdAt: 'desc' }
+      ],
+      skip,
+      take: limit,
+    });
+
+    // Format and return results with pagination info
+    return {
+      products: products.map((product) => this.formatProductResponse(product)),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async searchProductsFuzzy(
+    user: any, 
+    query: string, 
+    storeId?: string, 
+    threshold: number = 0.4
+  ) {
+    // Validate user authentication
+    if (!user) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    // Validate query
+    if (!query || query.trim() === '') {
+      throw new BadRequestException('Search query is required');
+    }
+
+    const prisma = await this.tenantContext.getPrismaClient();
+    
+    // First, get all products that the user has access to
+    let baseWhere: any = {};
+
+    // Handle store and client filtering based on user role and permissions
+    if (user.role === 'super_admin') {
+      // Super admin can search across all stores
+      if (storeId) {
+        baseWhere.storeId = storeId;
+      }
+    } else {
+      // Regular users are restricted to their client and stores
+      baseWhere.clientId = user.clientId;
+      
+      if (storeId) {
+        // Check if user has access to the specified store
+        const hasStoreAccess = user.stores?.some(
+          (store: any) => store.storeId === storeId,
+        );
+        
+        if (!hasStoreAccess && user.storeId !== storeId) {
+          throw new BadRequestException('No access to this store');
+        }
+        
+        baseWhere.storeId = storeId;
+      } else if (user.storeId) {
+        // If no storeId provided, use user's default store
+        baseWhere.storeId = user.storeId;
+      } else if (user.stores && user.stores.length > 0) {
+        // If user has multiple stores, search across all accessible stores
+        baseWhere.storeId = {
+          in: user.stores.map((store: any) => store.storeId)
+        };
+      } else {
+        // User has no store access
+        throw new BadRequestException('No store access available');
+      }
+    }
+
+    // Get all products for fuzzy matching
+    const allProducts = await prisma.products.findMany({
+      where: baseWhere,
+      include: {
+        packs: true,
+        productSuppliers: { 
+          include: { 
+            supplier: true 
+          } 
+        },
+        store: { 
+          select: { 
+            id: true, 
+            name: true 
+          } 
+        },
+        saleItems: true,
+        purchaseOrders: true,
+        category: { 
+          select: { 
+            id: true, 
+            name: true 
+          } 
+        },
+      },
+    });
+
+    // Import the fuzzy matcher
+    const { FuzzyMatcher } = require('../utils/fuzzy-matcher');
+
+    // Create searchable strings for each product
+    const searchableItems = allProducts.map(product => ({
+      product,
+      searchString: [
+        product.name,
+        product.sku,
+        product.pluUpc,
+        product.ean,
+        product.category?.name
+      ].filter(Boolean).join(' ').toLowerCase()
+    }));
+
+    // Create fuzzy matcher
+    const matcher = new FuzzyMatcher(
+      searchableItems.map(item => item.searchString),
+      threshold
+    );
+
+    // Perform fuzzy search
+    const fuzzyResults = matcher.search(query.toLowerCase(), 20);
+
+    // Map results back to products and sort by relevance
+    const matchedProducts = fuzzyResults
+      .map(result => {
+        const index = searchableItems.findIndex(
+          item => item.searchString === result.item
+        );
+        return {
+          product: searchableItems[index].product,
+          score: result.score
+        };
+      })
+      .sort((a, b) => a.score - b.score) // Lower score = better match
+      .slice(0, 20) // Limit to top 20 results
+      .map(item => this.formatProductResponse(item.product));
+
+    return {
+      products: matchedProducts,
+      query: query.trim(),
+      total: matchedProducts.length,
+      threshold
+    };
   }
 
   async getUploadStatus(fileUploadId: string) {
