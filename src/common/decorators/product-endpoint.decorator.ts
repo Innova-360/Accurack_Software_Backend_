@@ -187,7 +187,7 @@ export const ProductEndpoint = {
       ApiOperation({
         summary: 'Get all products',
         description:
-          'Retrieves all products for the stores accessible to the user with pagination support.',
+          'Retrieves all products for the stores accessible to the user with pagination and sorting support.',
       }),
       ApiQuery({
         name: 'storeId',
@@ -207,6 +207,38 @@ export const ProductEndpoint = {
         type: Number,
         description: 'Number of items per page',
         example: 10,
+      }),
+      ApiQuery({
+        name: 'sortBy',
+        required: false,
+        type: String,
+        description: 'Field to sort by',
+        example: 'createdAt',
+        enum: [
+          'name',
+          'createdAt',
+          'updatedAt',
+          'singleItemSellingPrice',
+          'msrpPrice',
+          'itemQuantity',
+          'sku',
+          'pluUpc',
+          'ean',
+          'discountAmount',
+          'percentDiscount',
+          'category',
+          'supplier',
+          'itemsPerUnit',
+          'minimumSellingQuantity',
+        ],
+      }),
+      ApiQuery({
+        name: 'sortOrder',
+        required: false,
+        type: String,
+        description: 'Sort order direction',
+        example: 'desc',
+        enum: ['asc', 'desc'],
       }),
       ApiResponse({
         status: 200,
@@ -776,7 +808,7 @@ export const ProductEndpoint = {
           id: 'uuid-product-id',
           name: 'Premium Coffee Beans',
           variant: {
-            name: 'Dark Roast',   
+            name: 'Dark Roast',
             pluUpc: 'UPC123456',
             quantity: 50,
             price: 25.99,
