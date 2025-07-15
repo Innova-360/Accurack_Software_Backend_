@@ -2164,6 +2164,7 @@ export class ProductService {
         { ean: { contains: query, mode: 'insensitive' } },
       ],
     };
+
     if (user.role !== 'super_admin') {
       if (storeId) {
         where.storeId = storeId;
@@ -2174,8 +2175,10 @@ export class ProductService {
     } else if (storeId) {
       where.storeId = storeId;
     }
+
     const products = await prisma.products.findMany({
       where,
+      take:10,
       include: {
         packs: true,
         productSuppliers: { include: { supplier: true } },
@@ -2186,6 +2189,7 @@ export class ProductService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    
     return products.map((product) => this.formatProductResponse(product));
   }
 
