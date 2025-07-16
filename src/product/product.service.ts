@@ -2275,7 +2275,7 @@ export class ProductService {
     // Execute search with proper includes
     const products = await prisma.products.findMany({
       where,
-      take:10,
+      take:50,
       include: {
         packs: true,
         productSuppliers: { 
@@ -2303,7 +2303,6 @@ export class ProductService {
         { name: 'asc' },
         { createdAt: 'desc' }
       ],
-      take: 100, // Limit results to prevent performance issues
     });
 
     return products.map((product) => this.formatProductResponse(product));
