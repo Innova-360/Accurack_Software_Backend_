@@ -92,7 +92,6 @@ export class ProductController extends BaseProductController {
             | 'percentDiscount'
             | 'category'
             | 'supplier'
-            | 'itemsPerUnit'
             | 'minimumSellingQuantity',
           sortOrder as 'asc' | 'desc',
         ),

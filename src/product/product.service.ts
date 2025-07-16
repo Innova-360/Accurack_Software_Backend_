@@ -632,7 +632,6 @@ export class ProductService {
       'percentDiscount',
       'category',
       'supplier',
-      'itemsPerUnit',
       'minimumSellingQuantity',
     ];
     if (!allowedSortFields.includes(sortBy)) {

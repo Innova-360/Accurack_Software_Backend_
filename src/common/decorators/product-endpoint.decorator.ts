@@ -228,7 +228,6 @@ export const ProductEndpoint = {
           'percentDiscount',
           'category',
           'supplier',
-          'itemsPerUnit',
           'minimumSellingQuantity',
         ],
       }),

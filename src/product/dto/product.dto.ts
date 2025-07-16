@@ -407,14 +407,14 @@ export class CreateProductDto {
     example: 1,
     description: 'Number of individual items per unit/pack',
   })
-  @Transform(({ value }) => {
-    if (value === null || value === undefined || value === '') return 1;
-    const num = typeof value === 'string' ? parseInt(value) : value;
-    return isNaN(num) ? 1 : num;
-  })
-  @IsNumber()
-  @IsOptional()
-  itemsPerUnit?: number;
+  // @Transform(({ value }) => {
+  //   if (value === null || value === undefined || value === '') return 1;
+  //   const num = typeof value === 'string' ? parseInt(value) : value;
+  //   return isNaN(num) ? 1 : num;
+  // })
+  // @IsNumber()
+  // @IsOptional()
+  // itemsPerUnit?: number;
 
   @ApiProperty({ example: 'uuid-client-id', description: 'ID of the client' })
   @IsString()
@@ -638,14 +638,14 @@ export class UpdateProductDto {
     description: 'Number of individual items per unit/pack',
     required: false,
   })
-  @Transform(({ value }) => {
-    if (value === null || value === undefined || value === '') return undefined;
-    const num = typeof value === 'string' ? parseInt(value) : value;
-    return isNaN(num) ? undefined : num;
-  })
-  @IsNumber()
-  @IsOptional()
-  itemsPerUnit?: number;
+  // @Transform(({ value }) => {
+  //   if (value === null || value === undefined || value === '') return undefined;
+  //   const num = typeof value === 'string' ? parseInt(value) : value;
+  //   return isNaN(num) ? undefined : num;
+  // })
+  // @IsNumber()
+  // @IsOptional()
+  // itemsPerUnit?: number;
 
   @ApiProperty({
     example: 'uuid-client-id',
@@ -826,11 +826,11 @@ export class ProductResponseDto {
   })
   percentDiscount: number;
 
-  @ApiProperty({
-    example: 1,
-    description: 'Number of individual items per unit/pack',
-  })
-  itemsPerUnit?: number;
+  // @ApiProperty({
+  //   example: 1,
+  //   description: 'Number of individual items per unit/pack',
+  // })
+  // itemsPerUnit?: number;
 
   @ApiProperty({ example: 'uuid-client-id', description: 'ID of the client' })
   clientId: string;
