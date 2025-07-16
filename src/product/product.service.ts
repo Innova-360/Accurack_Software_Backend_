@@ -581,7 +581,21 @@ export class ProductService {
     storeId: string,
     page: number = 1,
     limit: number = 15000,
-    sortBy: 'name' | 'createdAt' | 'updatedAt' = 'createdAt',
+    sortBy:
+      | 'name'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'singleItemSellingPrice'
+      | 'msrpPrice'
+      | 'itemQuantity'
+      | 'sku'
+      | 'pluUpc'
+      | 'ean'
+      | 'discountAmount'
+      | 'percentDiscount'
+      | 'category'
+      | 'supplier'
+      | 'minimumSellingQuantity' = 'createdAt',
     sortOrder: 'asc' | 'desc' = 'desc',
   ) {
     this.validateProductAccess(user, storeId);
@@ -601,6 +615,55 @@ export class ProductService {
       user.role !== 'super_admin'
     ) {
       throw new BadRequestException('No access to this store');
+    }
+
+    // Validate sortBy parameter to prevent injection attacks
+    const allowedSortFields = [
+      'name',
+      'createdAt',
+      'updatedAt',
+      'singleItemSellingPrice',
+      'msrpPrice',
+      'itemQuantity',
+      'sku',
+      'pluUpc',
+      'ean',
+      'discountAmount',
+      'percentDiscount',
+      'category',
+      'supplier',
+      'minimumSellingQuantity',
+    ];
+    if (!allowedSortFields.includes(sortBy)) {
+      throw new BadRequestException(
+        `Invalid sortBy field. Allowed values: ${allowedSortFields.join(', ')}`,
+      );
+    }
+
+    // Validate sortOrder parameter
+    if (!['asc', 'desc'].includes(sortOrder)) {
+      throw new BadRequestException(
+        'Invalid sortOrder. Allowed values: asc, desc',
+      );
+    }
+
+    // Create dynamic orderBy based on sortBy field
+    let orderBy: any;
+    let needsSupplierSort = false;
+    let needsMinimumSellingQuantitySort = false;
+
+    if (sortBy === 'category') {
+      orderBy = [{ category: { name: sortOrder } }, { createdAt: 'desc' }];
+    } else if (sortBy === 'supplier') {
+      // For supplier sorting, we need to sort after query since products can have multiple suppliers
+      orderBy = [{ createdAt: 'desc' }]; // Use default ordering for DB query
+      needsSupplierSort = true;
+    } else if (sortBy === 'minimumSellingQuantity') {
+      // For minimumSellingQuantity sorting, we need to sort after query since products can have multiple packs
+      orderBy = [{ createdAt: 'desc' }]; // Use default ordering for DB query
+      needsMinimumSellingQuantitySort = true;
+    } else {
+      orderBy = [{ [sortBy]: sortOrder }, { createdAt: 'desc' }];
     }
 
     let where: any = {};
@@ -658,10 +721,7 @@ export class ProductService {
           },
           skip: currentSkip,
           take: currentBatchSize,
-          orderBy: [
-            { [sortBy]: sortOrder },
-            { createdAt: 'desc' }
-          ],
+          orderBy: orderBy,
         });
 
         allProducts.push(...batch);
@@ -679,8 +739,20 @@ export class ProductService {
         }
       }
 
+      // Apply supplier sorting if needed
+      let finalProducts = allProducts;
+      if (needsSupplierSort) {
+        finalProducts = this.sortProductsBySupplier(allProducts, sortOrder);
+      }
+      if (needsMinimumSellingQuantitySort) {
+        finalProducts = this.sortProductsByMinimumSellingQuantity(
+          finalProducts,
+          sortOrder,
+        );
+      }
+
       return {
-        products: allProducts.map((product) =>
+        products: finalProducts.map((product) =>
           this.formatProductResponse(product),
         ),
         pagination: {
@@ -714,14 +786,25 @@ export class ProductService {
       },
       skip,
       take: Number(limit),
-      orderBy: [
-        { [sortBy]: sortOrder },
-        { createdAt: 'desc' }
-      ],
+      orderBy: orderBy,
     });
 
+    // Apply supplier sorting if needed
+    let finalProducts = products;
+    if (needsSupplierSort) {
+      finalProducts = this.sortProductsBySupplier(products, sortOrder);
+    }
+    if (needsMinimumSellingQuantitySort) {
+      finalProducts = this.sortProductsByMinimumSellingQuantity(
+        finalProducts,
+        sortOrder,
+      );
+    }
+
     return {
-      products: products.map((product) => this.formatProductResponse(product)),
+      products: finalProducts.map((product) =>
+        this.formatProductResponse(product),
+      ),
       pagination: {
         page,
         limit,
@@ -729,6 +812,52 @@ export class ProductService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  private sortProductsBySupplier(
+    products: any[],
+    sortOrder: 'asc' | 'desc',
+  ): any[] {
+    return products.sort((a, b) => {
+      // Get primary supplier name for product a
+      const primarySupplierA = a.productSuppliers?.find(
+        (ps: any) => ps.state === 'primary',
+      );
+      const supplierNameA = primarySupplierA?.supplier?.name || '';
+
+      // Get primary supplier name for product b
+      const primarySupplierB = b.productSuppliers?.find(
+        (ps: any) => ps.state === 'primary',
+      );
+      const supplierNameB = primarySupplierB?.supplier?.name || '';
+
+      // Compare supplier names
+      if (sortOrder === 'asc') {
+        return supplierNameA.localeCompare(supplierNameB);
+      } else {
+        return supplierNameB.localeCompare(supplierNameA);
+      }
+    });
+  }
+
+  private sortProductsByMinimumSellingQuantity(
+    products: any[],
+    sortOrder: 'asc' | 'desc',
+  ): any[] {
+    return products.sort((a, b) => {
+      // Get the first pack's minimumSellingQuantity for product a (if exists)
+      const minimumSellingQuantityA = a.packs?.[0]?.minimumSellingQuantity || 0;
+
+      // Get the first pack's minimumSellingQuantity for product b (if exists)
+      const minimumSellingQuantityB = b.packs?.[0]?.minimumSellingQuantity || 0;
+
+      // Compare minimumSellingQuantity values
+      if (sortOrder === 'asc') {
+        return minimumSellingQuantityA - minimumSellingQuantityB;
+      } else {
+        return minimumSellingQuantityB - minimumSellingQuantityA;
+      }
+    });
   }
 
   async getProductById(user: any, id: string): Promise<ProductResponseDto> {
@@ -2226,7 +2355,7 @@ export class ProductService {
     }
 
     const prisma = await this.tenantContext.getPrismaClient();
-    
+
     // Build where clause for search
     let where: any = {
       OR: [
@@ -2246,17 +2375,17 @@ export class ProductService {
     } else {
       // Regular users are restricted to their client and stores
       where.clientId = user.clientId;
-      
+
       if (storeId) {
         // Check if user has access to the specified store
         const hasStoreAccess = user.stores?.some(
           (store: any) => store.storeId === storeId,
         );
-        
+
         if (!hasStoreAccess && user.storeId !== storeId) {
           throw new BadRequestException('No access to this store');
         }
-        
+
         where.storeId = storeId;
       } else if (user.storeId) {
         // If no storeId provided, use user's default store
@@ -2264,7 +2393,7 @@ export class ProductService {
       } else if (user.stores && user.stores.length > 0) {
         // If user has multiple stores, search across all accessible stores
         where.storeId = {
-          in: user.stores.map((store: any) => store.storeId)
+          in: user.stores.map((store: any) => store.storeId),
         };
       } else {
         // User has no store access
@@ -2278,30 +2407,30 @@ export class ProductService {
       take:50,
       include: {
         packs: true,
-        productSuppliers: { 
-          include: { 
-            supplier: true 
-          } 
+        productSuppliers: {
+          include: {
+            supplier: true,
+          },
         },
-        store: { 
-          select: { 
-            id: true, 
-            name: true 
-          } 
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
         },
         saleItems: true,
         purchaseOrders: true,
-        category: { 
-          select: { 
-            id: true, 
-            name: true 
-          } 
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
         },
       },
       orderBy: [
         // Prioritize exact matches first
         { name: 'asc' },
-        { createdAt: 'desc' }
+        { createdAt: 'desc' },
       ],
     });
 
@@ -2309,7 +2438,7 @@ export class ProductService {
   }
 
   async searchProductsAdvanced(
-    user: any, 
+    user: any,
     options: {
       query?: string;
       storeId?: string;
@@ -2320,7 +2449,7 @@ export class ProductService {
       hasVariants?: boolean;
       limit?: number;
       page?: number;
-    }
+    },
   ) {
     // Validate user authentication
     if (!user) {
@@ -2328,7 +2457,7 @@ export class ProductService {
     }
 
     const prisma = await this.tenantContext.getPrismaClient();
-    
+
     // Build where clause for search
     let where: any = {};
 
@@ -2351,17 +2480,17 @@ export class ProductService {
     } else {
       // Regular users are restricted to their client and stores
       where.clientId = user.clientId;
-      
+
       if (options.storeId) {
         // Check if user has access to the specified store
         const hasStoreAccess = user.stores?.some(
           (store: any) => store.storeId === options.storeId,
         );
-        
+
         if (!hasStoreAccess && user.storeId !== options.storeId) {
           throw new BadRequestException('No access to this store');
         }
-        
+
         where.storeId = options.storeId;
       } else if (user.storeId) {
         // If no storeId provided, use user's default store
@@ -2369,7 +2498,7 @@ export class ProductService {
       } else if (user.stores && user.stores.length > 0) {
         // If user has multiple stores, search across all accessible stores
         where.storeId = {
-          in: user.stores.map((store: any) => store.storeId)
+          in: user.stores.map((store: any) => store.storeId),
         };
       } else {
         // User has no store access
@@ -2418,30 +2547,27 @@ export class ProductService {
       where,
       include: {
         packs: true,
-        productSuppliers: { 
-          include: { 
-            supplier: true 
-          } 
+        productSuppliers: {
+          include: {
+            supplier: true,
+          },
         },
-        store: { 
-          select: { 
-            id: true, 
-            name: true 
-          } 
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
         },
         saleItems: true,
         purchaseOrders: true,
-        category: { 
-          select: { 
-            id: true, 
-            name: true 
-          } 
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
         },
       },
-      orderBy: [
-        { name: 'asc' },
-        { createdAt: 'desc' }
-      ],
+      orderBy: [{ name: 'asc' }, { createdAt: 'desc' }],
       skip,
       take: limit,
     });
@@ -2459,10 +2585,10 @@ export class ProductService {
   }
 
   async searchProductsFuzzy(
-    user: any, 
-    query: string, 
-    storeId?: string, 
-    threshold: number = 0.4
+    user: any,
+    query: string,
+    storeId?: string,
+    threshold: number = 0.4,
   ) {
     // Validate user authentication
     if (!user) {
@@ -2475,7 +2601,7 @@ export class ProductService {
     }
 
     const prisma = await this.tenantContext.getPrismaClient();
-    
+
     // First, get all products that the user has access to
     let baseWhere: any = {};
 
@@ -2488,17 +2614,17 @@ export class ProductService {
     } else {
       // Regular users are restricted to their client and stores
       baseWhere.clientId = user.clientId;
-      
+
       if (storeId) {
         // Check if user has access to the specified store
         const hasStoreAccess = user.stores?.some(
           (store: any) => store.storeId === storeId,
         );
-        
+
         if (!hasStoreAccess && user.storeId !== storeId) {
           throw new BadRequestException('No access to this store');
         }
-        
+
         baseWhere.storeId = storeId;
       } else if (user.storeId) {
         // If no storeId provided, use user's default store
@@ -2506,7 +2632,7 @@ export class ProductService {
       } else if (user.stores && user.stores.length > 0) {
         // If user has multiple stores, search across all accessible stores
         baseWhere.storeId = {
-          in: user.stores.map((store: any) => store.storeId)
+          in: user.stores.map((store: any) => store.storeId),
         };
       } else {
         // User has no store access
@@ -2519,24 +2645,24 @@ export class ProductService {
       where: baseWhere,
       include: {
         packs: true,
-        productSuppliers: { 
-          include: { 
-            supplier: true 
-          } 
+        productSuppliers: {
+          include: {
+            supplier: true,
+          },
         },
-        store: { 
-          select: { 
-            id: true, 
-            name: true 
-          } 
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
         },
         saleItems: true,
         purchaseOrders: true,
-        category: { 
-          select: { 
-            id: true, 
-            name: true 
-          } 
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
         },
       },
     });
@@ -2545,21 +2671,24 @@ export class ProductService {
     const { FuzzyMatcher } = require('../utils/fuzzy-matcher');
 
     // Create searchable strings for each product
-    const searchableItems = allProducts.map(product => ({
+    const searchableItems = allProducts.map((product) => ({
       product,
       searchString: [
         product.name,
         product.sku,
         product.pluUpc,
         product.ean,
-        product.category?.name
-      ].filter(Boolean).join(' ').toLowerCase()
+        product.category?.name,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase(),
     }));
 
     // Create fuzzy matcher
     const matcher = new FuzzyMatcher(
-      searchableItems.map(item => item.searchString),
-      threshold
+      searchableItems.map((item) => item.searchString),
+      threshold,
     );
 
     // Perform fuzzy search
@@ -2567,24 +2696,24 @@ export class ProductService {
 
     // Map results back to products and sort by relevance
     const matchedProducts = fuzzyResults
-      .map(result => {
+      .map((result) => {
         const index = searchableItems.findIndex(
-          item => item.searchString === result.item
+          (item) => item.searchString === result.item,
         );
         return {
           product: searchableItems[index].product,
-          score: result.score
+          score: result.score,
         };
       })
       .sort((a, b) => a.score - b.score) // Lower score = better match
       .slice(0, 20) // Limit to top 20 results
-      .map(item => this.formatProductResponse(item.product));
+      .map((item) => this.formatProductResponse(item.product));
 
     return {
       products: matchedProducts,
       query: query.trim(),
       total: matchedProducts.length,
-      threshold
+      threshold,
     };
   }
 

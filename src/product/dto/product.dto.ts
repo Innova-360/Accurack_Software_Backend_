@@ -403,6 +403,19 @@ export class CreateProductDto {
   @IsOptional()
   percentDiscount?: number;
 
+  @ApiProperty({
+    example: 1,
+    description: 'Number of individual items per unit/pack',
+  })
+  // @Transform(({ value }) => {
+  //   if (value === null || value === undefined || value === '') return 1;
+  //   const num = typeof value === 'string' ? parseInt(value) : value;
+  //   return isNaN(num) ? 1 : num;
+  // })
+  // @IsNumber()
+  // @IsOptional()
+  // itemsPerUnit?: number;
+
   @ApiProperty({ example: 'uuid-client-id', description: 'ID of the client' })
   @IsString()
   clientId: string;
@@ -621,6 +634,20 @@ export class UpdateProductDto {
   percentDiscount?: number;
 
   @ApiProperty({
+    example: 1,
+    description: 'Number of individual items per unit/pack',
+    required: false,
+  })
+  // @Transform(({ value }) => {
+  //   if (value === null || value === undefined || value === '') return undefined;
+  //   const num = typeof value === 'string' ? parseInt(value) : value;
+  //   return isNaN(num) ? undefined : num;
+  // })
+  // @IsNumber()
+  // @IsOptional()
+  // itemsPerUnit?: number;
+
+  @ApiProperty({
     example: 'uuid-client-id',
     description: 'ID of the client',
     required: false,
@@ -798,6 +825,12 @@ export class ProductResponseDto {
     description: 'Percentage discount applied to the product',
   })
   percentDiscount: number;
+
+  // @ApiProperty({
+  //   example: 1,
+  //   description: 'Number of individual items per unit/pack',
+  // })
+  // itemsPerUnit?: number;
 
   @ApiProperty({ example: 'uuid-client-id', description: 'ID of the client' })
   clientId: string;
