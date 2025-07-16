@@ -179,7 +179,6 @@ export class ProductService {
       singleItemSellingPrice: product.singleItemSellingPrice,
       discountAmount: product.discountAmount,
       percentDiscount: product.percentDiscount,
-      itemsPerUnit: product.itemsPerUnit || 1,
       clientId: product.clientId,
       storeId: product.storeId,
       hasVariants: product.hasVariants,
@@ -318,7 +317,6 @@ export class ProductService {
         singleItemSellingPrice: createProductDto.singleItemSellingPrice,
         discountAmount: createProductDto.discountAmount,
         percentDiscount: createProductDto.percentDiscount,
-        itemsPerUnit: createProductDto.itemsPerUnit || 1,
         clientId: createProductDto.clientId,
         storeId: createProductDto.storeId,
         hasVariants: createProductDto.hasVariants || false,
@@ -597,7 +595,6 @@ export class ProductService {
       | 'percentDiscount'
       | 'category'
       | 'supplier'
-      | 'itemsPerUnit'
       | 'minimumSellingQuantity' = 'createdAt',
     sortOrder: 'asc' | 'desc' = 'desc',
   ) {
@@ -1125,8 +1122,6 @@ export class ProductService {
         updateData.discountAmount = updateProductDto.discountAmount;
       if (updateProductDto.percentDiscount !== undefined)
         updateData.percentDiscount = updateProductDto.percentDiscount;
-      if (updateProductDto.itemsPerUnit !== undefined)
-        updateData.itemsPerUnit = updateProductDto.itemsPerUnit;
 
       // Use proper Prisma relation syntax for client and store
       if (updateProductDto.clientId !== undefined) {

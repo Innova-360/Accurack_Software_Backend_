@@ -531,7 +531,6 @@ model Products {
   hasVariants            Boolean              @default(false)
   packIds                String[]             @default([])
   variants               Json[]
-  itemsPerUnit           Int?                 @default(0)
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
   fileUploadId           String?
