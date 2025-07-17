@@ -363,4 +363,230 @@ export class InvoiceService {
       );
     }
   }
+
+  async convertInvoiceToDraft(invoiceId: string, notes: string, user: any) {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    try {
+      // Get the invoice with all related data
+      const invoice = await prisma.invoice.findFirst({
+        where: {
+          id: invoiceId,
+          business: { clientId: user.clientId },
+        },
+        include: {
+          sale: {
+            include: {
+              store: true,
+              customer: true,
+            },
+          },
+          customer: true,
+          business: true,
+          customFields: true,
+        },
+      });
+
+      if (!invoice) {
+        throw new NotFoundException('Invoice not found or access denied');
+      }
+
+      // Check if invoice is already converted
+      if (invoice.isConverted) {
+        return {
+          success: false,
+          message: 'Invoice has already been converted to a draft',
+          data: null,
+        };
+      }
+
+      // Generate draft number
+      const draftCount = await prisma.invoiceDraft.count({
+        where: {
+          storeId: invoice.sale.storeId,
+          createdAt: {
+            gte: new Date(
+              new Date().getFullYear(),
+              new Date().getMonth(),
+              new Date().getDate(),
+            ),
+            lt: new Date(
+              new Date().getFullYear(),
+              new Date().getMonth(),
+              new Date().getDate() + 1,
+            ),
+          },
+        },
+      });
+
+      const draftNumber = `DRAFT-${new Date()
+        .toISOString()
+        .split('T')[0]
+        .replace(/-/g, '')}-${String(draftCount + 1).padStart(3, '0')}`;
+
+      // Create the draft with invoice data
+      const draft = await prisma.invoiceDraft.create({
+        data: {
+          storeId: invoice.sale.storeId,
+          originalInvoiceId: invoice.id,
+          draftNumber,
+          version: 1,
+          status: 'DRAFT',
+          notes: notes || 'Converted from invoice for editing',
+          dueDate: null, // Can be set during editing
+          shippingAddress: invoice.shippingAddress,
+          logoUrl: invoice.logoUrl,
+          customerId: invoice.customerId,
+          totalAmount: invoice.totalAmount,
+          netAmount: invoice.netAmount,
+          tax: invoice.tax,
+          paymentMethod: invoice.paymentMethod,
+          cashierName: invoice.cashierName,
+          userId: user.id,
+          clientId: user.clientId,
+          customFields: {
+            create: invoice.customFields.map((field) => ({
+              fieldName: field.fieldName,
+              fieldValue: field.fieldValue,
+            })),
+          },
+        },
+        include: {
+          store: true,
+          customer: true,
+          customFields: true,
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      // Mark the original invoice as converted
+      await prisma.invoice.update({
+        where: { id: invoiceId },
+        data: { isConverted: true },
+      });
+
+      return {
+        success: true,
+        message: 'Invoice converted to draft successfully',
+        data: draft,
+      };
+    } catch (error) {
+      console.error('Error converting invoice to draft:', error);
+
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      throw new Error(
+        'An error occurred while converting invoice to draft: ' +
+          (error.message || 'Unknown error'),
+      );
+    }
+  }
+
+  async createInvoiceFromDraft(draftData: any, user: any) {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    try {
+      // Get business information
+      const business = await prisma.business.findUnique({
+        where: { clientId: user.clientId },
+      });
+
+      if (!business) {
+        throw new NotFoundException('Business information required');
+      }
+
+      // Generate invoice number
+      const invoiceCount = await prisma.invoice.count({
+        where: {
+          business: { clientId: user.clientId },
+          createdAt: {
+            gte: new Date(
+              new Date().getFullYear(),
+              new Date().getMonth(),
+              new Date().getDate(),
+            ),
+            lt: new Date(
+              new Date().getFullYear(),
+              new Date().getMonth(),
+              new Date().getDate() + 1,
+            ),
+          },
+        },
+      });
+
+      const invoiceNumber = `INV-${new Date()
+        .toISOString()
+        .split('T')[0]
+        .replace(/-/g, '')}-${String(invoiceCount + 1).padStart(3, '0')}`;
+
+      // Generate QR code
+      const qrCodeData = `Invoice:${draftData.id}:${new Date().toISOString()}`;
+      const qrCode = await new Promise<string>((resolve, reject) => {
+        QRCode.toDataURL(qrCodeData, { width: 128, margin: 1 }, (err, url) => {
+          if (err) reject(err);
+          resolve(url);
+        });
+      });
+
+      // Create invoice from draft data
+      const invoice = await prisma.invoice.create({
+        data: {
+          saleId: draftData.saleId || null, // May not have saleId for store-based drafts
+          customerId: draftData.customerId,
+          businessId: business.id,
+          invoiceNumber,
+          customerName: draftData.customer?.customerName || 'Walk-in Customer',
+          customerPhone: draftData.customer?.phoneNumber || '',
+          customerMail: draftData.customer?.customerMail || undefined,
+          customerWebsite: draftData.customer?.website || undefined,
+          customerAddress: draftData.customer?.customerAddress || undefined,
+          businessName: business.businessName,
+          businessContact: business.contactNo,
+          businessWebsite: business.website || undefined,
+          businessAddress: business.address || undefined,
+          shippingAddress:
+            draftData.shippingAddress || draftData.customer?.customerAddress ||
+            undefined,
+          paymentMethod: draftData.paymentMethod || 'CASH',
+          totalAmount: draftData.totalAmount,
+          netAmount: draftData.netAmount,
+          tax: draftData.tax || 0,
+          status: 'COMPLETED', // Default status for approved drafts
+          cashierName: draftData.cashierName || user.firstName || 'System',
+          logoUrl: draftData.logoUrl || business.logoUrl || undefined,
+          qrCode,
+          originalDraftId: draftData.id,
+          customFields: {
+            create:
+              draftData.customFields?.map((field) => ({
+                fieldName: field.fieldName,
+                fieldValue: field.fieldValue,
+              })) || [],
+          },
+        },
+        include: {
+          customer: true,
+          business: true,
+          customFields: true,
+        },
+      });
+
+      return invoice;
+    } catch (error) {
+      console.error('Error creating invoice from draft:', error);
+      throw new Error(
+        'An error occurred while creating invoice from draft: ' +
+          (error.message || 'Unknown error'),
+      );
+    }
+  }
 }

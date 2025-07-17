@@ -100,4 +100,18 @@ export class InvoiceController extends BaseInvoiceController {
       'Invoices retrieved successfully',
     );
   }
+
+  @InvoiceEndpoint.ConvertInvoiceToDraft()
+  @Post(':id/convert-to-draft')
+  async convertInvoiceToDraft(
+    @Param('id') invoiceId: string,
+    @Body() dto: { notes?: string },
+    @Req() req: any,
+  ) {
+    return this.handleServiceOperation(
+      () => this.invoiceService.convertInvoiceToDraft(invoiceId, dto.notes || '', req.user),
+      'Invoice converted to draft successfully',
+      201,
+    );
+  }
 }

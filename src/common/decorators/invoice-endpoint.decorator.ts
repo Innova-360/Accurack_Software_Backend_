@@ -244,4 +244,44 @@ export const InvoiceEndpoint = {
       ...standardErrorResponses(),
       Version('1'),
     ),
+
+  ConvertInvoiceToDraft: () =>
+    applyDecorators(
+      ApiOperation({ summary: 'Convert invoice to draft for editing' }),
+      ApiParam({
+        name: 'id',
+        required: true,
+        description: 'Invoice ID',
+        example: 'invoice-uuid-123',
+      }),
+      ApiBody({
+        schema: {
+          type: 'object',
+          properties: {
+            notes: {
+              type: 'string',
+              description: 'Optional notes for the conversion',
+              example: 'Converting to draft for editing',
+            },
+          },
+        },
+      }),
+      ApiResponse({
+        status: 201,
+        description: 'Invoice converted to draft successfully',
+        schema: createdResponseSchema('Invoice converted to draft successfully'),
+      }),
+      ApiResponse({
+        status: 400,
+        description: 'Invoice already converted or cannot be converted',
+        schema: errorResponseSchema(400, 'Invoice already converted'),
+      }),
+      ApiResponse({
+        status: 404,
+        description: 'Invoice not found',
+        schema: errorResponseSchema(404, 'Invoice not found'),
+      }),
+      ...standardErrorResponses(),
+      Version('1'),
+    ),
 };
