@@ -55,10 +55,48 @@ export class AuthController extends BaseAuthController {
 
   @AuthEndpoint.GoogleCallback()
   @Get('google/callback')
-  async googleAuthRedirect(@Req() req, @Res() res: Response) {
-    return this.handleGoogleAuth(res, () =>
-      this.authService.googleLogin(req.user),
-    );
+  async googleAuthRedirect(@Req() req, @Res() res: Response): Promise<void> {
+    try {
+      const isProduction = process.env.NODE_ENV === 'production';
+      let redirectUrl = process.env.FRONTEND_URL
+        ? `${process.env.FRONTEND_URL}/stores`
+        : 'http://localhost:5173/stores';
+
+      if (!process.env.FRONTEND_URL && !isProduction) {
+        throw new Error('FRONTEND_URL environment variable is not set');
+      }
+
+      if (!req.user) {
+        redirectUrl = `${redirectUrl}/signup`;
+        return res.redirect(redirectUrl);
+      }
+
+      const { access_token, refresh_token } =
+        await this.authService.googleLogin(req.user);
+      if (!access_token || !refresh_token) {
+        redirectUrl = `${redirectUrl}/signup`;
+        return res.redirect(redirectUrl);
+      }
+
+      res.cookie('accessToken', access_token, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
+      });
+      res.cookie('refreshToken', refresh_token, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
+      });
+
+      return res.redirect(redirectUrl);
+    } catch (error) {
+      console.error('Google Auth Error:', error);
+      const redirectUrl = process.env.FRONTEND_URL
+        ? `${process.env.FRONTEND_URL}/signup`
+        : 'http://localhost:5173/signup';
+      return res.redirect(redirectUrl);
+    }
   }
 
   @AuthEndpoint.GetMe()

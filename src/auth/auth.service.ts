@@ -68,9 +68,9 @@ export class AuthService {
       }
 
       // If no user exists, create a new one using the configured strategy
-      if (!user) {
-        user = await this.handleGoogleUserCreation(googleUser);
-      }
+      // if (!user) {
+      //   user = await this.handleGoogleUserCreation(googleUser);
+      // }
 
       // Update refresh token if provided
       if (googleUser.refreshToken && user) {
