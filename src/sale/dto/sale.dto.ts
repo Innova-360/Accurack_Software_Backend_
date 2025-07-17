@@ -139,6 +139,11 @@ export class SaleItemDto {
   @IsOptional()
   @IsString()
   packId?: string;
+
+  @ApiPropertyOptional({ description: 'Pack Quantity if pack type is BOX' })
+  @IsOptional()
+  @IsNumber()
+  packQuantity?: number;
 }
 
 export class CreateSaleDto {

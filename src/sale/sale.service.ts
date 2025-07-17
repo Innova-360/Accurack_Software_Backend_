@@ -342,6 +342,7 @@ export class SaleService {
               totalPrice: item.totalPrice,
               packType: item.packType,
               packId: item.packId,
+              packQuantity: item.packQuantity, 
             },
           }),
         ),
@@ -498,6 +499,9 @@ export class SaleService {
                   id: true,
                   name: true,
                   pluUpc: true,
+                  msrpPrice: true,
+                  discountAmount: true,
+                  percentDiscount: true,
                 },
               },
             },
@@ -517,7 +521,8 @@ export class SaleService {
       prisma.sales.count({ where }),
     ]);
 
-    console.log(sales)
+    console.log('sales', sales, 'total', total);
+
 
     return {
       sales,
