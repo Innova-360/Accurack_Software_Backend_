@@ -183,7 +183,7 @@ export class AuthController extends BaseAuthController {
       this.responseService.success(
         'Login successful',
         {
-          user: this.extractUserData(resp.user),
+          user: resp.user,
           accessToken: resp.accessToken,
           refreshToken: resp.refreshToken,
         },
