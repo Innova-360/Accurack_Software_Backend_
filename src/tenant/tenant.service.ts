@@ -192,7 +192,234 @@ export class TenantService {
 
       // Delete related records from master database in correct order (respecting foreign keys)
       await this.prisma.$transaction(async (prisma) => {
-        // Delete users first (they reference clients)
+        // Step 1: Delete user-dependent records first (these reference users with RESTRICT)
+        if (tenant.users && tenant.users.length > 0) {
+          const userIds = tenant.users.map(user => user.id);
+          
+          // Delete AuditLogs (references userId with RESTRICT)
+          const auditLogsResult = await prisma.auditLogs.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${auditLogsResult.count} audit logs`);
+
+          // Delete Notifications (references userId with RESTRICT)
+          const notificationsResult = await prisma.notifications.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${notificationsResult.count} notifications`);
+
+          // Delete ApiTokens (references userId with RESTRICT)
+          const apiTokensResult = await prisma.apiTokens.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${apiTokensResult.count} API tokens`);
+
+          // Delete InviteLinks (references userId with RESTRICT)
+          const inviteLinksResult = await prisma.inviteLinks.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${inviteLinksResult.count} invite links`);
+
+          // Delete PasswordResetTokens (references userId with CASCADE, but safe to delete)
+          const passwordResetResult = await prisma.passwordResetTokens.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${passwordResetResult.count} password reset tokens`);
+
+          // Delete permissions where user is grantedBy (references grantedBy with RESTRICT)
+          const permissionsResult = await prisma.permission.deleteMany({
+            where: { grantedBy: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${permissionsResult.count} permissions where user was grantor`);
+
+          // Delete role_templates where user is createdBy (references createdBy with RESTRICT)
+          const roleTemplatesResult = await prisma.roleTemplate.deleteMany({
+            where: { createdBy: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${roleTemplatesResult.count} role templates created by user`);
+
+          // Delete user_roles where user is assignedBy (references assignedBy with RESTRICT)
+          const userRolesAssignedResult = await prisma.userRole.deleteMany({
+            where: { assignedBy: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${userRolesAssignedResult.count} user roles assigned by user`);
+
+          // Delete user_roles where user is the target (references userId with CASCADE, but safe to delete)
+          const userRolesResult = await prisma.userRole.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${userRolesResult.count} user roles`);
+
+          // Delete UserStoreMap (references userId with RESTRICT)
+          const userStoreMapResult = await prisma.userStoreMap.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${userStoreMapResult.count} user store mappings`);
+
+          // Delete SaleAdjustment records (references userId with RESTRICT)
+          const saleAdjustmentResult = await prisma.saleAdjustment.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${saleAdjustmentResult.count} sale adjustments`);
+
+          // Delete Sales records (references userId with RESTRICT)
+          const salesResult = await prisma.sales.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${salesResult.count} sales`);
+
+          // Delete SaleReturn records (references processedBy with RESTRICT)
+          const saleReturnResult = await prisma.saleReturn.deleteMany({
+            where: { processedBy: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${saleReturnResult.count} sale returns`);
+
+          // Delete PurchaseOrders records (references userId with RESTRICT)
+          const purchaseOrdersResult = await prisma.purchaseOrders.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${purchaseOrdersResult.count} purchase orders`);
+
+          // Delete Expenses records (references userId with RESTRICT)
+          const expensesResult = await prisma.expenses.deleteMany({
+            where: { userId: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${expensesResult.count} expenses`);
+
+          // Delete OrderProcessing records (references driverId with RESTRICT)
+          const orderProcessingResult = await prisma.orderProcessing.deleteMany({
+            where: { driverId: { in: userIds } },
+          });
+          this.logger.log(`Deleted ${orderProcessingResult.count} order processing records`);
+        }
+
+        // Step 2: Delete store-dependent records (these reference stores with RESTRICT)
+        if (tenant.stores && tenant.stores.length > 0) {
+          const storeIds = tenant.stores.map(store => store.id);
+
+          // Delete StoreSettings (references storeId with RESTRICT)
+          const storeSettingsResult = await prisma.storeSettings.deleteMany({
+            where: { storeId: { in: storeIds } },
+          });
+          this.logger.log(`Deleted ${storeSettingsResult.count} store settings`);
+
+          // Delete UserStoreMap (references storeId with RESTRICT)
+          const userStoreMapResult = await prisma.userStoreMap.deleteMany({
+            where: { storeId: { in: storeIds } },
+          });
+          this.logger.log(`Deleted ${userStoreMapResult.count} user store mappings`);
+
+          // Delete Suppliers (references storeId with RESTRICT)
+          const suppliersResult = await prisma.suppliers.deleteMany({
+            where: { storeId: { in: storeIds } },
+          });
+          this.logger.log(`Deleted ${suppliersResult.count} suppliers`);
+
+          // Delete Customer records (references storeId with RESTRICT)
+          const customersResult = await prisma.customer.deleteMany({
+            where: { storeId: { in: storeIds } },
+          });
+          this.logger.log(`Deleted ${customersResult.count} customers`);
+
+          // Delete Sales records (references storeId with RESTRICT)
+          const salesResult = await prisma.sales.deleteMany({
+            where: { storeId: { in: storeIds } },
+          });
+          this.logger.log(`Deleted ${salesResult.count} sales`);
+
+          // Delete SaleAdjustment records (references storeId with RESTRICT)
+          const saleAdjustmentResult = await prisma.saleAdjustment.deleteMany({
+            where: { storeId: { in: storeIds } },
+          });
+          this.logger.log(`Deleted ${saleAdjustmentResult.count} sale adjustments`);
+
+          // Delete PurchaseOrders records (references storeId with RESTRICT)
+          const purchaseOrdersResult = await prisma.purchaseOrders.deleteMany({
+            where: { storeId: { in: storeIds } },
+          });
+          this.logger.log(`Deleted ${purchaseOrdersResult.count} purchase orders`);
+
+          // Delete Expenses records (references storeId with RESTRICT)
+          const expensesResult = await prisma.expenses.deleteMany({
+            where: { storeId: { in: storeIds } },
+          });
+          this.logger.log(`Deleted ${expensesResult.count} expenses`);
+
+          // Delete Reports records (references storeId with RESTRICT)
+          const reportsResult = await prisma.reports.deleteMany({
+            where: { storeId: { in: storeIds } },
+          });
+          this.logger.log(`Deleted ${reportsResult.count} reports`);
+
+          // Delete OrderProcessing records (references storeId with RESTRICT)
+          const orderProcessingResult = await prisma.orderProcessing.deleteMany({
+            where: { storeId: { in: storeIds } },
+          });
+          this.logger.log(`Deleted ${orderProcessingResult.count} order processing records`);
+
+          // Delete FileUploadInventory records (references storeId with RESTRICT)
+          const fileUploadResult = await prisma.fileUploadInventory.deleteMany({
+            where: { storeId: { in: storeIds } },
+          });
+          this.logger.log(`Deleted ${fileUploadResult.count} file upload records`);
+
+          // Delete ErrorLog records (references fileUploadId with RESTRICT)
+          // Note: We need to get the fileUploadIds first before deleting FileUploadInventory
+          const fileUploadIds = await prisma.fileUploadInventory.findMany({
+            where: { storeId: { in: storeIds } },
+            select: { id: true },
+          });
+          
+          if (fileUploadIds.length > 0) {
+            const errorLogResult = await prisma.errorLog.deleteMany({
+              where: { fileUploadId: { in: fileUploadIds.map(f => f.id) } }
+            });
+            this.logger.log(`Deleted ${errorLogResult.count} error log records`);
+          }
+        }
+
+        // Step3 product-dependent records (these reference products with RESTRICT)
+        if (tenant.products && tenant.products.length > 0) {
+          const productIds = tenant.products.map(product => product.id);
+
+          // Delete Pack records (references productId with RESTRICT)
+          const packResult = await prisma.pack.deleteMany({
+            where: { productId: { in: productIds } },
+          });
+          this.logger.log(`Deleted ${packResult.count} pack records`);
+
+          // Delete SaleAdjustment records (references productId with RESTRICT)
+          const saleAdjustmentResult = await prisma.saleAdjustment.deleteMany({
+            where: { productId: { in: productIds } },
+          });
+          this.logger.log(`Deleted ${saleAdjustmentResult.count} sale adjustments`);
+
+          // Delete PurchaseOrders records (references productId with RESTRICT)
+          const purchaseOrdersResult = await prisma.purchaseOrders.deleteMany({
+            where: { productId: { in: productIds } },
+          });
+          this.logger.log(`Deleted ${purchaseOrdersResult.count} purchase orders`);
+        }
+
+        // Step 4customer-dependent records (these reference customers with RESTRICT)
+        const customersResult = await prisma.customer.deleteMany({
+          where: { clientId: tenantId },
+        });
+        this.logger.log(`Deleted ${customersResult.count} customers`);
+
+        // Step 5business-dependent records (these reference business with RESTRICT)
+        const businessResult = await prisma.business.deleteMany({
+          where: { clientId: tenantId },
+        });
+        this.logger.log(`Deleted ${businessResult.count} business records`);
+
+        // Step 6: Delete sales-dependent records (these reference sales with RESTRICT)
+        const salesResult = await prisma.sales.deleteMany({
+          where: { clientId: tenantId },
+        });
+        this.logger.log(`Deleted ${salesResult.count} sales`);
+
+        // Step7 Delete users (now that all dependent records are deleted)
         if (tenant.users && tenant.users.length > 0) {
           const deleteUsersResult = await prisma.users.deleteMany({
             where: { clientId: tenantId },
@@ -202,7 +429,7 @@ export class TenantService {
           );
         }
 
-        // Delete stores (they reference clients)
+        // Step 8Delete stores (now that all dependent records are deleted)
         if (tenant.stores && tenant.stores.length > 0) {
           const deleteStoresResult = await prisma.stores.deleteMany({
             where: { clientId: tenantId },
@@ -212,7 +439,7 @@ export class TenantService {
           );
         }
 
-        // Delete products (they reference clients)
+        // Step 9 Delete products (now that all dependent records are deleted)
         if (tenant.products && tenant.products.length > 0) {
           const deleteProductsResult = await prisma.products.deleteMany({
             where: { clientId: tenantId },
@@ -222,7 +449,7 @@ export class TenantService {
           );
         }
 
-        // Finally delete the client record
+        // Step 10Finally delete the client record
         await prisma.clients.delete({
           where: { id: tenantId },
         });
