@@ -342,7 +342,6 @@ export class SaleService {
               totalPrice: item.totalPrice,
               packType: item.packType,
               packId: item.packId,
-              packQuantity: item.packQuantity, 
             },
           }),
         ),
@@ -502,6 +501,7 @@ export class SaleService {
                   msrpPrice: true,
                   discountAmount: true,
                   percentDiscount: true,
+                  packs: true
                 },
               },
             },
@@ -547,6 +547,15 @@ export class SaleService {
                 name: true,
                 sku: true,
                 category: true,
+                msrpPrice: true,
+                discountAmount: true,
+                percentDiscount: true,
+                packIds: true,
+                packs: {
+                  select: {
+                    totalPacksQuantity: true,
+                  }
+                }
               },
             },
           },
