@@ -97,3 +97,54 @@ export class UpdateBusinessInfoDto {
   @IsString()
   logoUrl?: string;
 }
+
+export class UpdateInvoiceDto {
+  @ApiPropertyOptional({ example: 'Updated Customer Name', description: 'Updated customer name' })
+  @IsOptional()
+  @IsString()
+  customerName?: string;
+
+  @ApiPropertyOptional({ example: '+1-555-0123', description: 'Updated customer phone' })
+  @IsOptional()
+  @IsString()
+  customerPhone?: string;
+
+  @ApiPropertyOptional({ example: 'customer@example.com', description: 'Updated customer email' })
+  @IsOptional()
+  @IsString()
+  customerMail?: string;
+
+  @ApiPropertyOptional({ example: 'https://customer.com', description: 'Updated customer website' })
+  @IsOptional()
+  @IsString()
+  customerWebsite?: string;
+
+  @ApiPropertyOptional({ example: '123 Customer St, City, State', description: 'Updated customer address' })
+  @IsOptional()
+  @IsString()
+  customerAddress?: string;
+
+  @ApiPropertyOptional({ example: '456 Shipping Ave, City, State', description: 'Updated shipping address' })
+  @IsOptional()
+  @IsString()
+  shippingAddress?: string;
+
+  @ApiPropertyOptional({ example: 'https://example.com/logo.png', description: 'Updated logo URL' })
+  @IsOptional()
+  @IsString()
+  logoUrl?: string;
+
+  @ApiPropertyOptional({
+    type: [CustomFieldDto],
+    description: 'Updated custom fields for the invoice',
+    example: [
+      { name: 'VAT Number', value: '987654321' },
+      { name: 'PO Number', value: 'PO-2025-002' },
+    ],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CustomFieldDto)
+  customFields?: CustomFieldDto[];
+}

@@ -13,10 +13,11 @@ import {
   businessInfoDto,
   CreateInvoiceDto,
   UpdateBusinessInfoDto,
+  UpdateInvoiceDto,
 } from './dto/invoice.dto';
 import { Invoice } from '@prisma/client';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { ResponseService } from '../common';
 import { BaseInvoiceController } from '../common/decorators/base-invoice.controller';
 import { InvoiceEndpoint } from '../common/decorators/invoice-endpoint.decorator';
@@ -98,6 +99,24 @@ export class InvoiceController extends BaseInvoiceController {
     return this.handleServiceOperation(
       () => this.invoiceService.getInvoicesByStore(storeId),
       'Invoices retrieved successfully',
+    );
+  }
+
+  @ApiOperation({ summary: 'Update an existing invoice' })
+  @ApiParam({ name: 'id', type: String, description: 'Invoice ID to update' })
+  @ApiBody({ type: UpdateInvoiceDto })
+  @ApiResponse({ status: 200, description: 'Invoice updated successfully' })
+  @ApiResponse({ status: 404, description: 'Invoice not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @Put(':id')
+  async updateInvoice(
+    @Param('id') id: string,
+    @Body() dto: UpdateInvoiceDto,
+    @Req() req: any,
+  ): Promise<Invoice> {
+    return this.handleServiceOperation(
+      () => this.invoiceService.updateInvoice(id, dto, req.user),
+      'Invoice updated successfully',
     );
   }
 }

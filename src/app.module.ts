@@ -15,6 +15,7 @@ import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 import { SaleModule } from './sale/sale.module';
 import { TaxModule } from './tax/tax.module';
 import { InvoiceModule } from './invoice/invoice.module';
+import { InvoiceDraftModule } from './invoice-draft/invoice-draft.module';
 import { HealthController } from './health/health.controller';
 import { ValidatorModule } from './validator/validator.module';
 import { DriverModule } from './driver/driver.module';
@@ -42,6 +43,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
     DatabaseModule,
     SaleModule,
     InvoiceModule,
+    InvoiceDraftModule,
     EmployeeModule,
     UsersModule,
     TaxModule,

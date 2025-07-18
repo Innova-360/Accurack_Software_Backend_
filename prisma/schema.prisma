@@ -29,6 +29,7 @@ model Clients {
   stores       Stores[]
   users        Users[]
   orderProcessing OrderProcessing[]
+  invoiceDrafts InvoiceDraft[]
 }
 
 model Users {
@@ -73,6 +74,11 @@ model Users {
   userRoles            UserRole[]
   drivenOrders         OrderProcessing[]     @relation("DriverOrders")
   validatedOrders      OrderProcessing[]     @relation("ValidatedOrders")
+  invoiceDrafts        InvoiceDraft[]
+  submittedDrafts      InvoiceDraft[]        @relation("SubmittedDrafts")
+  approvedDrafts       InvoiceDraft[]        @relation("ApprovedDrafts")
+  rejectedDrafts       InvoiceDraft[]        @relation("RejectedDrafts")
+  draftVersions        InvoiceDraftVersion[]
 }
 
 model Stores {
@@ -103,6 +109,7 @@ model Stores {
   users               UserStoreMap[]
   permissions         Permission[]
   orderProcessing     OrderProcessing[]
+  invoiceDrafts       InvoiceDraft[]
 }
 
 model Business {
@@ -163,6 +170,7 @@ model Customer {
   invoices        Invoice[]
   sales           Sales[]
   orderProcessing OrderProcessing[]
+  invoiceDrafts   InvoiceDraft[]
 }
 
 model Sales {
@@ -240,12 +248,107 @@ model Invoice {
   cashierName     String
   logoUrl         String?
   qrCode          String?
+  originalDraftId String?       // If created from draft
+  isConverted     Boolean       @default(false)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   customFields    CustomField[]
   business        Business      @relation(fields: [businessId], references: [id])
   customer        Customer      @relation(fields: [customerId], references: [id])
   sale            Sales         @relation(fields: [saleId], references: [id])
+  originalDraft   InvoiceDraft? @relation("DraftInvoices", fields: [originalDraftId], references: [id])
+  drafts          InvoiceDraft[] @relation("OriginalInvoice")
+}
+
+model InvoiceDraft {
+  id                String        @id @default(uuid())
+  storeId           String        // REQUIRED - references store
+  originalInvoiceId String?       // If converted from existing invoice
+  draftNumber       String        @unique
+  version           Int           @default(1)
+  status            DraftStatus   @default(DRAFT)
+  
+  // Invoice-specific fields (draftable)
+  notes             String?
+  dueDate           DateTime?
+  shippingAddress   String?
+  logoUrl           String?
+  customerId        String?       // Optional customer reference
+  totalAmount       Float?        // Draft-specific amount
+  netAmount         Float?        // Calculated
+  tax               Float?        // Draft-specific tax
+  paymentMethod     PaymentMethod?// Optional payment method
+  cashierName       String?       // Optional cashier
+  
+  // Approval workflow
+  submittedForApprovalAt DateTime?
+  submittedBy            String?
+  approvedAt             DateTime?
+  approvedBy             String?
+  rejectedAt             DateTime?
+  rejectedBy             String?
+  rejectionReason        String?
+  
+  // Metadata
+  userId          String
+  clientId        String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  store           Stores        @relation(fields: [storeId], references: [id])
+  originalInvoice Invoice?      @relation("OriginalInvoice", fields: [originalInvoiceId], references: [id])
+  customer        Customer?     @relation(fields: [customerId], references: [id])
+  user            Users         @relation(fields: [userId], references: [id])
+  submittedByUser Users?        @relation("SubmittedDrafts", fields: [submittedBy], references: [id])
+  approvedByUser  Users?        @relation("ApprovedDrafts", fields: [approvedBy], references: [id])
+  rejectedByUser  Users?        @relation("RejectedDrafts", fields: [rejectedBy], references: [id])
+  client          Clients?      @relation(fields: [clientId], references: [id])
+  customFields    InvoiceDraftCustomField[]
+  finalizedInvoices Invoice[]   @relation("DraftInvoices")
+  versions        InvoiceDraftVersion[]
+}
+
+model InvoiceDraftCustomField {
+  id         String        @id @default(uuid())
+  draftId    String
+  fieldName  String
+  fieldValue String
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  
+  // Relations
+  draft      InvoiceDraft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
+}
+
+model InvoiceDraftVersion {
+  id                String        @id @default(uuid())
+  draftId           String
+  version           Int
+  previousVersionId String?
+  
+  // Snapshot of draft data
+  notes             String?
+  dueDate           DateTime?
+  shippingAddress   String?
+  logoUrl           String?
+  customerId        String?
+  totalAmount       Float?
+  netAmount         Float?
+  tax               Float?
+  paymentMethod     PaymentMethod?
+  cashierName       String?
+  customFields      Json?
+  
+  // Metadata
+  createdBy         String
+  createdAt         DateTime      @default(now())
+  
+  // Relations
+  draft             InvoiceDraft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  previousVersion   InvoiceDraftVersion? @relation("VersionHistory", fields: [previousVersionId], references: [id])
+  nextVersion       InvoiceDraftVersion? @relation("VersionHistory")
+  createdByUser     Users         @relation(fields: [createdBy], references: [id])
 }
 
 model CustomField {
@@ -774,6 +877,13 @@ enum PaymentStatus {
 enum InvoiceSource {
   manual
   website
+}
+
+enum DraftStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
 }
 
 enum SaleConfirmation {

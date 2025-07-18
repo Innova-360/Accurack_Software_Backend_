@@ -365,4 +365,76 @@ export class InvoiceService {
       );
     }
   }
+
+  async updateInvoice(invoiceId: string, dto: any, user: User): Promise<Invoice> {
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    // 1. Check if invoice exists and user has access
+    const existingInvoice = await prisma.invoice.findFirst({
+      where: {
+        id: invoiceId,
+        // Add any access control logic here based on user/client
+      },
+      include: {
+        customFields: true,
+      },
+    });
+
+    if (!existingInvoice) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    // 2. Update invoice with provided fields
+    const updatedInvoice = await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        ...(dto.customerName && { customerName: dto.customerName }),
+        ...(dto.customerPhone && { customerPhone: dto.customerPhone }),
+        ...(dto.customerMail && { customerMail: dto.customerMail }),
+        ...(dto.customerWebsite && { customerWebsite: dto.customerWebsite }),
+        ...(dto.customerAddress && { customerAddress: dto.customerAddress }),
+        ...(dto.shippingAddress && { shippingAddress: dto.shippingAddress }),
+        ...(dto.logoUrl && { logoUrl: dto.logoUrl }),
+        updatedAt: new Date(),
+      },
+      include: {
+        sale: {
+          include: {
+            saleItems: {
+              include: {
+                product: true,
+              },
+            },
+          },
+        },
+        customer: true,
+        business: true,
+        customFields: true,
+      },
+    });
+
+    // 3. Update custom fields if provided
+    if (dto.customFields !== undefined) {
+      // Delete existing custom fields
+      await prisma.customField.deleteMany({
+        where: { invoiceId },
+      });
+
+      // Create new custom fields
+      if (dto.customFields.length > 0) {
+        await prisma.customField.createMany({
+          data: dto.customFields.map((field: any) => ({
+            invoiceId,
+            fieldName: field.name,
+            fieldValue: field.value,
+          })),
+        });
+      }
+
+      // Refetch with updated custom fields
+      return this.getInvoice(invoiceId);
+    }
+
+    return updatedInvoice;
+  }
 }
