@@ -157,6 +157,7 @@ export class InvoiceService {
       });
     }
 
+
     const { logoUrl } = user.business || {};
 
     // Fetch sale with related data
@@ -196,12 +197,13 @@ export class InvoiceService {
     });
 
     // Create invoice
+    // `INV-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
     const invoice = await prisma.invoice.create({
       data: {
         saleId,
         customerId: sale.customerId,
         businessId: userExist.businessId,
-        invoiceNumber: `INV-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        invoiceNumber: dto.invoiceNumber,
         customerName: sale.customer.customerName,
         customerPhone: sale.customer.phoneNumber,
         customerMail: sale.customer.customerMail || undefined,

@@ -17,6 +17,11 @@ export class CreateInvoiceDto {
   @IsString()
   saleId: string;
 
+  //adding invoincenumbe dto
+  @ApiProperty({ example: 'INV-2025-001', description: 'Invoice number' })
+  @IsString()
+  invoiceNumber: string;
+
   // @ApiProperty({ example: 'business-uuid-456', description: 'Business ID for the invoice' })
   // @IsString()
   // businessId: string;
