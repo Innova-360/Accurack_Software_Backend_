@@ -347,7 +347,7 @@ model InvoiceDraftVersion {
   // Relations
   draft             InvoiceDraft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
   previousVersion   InvoiceDraftVersion? @relation("VersionHistory", fields: [previousVersionId], references: [id])
-  nextVersions      InvoiceDraftVersion[] @relation("VersionHistory")
+  nextVersion       InvoiceDraftVersion? @relation("VersionHistory")
   createdByUser     Users         @relation(fields: [createdBy], references: [id])
 }
 

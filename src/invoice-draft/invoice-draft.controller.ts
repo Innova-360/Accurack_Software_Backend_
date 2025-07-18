@@ -10,10 +10,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { InvoiceDraftService } from './invoice-draft.service';
-import { InvoiceDraftVersionService } from './invoice-draft-version.service';
 import {
   CreateInvoiceDraftDto,
   UpdateInvoiceDraftDto,
@@ -21,53 +18,162 @@ import {
   SubmitDraftDto,
   ApproveDraftDto,
   RejectDraftDto,
+  ConvertToDraftDto,
 } from './dto/invoice-draft.dto';
-import { ResponseService } from '../common';
-import { BaseInvoiceController } from '../common/decorators/base-invoice.controller';
-import { InvoiceDraftEndpoint } from '../common/decorators/invoice-draft-endpoint.decorator';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiBody,
+  ApiQuery,
+} from '@nestjs/swagger';
+import { BaseAuthController, ResponseService } from '../common';
 
 @ApiTags('invoice-drafts')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
-@Controller('invoice-drafts')
-export class InvoiceDraftController extends BaseInvoiceController {
+@Controller({ path: 'invoice-drafts', version: '1' })
+@UseGuards(JwtAuthGuard)
+export class InvoiceDraftController extends BaseAuthController {
   constructor(
-    private invoiceDraftService: InvoiceDraftService,
-    private versionService: InvoiceDraftVersionService,
-    protected responseService: ResponseService,
+    private readonly invoiceDraftService: InvoiceDraftService,
+    responseService: ResponseService,
   ) {
     super(responseService);
   }
 
-  @InvoiceDraftEndpoint.CreateDraft(CreateInvoiceDraftDto)
+  @ApiOperation({ summary: 'Create a new invoice draft' })
+  @ApiBody({ type: CreateInvoiceDraftDto })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Invoice draft created successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Invoice draft created successfully',
+        data: {
+          id: 'draft-uuid-123',
+          draftNumber: 'DRAFT-20250718-001',
+          version: 1,
+          status: 'DRAFT',
+          storeId: 'store-uuid-123',
+          totalAmount: 1500.0,
+          // ... other draft fields
+        },
+        status: 201,
+        timestamp: '2025-07-18T10:00:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - validation failed' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Store or customer not found' })
   @Post()
   async createDraft(@Body() dto: CreateInvoiceDraftDto, @Req() req: any) {
     return this.handleServiceOperation(
       () => this.invoiceDraftService.createDraft(dto, req.user),
-      'Draft created successfully',
+      'Invoice draft created successfully',
       201,
     );
   }
 
-  @InvoiceDraftEndpoint.GetDrafts()
+  @ApiOperation({ summary: 'Get all invoice drafts with filtering and pagination' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 20)' })
+  @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED'], description: 'Filter by status' })
+  @ApiQuery({ name: 'storeId', required: false, type: String, description: 'Filter by store ID' })
+  @ApiQuery({ name: 'customerId', required: false, type: String, description: 'Filter by customer ID' })
+  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'Filter from date (ISO string)' })
+  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'Filter to date (ISO string)' })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search in draft number, customer name, or notes' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Invoice drafts retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Invoice drafts retrieved successfully',
+        data: {
+          drafts: [],
+          total: 0,
+          page: 1,
+          limit: 20,
+          totalPages: 0
+        },
+        status: 200,
+        timestamp: '2025-07-18T10:00:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
   @Get()
   async getDrafts(@Query() dto: GetDraftsDto, @Req() req: any) {
     return this.handleServiceOperation(
       () => this.invoiceDraftService.getDrafts(dto, req.user),
-      'Drafts retrieved successfully',
+      'Invoice drafts retrieved successfully',
     );
   }
 
-  @InvoiceDraftEndpoint.GetDraft()
+  @ApiOperation({ summary: 'Get a specific invoice draft by ID' })
+  @ApiParam({ name: 'id', type: String, description: 'Invoice draft ID' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Invoice draft retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Invoice draft retrieved successfully',
+        data: {
+          id: 'draft-uuid-123',
+          draftNumber: 'DRAFT-20250718-001',
+          version: 1,
+          status: 'DRAFT',
+          // ... full draft details with relations
+        },
+        status: 200,
+        timestamp: '2025-07-18T10:00:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Invoice draft not found' })
   @Get(':id')
   async getDraft(@Param('id') id: string, @Req() req: any) {
     return this.handleServiceOperation(
       () => this.invoiceDraftService.getDraft(id, req.user),
-      'Draft retrieved successfully',
+      'Invoice draft retrieved successfully',
     );
   }
 
-  @InvoiceDraftEndpoint.UpdateDraft(UpdateInvoiceDraftDto)
+  @ApiOperation({ summary: 'Update an existing invoice draft' })
+  @ApiParam({ name: 'id', type: String, description: 'Invoice draft ID' })
+  @ApiBody({ type: UpdateInvoiceDraftDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Invoice draft updated successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Invoice draft updated successfully',
+        data: {
+          id: 'draft-uuid-123',
+          version: 2,
+          // ... updated draft fields
+        },
+        status: 200,
+        timestamp: '2025-07-18T10:00:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - validation failed or draft cannot be updated' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Invoice draft not found' })
   @Put(':id')
   async updateDraft(
     @Param('id') id: string,
@@ -76,33 +182,107 @@ export class InvoiceDraftController extends BaseInvoiceController {
   ) {
     return this.handleServiceOperation(
       () => this.invoiceDraftService.updateDraft(id, dto, req.user),
-      'Draft updated successfully',
+      'Invoice draft updated successfully',
     );
   }
 
-  @InvoiceDraftEndpoint.DeleteDraft()
+  @ApiOperation({ summary: 'Delete an invoice draft' })
+  @ApiParam({ name: 'id', type: String, description: 'Invoice draft ID' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Invoice draft deleted successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Invoice draft deleted successfully',
+        data: {
+          message: 'Draft deleted successfully'
+        },
+        status: 200,
+        timestamp: '2025-07-18T10:00:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - draft cannot be deleted' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Invoice draft not found' })
   @Delete(':id')
   async deleteDraft(@Param('id') id: string, @Req() req: any) {
     return this.handleServiceOperation(
       () => this.invoiceDraftService.deleteDraft(id, req.user),
-      'Draft deleted successfully',
+      'Invoice draft deleted successfully',
     );
   }
 
-  @InvoiceDraftEndpoint.SubmitDraft(SubmitDraftDto)
+  @ApiOperation({ summary: 'Submit invoice draft for approval' })
+  @ApiParam({ name: 'id', type: String, description: 'Invoice draft ID' })
+  @ApiBody({ type: SubmitDraftDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Invoice draft submitted for approval',
+    schema: {
+      example: {
+        success: true,
+        message: 'Invoice draft submitted for approval',
+        data: {
+          message: 'Draft submitted for approval',
+          draft: {
+            id: 'draft-uuid-123',
+            status: 'PENDING_APPROVAL',
+            submittedForApprovalAt: '2025-07-18T10:00:00Z',
+            // ... other fields
+          }
+        },
+        status: 200,
+        timestamp: '2025-07-18T10:00:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - draft cannot be submitted' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Invoice draft not found' })
   @Post(':id/submit')
-  async submitDraft(
+  async submitForApproval(
     @Param('id') id: string,
     @Body() dto: SubmitDraftDto,
     @Req() req: any,
   ) {
     return this.handleServiceOperation(
-      () => this.invoiceDraftService.submitDraft(id, dto, req.user),
-      'Draft submitted for approval',
+      () => this.invoiceDraftService.submitForApproval(id, dto, req.user),
+      'Invoice draft submitted for approval',
     );
   }
 
-  @InvoiceDraftEndpoint.ApproveDraft(ApproveDraftDto)
+  @ApiOperation({ summary: 'Approve an invoice draft' })
+  @ApiParam({ name: 'id', type: String, description: 'Invoice draft ID' })
+  @ApiBody({ type: ApproveDraftDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Invoice draft approved successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Invoice draft approved successfully',
+        data: {
+          message: 'Draft approved',
+          draft: {
+            id: 'draft-uuid-123',
+            status: 'APPROVED',
+            approvedAt: '2025-07-18T10:00:00Z',
+            // ... other fields
+          }
+        },
+        status: 200,
+        timestamp: '2025-07-18T10:00:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - draft cannot be approved' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Invoice draft not found' })
   @Post(':id/approve')
   async approveDraft(
     @Param('id') id: string,
@@ -111,11 +291,39 @@ export class InvoiceDraftController extends BaseInvoiceController {
   ) {
     return this.handleServiceOperation(
       () => this.invoiceDraftService.approveDraft(id, dto, req.user),
-      'Draft approved successfully',
+      'Invoice draft approved and invoice created successfully',
     );
   }
 
-  @InvoiceDraftEndpoint.RejectDraft(RejectDraftDto)
+  @ApiOperation({ summary: 'Reject an invoice draft' })
+  @ApiParam({ name: 'id', type: String, description: 'Invoice draft ID' })
+  @ApiBody({ type: RejectDraftDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Invoice draft rejected',
+    schema: {
+      example: {
+        success: true,
+        message: 'Invoice draft rejected',
+        data: {
+          message: 'Draft rejected',
+          draft: {
+            id: 'draft-uuid-123',
+            status: 'REJECTED',
+            rejectedAt: '2025-07-18T10:00:00Z',
+            rejectionReason: 'Missing required information',
+            // ... other fields
+          }
+        },
+        status: 200,
+        timestamp: '2025-07-18T10:00:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - draft cannot be rejected' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Invoice draft not found' })
   @Post(':id/reject')
   async rejectDraft(
     @Param('id') id: string,
@@ -124,65 +332,49 @@ export class InvoiceDraftController extends BaseInvoiceController {
   ) {
     return this.handleServiceOperation(
       () => this.invoiceDraftService.rejectDraft(id, dto, req.user),
-      'Draft rejected',
+      'Invoice draft rejected',
     );
   }
 
-  @InvoiceDraftEndpoint.GetVersionHistory()
-  @Get(':id/versions')
-  async getVersionHistory(@Param('id') id: string, @Req() req: any) {
-    return this.handleServiceOperation(
-      () => this.versionService.getVersionHistory(id, req.user),
-      'Version history retrieved successfully',
-    );
-  }
-
-  @InvoiceDraftEndpoint.RevertToVersion()
-  @Post(':id/revert/:versionId')
-  async revertToVersion(
-    @Param('id') id: string,
-    @Param('versionId') versionId: string,
+  @ApiOperation({ summary: 'Convert an existing invoice to draft' })
+  @ApiParam({ name: 'invoiceId', type: String, description: 'Original invoice ID' })
+  @ApiBody({ type: ConvertToDraftDto })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Invoice converted to draft successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Invoice converted to draft successfully',
+        data: {
+          message: 'Invoice converted to draft successfully',
+          draft: {
+            id: 'draft-uuid-123',
+            draftNumber: 'DRAFT-20250718-001',
+            originalInvoiceId: 'invoice-uuid-456',
+            status: 'DRAFT',
+            // ... other draft fields
+          }
+        },
+        status: 201,
+        timestamp: '2025-07-18T10:00:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - invoice already converted or invalid' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Invoice not found' })
+  @Post('convert/:invoiceId')
+  async convertInvoiceToDraft(
+    @Param('invoiceId') invoiceId: string,
+    @Body() dto: ConvertToDraftDto,
     @Req() req: any,
   ) {
     return this.handleServiceOperation(
-      () => this.versionService.revertToVersion(id, versionId, req.user),
-      'Draft reverted to previous version',
-    );
-  }
-
-  @InvoiceDraftEndpoint.CompareVersions()
-  @Get(':id/versions/compare/:version1Id/:version2Id')
-  async compareVersions(
-    @Param('id') id: string,
-    @Param('version1Id') version1Id: string,
-    @Param('version2Id') version2Id: string,
-    @Req() req: any,
-  ) {
-    return this.handleServiceOperation(
-      () => this.versionService.compareVersions(id, version1Id, version2Id, req.user),
-      'Version comparison completed',
-    );
-  }
-
-  @InvoiceDraftEndpoint.FinalizeDraft(ApproveDraftDto)
-  @Post(':id/finalize')
-  async finalizeDraft(
-    @Param('id') id: string,
-    @Body() dto: ApproveDraftDto,
-    @Req() req: any,
-  ) {
-    return this.handleServiceOperation(
-      () => this.invoiceDraftService.finalizeDraft(id, dto, req.user),
-      'Invoice created successfully',
-    );
-  }
-
-  @InvoiceDraftEndpoint.GetDraft()
-  @Get(':id/status')
-  async getDraftStatus(@Param('id') id: string, @Req() req: any) {
-    return this.handleServiceOperation(
-      () => this.invoiceDraftService.getDraftStatus(id, req.user),
-      'Draft status retrieved successfully',
+      () => this.invoiceDraftService.convertInvoiceToDraft(invoiceId, dto, req.user),
+      'Invoice converted to draft successfully',
+      201,
     );
   }
 }

@@ -1,15 +1,14 @@
 import { Module } from '@nestjs/common';
-import { PassportModule } from '@nestjs/passport';
-import { JwtModule } from '@nestjs/jwt';
 import { InvoiceDraftController } from './invoice-draft.controller';
 import { InvoiceDraftService } from './invoice-draft.service';
 import { InvoiceDraftVersionService } from './invoice-draft-version.service';
 import { PrismaClientService } from '../prisma-client/prisma-client.service';
-import { PrismaClientModule } from '../prisma-client/prisma-client.module';
-import { JwtStrategy } from '../strategies/jwt.strategy';
-import { PermissionsService, ResponseService } from '../common';
-import { TenantModule } from '../tenant/tenant.module';
-import { InvoiceModule } from '../invoice/invoice.module';
+import { PrismaClientModule } from 'src/prisma-client/prisma-client.module';
+import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
+import { JwtStrategy } from 'src/strategies/jwt.strategy';
+import { PermissionsService, ResponseService } from 'src/common';
+import { TenantModule } from 'src/tenant/tenant.module';
 
 @Module({
   imports: [
@@ -20,7 +19,6 @@ import { InvoiceModule } from '../invoice/invoice.module';
     }),
     PrismaClientModule,
     TenantModule,
-    InvoiceModule, // Import InvoiceModule to access InvoiceService
   ],
   controllers: [InvoiceDraftController],
   providers: [

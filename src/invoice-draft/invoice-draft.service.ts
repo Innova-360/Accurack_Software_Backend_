@@ -289,43 +289,6 @@ export class InvoiceDraftService {
     };
   }
 
-  // Alias method for controller consistency
-  async submitDraft(draftId: string, dto: SubmitDraftDto, user: User) {
-    return this.submitForApproval(draftId, dto, user);
-  }
-
-  async approveDraft(draftId: string, dto: ApproveDraftDto, user: User) {
-    const prisma = await this.tenantContext.getPrismaClient();
-
-    // 1. Get and validate draft
-    const draft = await this.getDraft(draftId, user);
-    this.validateDraftApprovable(draft);
-
-    // 2. Update draft status to approved
-    const updatedDraft = await prisma.invoiceDraft.update({
-      where: { id: draftId },
-      data: {
-        status: DraftStatus.APPROVED,
-        approvedAt: new Date(),
-        approvedBy: user.id,
-      },
-      include: {
-        store: true,
-        customer: true,
-        customFields: true,
-        approvedByUser: { select: { id: true, firstName: true, lastName: true } },
-      },
-    });
-
-    // TODO: Create invoice from approved draft
-    // This will be implemented when integrating with the invoice service
-    
-    return {
-      message: 'Draft approved successfully',
-      draft: updatedDraft,
-    };
-  }
-
   async rejectDraft(draftId: string, dto: RejectDraftDto, user: User) {
     const prisma = await this.tenantContext.getPrismaClient();
 
@@ -388,13 +351,10 @@ export class InvoiceDraftService {
     // 4. Create draft with invoice data
     const draft = await prisma.invoiceDraft.create({
       data: {
-        storeId: invoice.sale.storeId,
-        originalInvoiceId: invoice.id,
         draftNumber,
         version: 1,
         status: DraftStatus.DRAFT,
         notes: dto.notes,
-        customerId: invoice.customerId,
         totalAmount: invoice.totalAmount,
         netAmount: invoice.netAmount,
         tax: invoice.tax,
@@ -402,8 +362,11 @@ export class InvoiceDraftService {
         cashierName: invoice.cashierName,
         shippingAddress: invoice.shippingAddress,
         logoUrl: invoice.logoUrl,
-        userId: user.id,
-        clientId: user.clientId,
+        store: { connect: { id: invoice.sale.storeId } },
+        originalInvoice: { connect: { id: invoice.id } },
+        user: { connect: { id: user.id } },
+        ...(user.clientId && { client: { connect: { id: user.clientId } } }),
+        ...(invoice.customerId && { customer: { connect: { id: invoice.customerId } } }),
         customFields: {
           create: invoice.customFields.map((field) => ({
             fieldName: field.fieldName,
@@ -425,114 +388,122 @@ export class InvoiceDraftService {
     };
   }
 
-  async finalizeDraft(draftId: string, dto: ApproveDraftDto, user: User) {
+  async approveDraft(draftId: string, dto: ApproveDraftDto, user: User) {
     const prisma = await this.tenantContext.getPrismaClient();
 
-    try {
-      // 1. Get and validate draft
-      const draft = await this.getDraft(draftId, user);
-      
-      // Log current status for debugging
-      console.log(`[FinalizeDraft] Draft ${draftId} current status: ${draft.status}`);
-      
-      // Simple validation: only allow DRAFT status
-      if (draft.status !== DraftStatus.DRAFT) {
-        if (draft.status === DraftStatus.APPROVED) {
-          throw new BadRequestException(
-            'This draft has already been finalized and an invoice was created. Check your invoices list.'
-          );
-        }
-        
-        throw new BadRequestException(
-          `Cannot finalize draft with status ${draft.status}. Only drafts with DRAFT status can be finalized.`
-        );
-      }
-
-      // 2. Create invoice from draft
-      const { InvoiceService } = await import('../invoice/invoice.service');
-      const invoiceService = new InvoiceService(this.prisma, this.tenantContext);
-      
-      console.log(`[FinalizeDraft] Creating invoice from draft ${draftId}`);
-      const invoice = await invoiceService.createInvoiceFromDraft(draft, user);
-      console.log(`[FinalizeDraft] Invoice created: ${invoice?.id || 'N/A'}`);
-
-      // 3. Update draft status to approved
-      const updatedDraft = await prisma.invoiceDraft.update({
-        where: { id: draftId },
-        data: {
-          status: DraftStatus.APPROVED,
-          approvedAt: new Date(),
-          approvedBy: user.id,
-        },
-        include: {
-          store: true,
-          customer: true,
-          customFields: true,
-          approvedByUser: { select: { id: true, firstName: true, lastName: true } },
-        },
-      });
-
-      console.log(`[FinalizeDraft] Draft ${draftId} finalized successfully`);
-
-      return {
-        message: 'Invoice created successfully from draft',
-        draft: updatedDraft,
-        invoice: invoice,
-      };
-    } catch (error) {
-      console.error('Error finalizing draft:', error);
-      
-      if (error instanceof BadRequestException || error instanceof NotFoundException) {
-        throw error;
-      }
-
-      throw new BadRequestException(
-        'Failed to create invoice from draft: ' + (error.message || 'Unknown error')
-      );
-    }
-  }
-
-  async getDraftStatus(draftId: string, user: User) {
+    // 1. Get and validate draft
     const draft = await this.getDraft(draftId, user);
-    
-    const availableActions = this.getAvailableActions(draft.status);
-    
+    this.validateDraftApprovable(draft);
+
+    // 2. Check if user has business information (required for invoice creation)
+    const userWithBusiness = await prisma.users.findFirst({
+      where: { id: user.id },
+      include: { business: true },
+    });
+
+    if (!userWithBusiness || !userWithBusiness.businessId) {
+      throw new BadRequestException({
+        message: 'Please fill in all required business details to continue. Business name, contact number, and address are mandatory.',
+        showBusinessForm: true,
+        requiredFields: ['businessName', 'contactNo', 'address'],
+        error: 'BUSINESS_INFO_REQUIRED',
+      });
+    }
+
+    // 3. Create a sale first (invoice creation requires a sale)
+    // For drafts without customers, we'll need to handle this case
+    if (!draft.customerId) {
+      throw new BadRequestException('Cannot approve draft without a customer. Please assign a customer to the draft first.');
+    }
+
+    const sale = await prisma.sales.create({
+      data: {
+        storeId: draft.storeId,
+        customerId: draft.customerId,
+        totalAmount: draft.totalAmount || 0,
+        tax: draft.tax || 0,
+        paymentMethod: draft.paymentMethod || 'CASH',
+        cashierName: draft.cashierName || 'System',
+        status: 'COMPLETED',
+        allowance: 0,
+        quantitySend: 0,
+        userId: user.id,
+        clientId: user.clientId,
+      },
+    });
+
+    // 4. Generate QR code for invoice
+    const qrCodeData = `Invoice:${sale.id}:${new Date().toISOString()}`;
+    const QRCode = require('qrcode');
+    const qrCode = await new Promise<string>((resolve, reject) => {
+      QRCode.toDataURL(qrCodeData, { width: 128, margin: 1 }, (err: any, url: string) => {
+        if (err) reject(err);
+        resolve(url);
+      });
+    });
+
+    // 5. Create invoice from the approved draft
+    const invoice = await prisma.invoice.create({
+      data: {
+        saleId: sale.id,
+        customerId: draft.customerId!, // We already validated this exists above
+        businessId: userWithBusiness.businessId,
+        invoiceNumber: `INV-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        customerName: draft.customer?.customerName || 'Guest',
+        customerPhone: draft.customer?.phoneNumber || '',
+        customerMail: draft.customer?.customerMail || undefined,
+        customerWebsite: draft.customer?.website || undefined,
+        customerAddress: draft.customer?.customerAddress || undefined,
+        businessName: userWithBusiness.business?.businessName || '',
+        businessContact: userWithBusiness.business?.contactNo || '',
+        businessWebsite: userWithBusiness.business?.website || undefined,
+        businessAddress: userWithBusiness.business?.address || undefined,
+        shippingAddress: draft.shippingAddress || draft.customer?.customerAddress || undefined,
+        paymentMethod: draft.paymentMethod || 'CASH',
+        totalAmount: draft.totalAmount || 0,
+        netAmount: draft.netAmount || 0,
+        tax: draft.tax || 0,
+        status: 'COMPLETED',
+        cashierName: draft.cashierName || 'System',
+        logoUrl: draft.logoUrl || userWithBusiness.business?.logoUrl || undefined,
+        qrCode,
+        customFields: {
+          create: draft.customFields?.map((field) => ({
+            fieldName: field.fieldName,
+            fieldValue: field.fieldValue,
+          })) || [],
+        },
+        originalDraftId: draft.id, // Link the invoice to the draft
+      },
+      include: {
+        sale: true,
+        customer: true,
+        business: true,
+        customFields: true,
+      },
+    });
+
+    // 6. Update draft status to approved
+    const updatedDraft = await prisma.invoiceDraft.update({
+      where: { id: draftId },
+      data: {
+        status: DraftStatus.APPROVED,
+        approvedAt: new Date(),
+        approvedBy: user.id,
+      },
+      include: {
+        store: true,
+        customer: true,
+        customFields: true,
+        approvedByUser: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
     return {
-      draftId: draft.id,
-      currentStatus: draft.status,
-      availableActions,
-      statusDescription: this.getStatusDescription(draft.status),
+      message: 'Draft approved and invoice created successfully',
+      draft: updatedDraft,
+      invoice,
     };
-  }
-
-  private getAvailableActions(status: DraftStatus): string[] {
-    switch (status) {
-      case DraftStatus.DRAFT:
-        return ['edit', 'delete', 'submit', 'finalize'];
-      case DraftStatus.PENDING_APPROVAL:
-        return ['approve', 'reject', 'view'];
-      case DraftStatus.APPROVED:
-        return ['view', 'convert-to-new-draft'];
-      case DraftStatus.REJECTED:
-        return ['edit', 'delete', 'resubmit', 'view'];
-      default:
-        return ['view'];
-    }
-  }
-
-  private getStatusDescription(status: DraftStatus): string {
-    switch (status) {
-      case DraftStatus.DRAFT:
-        return 'Draft is ready for editing or finalization';
-      case DraftStatus.PENDING_APPROVAL:
-        return 'Draft is waiting for approval';
-      case DraftStatus.APPROVED:
-        return 'Draft has been approved and invoice created';
-      case DraftStatus.REJECTED:
-        return 'Draft was rejected and needs revisions';
-      default:
-        return `Draft has ${status} status`;
-    }
   }
 
   // Helper methods
@@ -599,29 +570,13 @@ export class InvoiceDraftService {
 
   private validateDraftSubmittable(draft: any) {
     if (draft.status !== DraftStatus.DRAFT) {
-      const statusMessage = draft.status === DraftStatus.PENDING_APPROVAL
-        ? 'Draft is already pending approval.'
-        : draft.status === DraftStatus.APPROVED
-        ? 'Draft is already approved.'
-        : draft.status === DraftStatus.REJECTED
-        ? 'Draft was rejected. Revert to DRAFT status first.'
-        : `Draft has ${draft.status} status.`;
-      
-      throw new BadRequestException(
-        `Only drafts with DRAFT status can be submitted for approval. ${statusMessage}`
-      );
+      throw new BadRequestException('Only drafts with DRAFT status can be submitted for approval');
     }
   }
 
   private validateDraftApprovable(draft: any) {
     if (draft.status !== DraftStatus.PENDING_APPROVAL) {
-      const statusMessage = draft.status === DraftStatus.DRAFT 
-        ? 'Draft has DRAFT status. Use the /finalize endpoint to create an invoice directly, or submit the draft for approval first.'
-        : `Draft has ${draft.status} status.`;
-      
-      throw new BadRequestException(
-        `Only drafts with PENDING_APPROVAL status can be approved or rejected. ${statusMessage}`
-      );
+      throw new BadRequestException('Only drafts with PENDING_APPROVAL status can be approved or rejected');
     }
   }
 }
