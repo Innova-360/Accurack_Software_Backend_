@@ -67,6 +67,18 @@ export class AuthController extends BaseAuthController {
       }
 
       if (!req.user) {
+        // Set Google profile cookie for signup pre-fill
+        res.cookie('googleSignup', JSON.stringify({
+          email: req.user?.email || '',
+          firstName: req.user?.firstName || '',
+          lastName: req.user?.lastName || '',
+          picture: req.user?.picture || '',
+        }), {
+          httpOnly: false,
+          secure: isProduction,
+          sameSite: isProduction ? 'none' : 'lax',
+          maxAge: 5 * 60 * 1000, // 5 minutes
+        });
         redirectUrl = `${redirectUrl}/signup`;
         return res.redirect(redirectUrl);
       }
@@ -74,6 +86,18 @@ export class AuthController extends BaseAuthController {
       const { access_token, refresh_token } =
         await this.authService.googleLogin(req.user);
       if (!access_token || !refresh_token) {
+        // Set Google profile cookie for signup pre-fill
+        res.cookie('googleSignup', JSON.stringify({
+          email: req.user?.email || '',
+          firstName: req.user?.firstName || '',
+          lastName: req.user?.lastName || '',
+          picture: req.user?.picture || '',
+        }), {
+          httpOnly: false,
+          secure: isProduction,
+          sameSite: isProduction ? 'none' : 'lax',
+          maxAge: 5 * 60 * 1000, // 5 minutes
+        });
         redirectUrl = `${redirectUrl}/signup`;
         return res.redirect(redirectUrl);
       }
@@ -92,6 +116,20 @@ export class AuthController extends BaseAuthController {
       return res.redirect(redirectUrl);
     } catch (error) {
       console.error('Google Auth Error:', error);
+      // Try to set Google profile cookie if available
+      if (req.user) {
+        res.cookie('googleSignup', JSON.stringify({
+          email: req.user?.email || '',
+          firstName: req.user?.firstName || '',
+          lastName: req.user?.lastName || '',
+          picture: req.user?.picture || '',
+        }), {
+          httpOnly: false,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+          maxAge: 5 * 60 * 1000, // 5 minutes
+        });
+      }
       const redirectUrl = process.env.FRONTEND_URL
         ? `${process.env.FRONTEND_URL}/signup`
         : 'http://localhost:5173/signup';
