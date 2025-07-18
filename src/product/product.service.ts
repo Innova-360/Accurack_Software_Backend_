@@ -169,6 +169,10 @@ export class ProductService {
     return {
       id: product.id,
       name: product.name,
+      description: product.description,
+      brandName: product.brandName,
+      location: product.location,
+      attributes: product.attributes || [],
       categoryId: product.categoryId,
       ean: product.ean,
       pluUpc: product.pluUpc,
@@ -310,6 +314,9 @@ export class ProductService {
     try {
       const createData: any = {
         name: createProductDto.name,
+        description: createProductDto.description || null,
+        brandName: createProductDto.brandName || null,
+        location: createProductDto.location || null,
         ean: createProductDto.ean || null,
         sku: createProductDto.sku || null,
         itemQuantity: createProductDto.itemQuantity,
@@ -322,6 +329,10 @@ export class ProductService {
         hasVariants: createProductDto.hasVariants || false,
         packIds: [],
         variants: [],
+        // Add attributes only when hasVariants is false and attributes are provided
+        attributes: (!createProductDto.hasVariants && createProductDto.attributes) 
+          ? createProductDto.attributes 
+          : [],
         // Use categoryId directly
         ...(createProductDto.categoryId && {
           categoryId: createProductDto.categoryId,
@@ -1101,11 +1112,25 @@ export class ProductService {
 
       if (updateProductDto.name !== undefined)
         updateData.name = updateProductDto.name;
+      if (updateProductDto.description !== undefined)
+        updateData.description = updateProductDto.description;
+      if (updateProductDto.brandName !== undefined)
+        updateData.brandName = updateProductDto.brandName;
+      if (updateProductDto.location !== undefined)
+        updateData.location = updateProductDto.location;
       if (updateProductDto.categoryId !== undefined) {
         updateData.category = {
           connect: { id: updateProductDto.categoryId },
         };
       }
+      
+      // Handle attributes update - only for non-variant products
+      if (updateProductDto.attributes !== undefined) {
+        if (updateProductDto.hasVariants === false || (updateProductDto.hasVariants === undefined && !product.hasVariants)) {
+          updateData.attributes = updateProductDto.attributes || [];
+        }
+      }
+
       if (updateProductDto.ean !== undefined)
         updateData.ean = updateProductDto.ean;
       if (updateProductDto.sku !== undefined)
@@ -2851,6 +2876,200 @@ export class ProductService {
         product: this.formatProductResponse(updatedProduct),
         updatedVariant: updatedVariants[variantIndex],
       },
+    };
+  }
+
+  /**
+   * Delete a single variant by PLU/UPC
+   */
+  async deleteVariant(pluUpc: string, user: any) {
+    this.validateProductOperationPermissions(user, 'delete');
+    
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    // Build where clause based on user permissions
+    let where: any = {};
+    if (user.role !== 'super_admin') {
+      where.clientId = user.clientId;
+      if (user.storeId) {
+        where.storeId = user.storeId;
+      }
+    }
+
+    // Find the product that contains this variant
+    const products = await prisma.products.findMany({
+      where: {
+        ...where,
+        hasVariants: true,
+      },
+    });
+
+    let targetProduct: any = null;
+    let variantIndex = -1;
+    let foundVariant: any = null;
+
+    for (const product of products) {
+      const variants = product.variants as any[];
+      const index = variants.findIndex((variant: any) => variant.pluUpc === pluUpc);
+      if (index !== -1) {
+        targetProduct = product;
+        variantIndex = index;
+        foundVariant = variants[index];
+        break;
+      }
+    }
+
+    if (!targetProduct || variantIndex === -1) {
+      throw new NotFoundException(`Variant with PLU/UPC '${pluUpc}' not found`);
+    }
+
+    // Remove the variant from the variants array
+    const variants = targetProduct.variants as any[];
+    const updatedVariants = variants.filter((variant: any) => variant.pluUpc !== pluUpc);
+
+    // Update the product with the modified variants
+    await prisma.products.update({
+      where: { id: targetProduct.id },
+      data: {
+        variants: updatedVariants,
+      },
+    });
+
+    return {
+      success: true,
+      message: `Variant with PLU/UPC '${pluUpc}' has been deleted`,
+      deletedVariantPluUpc: pluUpc,
+      deletedVariant: foundVariant,
+    };
+  }
+
+  /**
+   * Delete selected variants by PLU/UPC (bulk operation)
+   */
+  async deleteSelectedVariants(pluUpcList: string[], user: any) {
+    this.validateProductOperationPermissions(user, 'delete');
+    
+    if (!pluUpcList || pluUpcList.length === 0) {
+      throw new BadRequestException('PLU/UPC list cannot be empty');
+    }
+
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    // Build where clause based on user permissions
+    let where: any = {};
+    if (user.role !== 'super_admin') {
+      where.clientId = user.clientId;
+      if (user.storeId) {
+        where.storeId = user.storeId;
+      }
+    }
+
+    // Find all products with variants
+    const productsWithVariants = await prisma.products.findMany({
+      where: {
+        ...where,
+        hasVariants: true,
+      },
+    });
+
+    if (productsWithVariants.length === 0) {
+      return {
+        success: true,
+        message: 'No products with variants found',
+        deletedCount: 0,
+        deletedVariants: [],
+        affectedProducts: [],
+      };
+    }
+
+    let totalDeletedVariants = 0;
+    const deletedVariants: any[] = [];
+    const affectedProductIds: string[] = [];
+
+    // Process each product to remove matching variants
+    for (const product of productsWithVariants) {
+      const variants = product.variants as any[];
+      const originalVariantCount = variants.length;
+      
+      // Filter out variants that match the PLU/UPC list
+      const variantsToDelete = variants.filter((variant: any) => 
+        pluUpcList.includes(variant.pluUpc)
+      );
+      
+      const updatedVariants = variants.filter((variant: any) => 
+        !pluUpcList.includes(variant.pluUpc)
+      );
+
+      // Only update if variants were actually removed
+      if (variantsToDelete.length > 0) {
+        await prisma.products.update({
+          where: { id: product.id },
+          data: {
+            variants: updatedVariants,
+            // If no variants remain, set hasVariants to false
+            hasVariants: updatedVariants.length > 0,
+          },
+        });
+
+        totalDeletedVariants += variantsToDelete.length;
+        deletedVariants.push(...variantsToDelete);
+        affectedProductIds.push(product.id);
+      }
+    }
+
+    // Check for PLU/UPCs that were not found
+    const foundPluUpcs = deletedVariants.map(v => v.pluUpc);
+    const notFoundPluUpcs = pluUpcList.filter(plu => !foundPluUpcs.includes(plu));
+
+    return {
+      success: true,
+      message: `Successfully deleted ${totalDeletedVariants} variants`,
+      deletedCount: totalDeletedVariants,
+      deletedVariants: deletedVariants,
+      affectedProducts: affectedProductIds,
+      notFoundPluUpcs: notFoundPluUpcs.length > 0 ? notFoundPluUpcs : undefined,
+    };
+  }
+
+  /**
+   * Delete a specific pack by pack ID
+   */
+  async deletePack(packId: string, user: any) {
+    this.validateProductOperationPermissions(user, 'delete');
+    
+    const prisma = await this.tenantContext.getPrismaClient();
+
+    // Check if the pack exists
+    const pack = await prisma.pack.findUnique({
+      where: { id: packId },
+      include: {
+        product: true,
+      },
+    });
+
+    if (!pack) {
+      throw new NotFoundException(`Pack with ID '${packId}' not found`);
+    }
+
+    // Delete the pack
+    await prisma.pack.delete({
+      where: { id: packId },
+    });
+
+    // Update the product's packIds array to remove the deleted pack ID
+    const updatedPackIds = pack.product.packIds.filter((id: string) => id !== packId);
+    
+    await prisma.products.update({
+      where: { id: pack.productId },
+      data: {
+        packIds: updatedPackIds,
+      },
+    });
+
+    return {
+      success: true,
+      message: `Pack with ID ${packId} has been deleted`,
+      deletedPackId: packId,
     };
   }
 }

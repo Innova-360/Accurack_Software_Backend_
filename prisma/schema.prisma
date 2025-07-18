@@ -519,6 +519,10 @@ model Category {
 model Products {
   id                     String               @id @default(uuid())
   name                   String
+  description            String?
+  brandName              String?
+  location               String?
+  attributes             Json[]               @default([])
   categoryId             String?
   ean                    String?
   pluUpc                 String?
