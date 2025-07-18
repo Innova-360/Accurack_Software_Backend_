@@ -44,6 +44,9 @@ export class AuthResponseDto {
     role?: string | Role | null | undefined;
     clientId?: string;
     provider: string;
+    stores: string[];
+    permissions: string[]
+    googleId: string
   };
 
   @ApiProperty({

@@ -41,36 +41,49 @@ export class AuthService {
   ) {}
   async googleLogin(googleUser: GoogleProfileDto): Promise<AuthResponseDto> {
     try {
-      // Check if user exists by Google ID
-      let user = await this.prisma.users.findUnique({
-        where: { googleId: googleUser.id },
-        include: { client: true },
+      // Try to find user by Google ID or email across all databases
+      let user = await this.findUserAcrossDatabases(googleUser.email, {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+        status: true,
+        clientId: true,
+        googleId: true,
+        stores: { select: { storeId: true } },
       });
 
-      // If not found by googleId, check by email
+      // If not found by googleId, check by email and link googleId if needed
       if (!user) {
-        user = await this.prisma.users.findUnique({
-          where: { email: googleUser.email },
-          include: { client: true },
+        user = await this.findUserAcrossDatabases(googleUser.email, {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+          status: true,
+          clientId: true,
+          googleId: true,
+          stores: { select: { storeId: true } },
         });
-
         // If user exists with same email but no googleId, link the accounts
-        if (user) {
-          user = await this.prisma.users.update({
+        if (user && !user.googleId) {
+          await this.prisma.users.update({
             where: { id: user.id },
             data: {
               googleId: googleUser.id,
               googleRefreshToken: googleUser.refreshToken || null,
             },
-            include: { client: true },
           });
+          user.googleId = googleUser.id;
         }
       }
 
-      // If no user exists, create a new one using the configured strategy
-      // if (!user) {
-      //   user = await this.handleGoogleUserCreation(googleUser);
-      // }
+      // If no user exists, throw error (or handle creation if desired)
+      if (!user) {
+        throw new BadRequestException('Failed to create or find user');
+      }
 
       // Update refresh token if provided
       if (googleUser.refreshToken && user) {
@@ -80,16 +93,21 @@ export class AuthService {
         });
       }
 
-      if (!user) {
-        throw new BadRequestException('Failed to create or find user');
-      }
+      // Fix stores property handling
+      const stores =
+        user.role === Role.super_admin
+          ? ['*']
+          : Array.isArray(user.stores)
+            ? user.stores.map((s: any) => (typeof s === 'string' ? s : s.storeId))
+            : [];
 
       const payload = {
         id: user.id,
         email: user.email,
         role: user.role,
         clientId: user.clientId,
-        googleId: user.googleId,
+        stores: stores,
+        googleId: user.googleId, // Optionally include for Google-specific logic
       };
 
       // Generate access token (15 minutes)
@@ -104,6 +122,78 @@ export class AuthService {
         expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
       });
 
+      // Fetch user permissions (same logic as normal login)
+      let userPermissions: any = null;
+      try {
+        if (user.clientId) {
+          // For tenant users, get permissions from their tenant database
+          const credentials = await this.multiTenantService['getTenantCredentials'](user.clientId);
+          if (credentials) {
+            const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
+            const tenantPrisma = new PrismaClient({
+              datasources: { db: { url: tenantDatabaseUrl } },
+            });
+            try {
+              await tenantPrisma.$connect();
+              const permissions = await this.permissionsService.getUserPermissionsWithClient(
+                tenantPrisma,
+                user.id,
+              );
+              userPermissions = permissions;
+            } finally {
+              await tenantPrisma.$disconnect();
+            }
+          }
+        } else {
+          // For master database users (super_admin, admin), get permissions from master database
+          userPermissions = await this.permissionsService.getUserPermissions(user.id);
+        }
+      } catch (error) {
+        console.error('Failed to get user permissions during Google login:', error);
+        userPermissions = {
+          userId: user.id,
+          permissions: [],
+          roleTemplates: [],
+        };
+      }
+
+      // Audit log (same as normal login)
+      try {
+        if (user.clientId) {
+          const credentials = await this.multiTenantService['getTenantCredentials'](user.clientId);
+          if (credentials) {
+            const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
+            const tenantPrisma = new PrismaClient({
+              datasources: { db: { url: tenantDatabaseUrl } },
+            });
+            try {
+              await tenantPrisma.$connect();
+              await tenantPrisma.auditLogs.create({
+                data: {
+                  userId: user.id,
+                  action: 'google_login',
+                  resource: 'auth',
+                  details: { email: user.email },
+                },
+              });
+            } finally {
+              await tenantPrisma.$disconnect();
+            }
+          }
+        } else {
+          await this.prisma.auditLogs.create({
+            data: {
+              userId: user.id,
+              action: 'google_login',
+              resource: 'auth',
+              details: { email: user.email },
+            },
+          });
+        }
+      } catch (error) {
+        console.error('Failed to create audit log for Google login:', error);
+      }
+
       return {
         access_token: accessToken,
         refresh_token: refreshToken,
@@ -114,7 +204,10 @@ export class AuthService {
           lastName: user.lastName,
           role: user.role || undefined,
           clientId: user.clientId,
+          stores: stores,
+          permissions: userPermissions,
           provider: 'google',
+          googleId: user.googleId,
         },
         message: 'Google authentication successful',
       };
