@@ -200,6 +200,12 @@ export class CreateSaleDto {
   @IsBoolean()
   generateInvoice?: boolean;
 
+
+  @ApiPropertyOptional({ description: 'Invoice number' })
+  @IsOptional()
+  @IsString()
+  invoiceNumber?: string;
+
   @ApiProperty({ description: 'Sale items', type: [SaleItemDto] })
   @IsArray()
   @ValidateNested({ each: true })

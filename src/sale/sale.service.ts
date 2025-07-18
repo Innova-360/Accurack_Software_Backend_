@@ -381,9 +381,9 @@ export class SaleService {
         await this.invoiceService.setBusinessInfo(dto.storeId, businessData, user);
       }
       
-      const invoiceNumber = await this.generateInvoiceNumber();
+      const invoiceNumber = dto.invoiceNumber ?? await this.generateInvoiceNumber();
       invoice = await this.invoiceService.createInvoice(
-        { saleId: result.sale.id },
+        { saleId: result.sale.id, invoiceNumber },
         user,
       );
     }
@@ -415,7 +415,7 @@ export class SaleService {
         // Generate invoice
         const invoiceNumber = await this.generateInvoiceNumber();
         const invoice = await this.invoiceService.createInvoice(
-          { saleId: sale.id },
+          { saleId: sale.id ,invoiceNumber},
           user,
         );
 
