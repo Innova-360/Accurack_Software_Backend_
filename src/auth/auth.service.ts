@@ -1809,17 +1809,22 @@ export class AuthService {
         companyAddress,
       } = dto;
 
-      // Validate that user email doesn't already exist
+      // 1. Check for existing user
       const existingUser = await this.prisma.users.findUnique({
         where: { email },
-        select: { id: true },
+        select: { id: true, status: true },
       });
 
       if (existingUser) {
-        throw new BadRequestException('User email already exists');
+        if (existingUser.status === 'pending') {
+          // Delete pending user to allow fresh signup
+          await this.prisma.users.delete({ where: { email } });
+        } else {
+          throw new BadRequestException('User email already exists');
+        }
       }
 
-      // Validate that client email doesn't already exist
+      // 2. Check for existing client
       const clientEmailToUse = companyEmail || email;
       const existingClient = await this.prisma.clients.findUnique({
         where: { email: clientEmailToUse },
@@ -1832,7 +1837,7 @@ export class AuthService {
         );
       }
 
-      // Step 1: Create client record first (quick operation)
+      // 3. Create client record
       const client = await this.prisma.clients.create({
         data: {
           name: companyName,
@@ -1846,18 +1851,7 @@ export class AuthService {
 
       let user;
       try {
-        // Step 2: Create tenant database (long operation - outside transaction)
-        await this.multiTenantService.createTenantDatabase(client.id, {
-          id: client.id,
-          name: client.name,
-          email: client.email,
-          phone: client.phone,
-          address: client.address,
-          status: client.status,
-          tier: client.tier,
-        });
-
-        // Step 3: Create user (quick operation with transaction)
+        // 4. Create user record as 'pending'
         const passwordHash = await bcrypt.hash(password, 10);
         const otp = this.generateOtp();
         const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -1870,7 +1864,7 @@ export class AuthService {
             passwordHash,
             role: 'super_admin',
             clientId: client.id,
-            status: Status.active,
+            status: 'pending', // <-- key change
             otp,
             otpExpiresAt,
             isOtpUsed: false,
@@ -1886,7 +1880,18 @@ export class AuthService {
           },
         });
 
-        // Step 4: Sync both client and user records to tenant database
+        // 5. Create tenant database (outside transaction)
+        await this.multiTenantService.createTenantDatabase(client.id, {
+          id: client.id,
+          name: client.name,
+          email: client.email,
+          phone: client.phone,
+          address: client.address,
+          status: client.status,
+          tier: client.tier,
+        });
+
+        // 6. Sync both client and user records to tenant database
         await this.multiTenantService.ensureClientRecordExists(client.id, {
           id: client.id,
           name: client.name,
@@ -1913,12 +1918,9 @@ export class AuthService {
           createdAt: new Date(),
         });
 
-        // Step 5: Initialize permissions for the super admin user
+        // 7. Assign permissions, send email, etc.
         await this.permissionsService.assignDefaultPermissions(user.id);
 
-        const result = { client, user, otp };
-
-        // Step 5: Send welcome email with OTP
         await this.mailService.sendMail({
           to: email,
           subject: 'Welcome to Accurack - Complete Your Setup',
@@ -1926,10 +1928,16 @@ export class AuthService {
             <h2>Welcome to Accurack!</h2>
             <p>Your account has been created successfully for <strong>${companyName}</strong>.</p>
             <p>To complete your setup, please verify your email with this OTP code:</p>
-            <h3 style="color: #007bff; font-size: 24px; letter-spacing: 2px;">${result.otp}</h3>
+            <h3 style="color: #007bff; font-size: 24px; letter-spacing: 2px;">${otp}</h3>
             <p>This code will expire in 10 minutes.</p>
             <p>Once verified, you can start managing your business with Accurack!</p>
           `,
+        });
+
+        // 8. Mark user as 'active' after all steps succeed
+        await this.prisma.users.update({
+          where: { id: user.id },
+          data: { status: Status.active },
         });
 
         return {
@@ -1938,38 +1946,35 @@ export class AuthService {
             'Client and super admin account created successfully. Please check your email for OTP verification.',
           data: {
             client: {
-              id: result.client.id,
-              name: result.client.name,
-              email: result.client.email,
+              id: client.id,
+              name: client.name,
+              email: client.email,
             },
-            user: result.user,
+            user: { ...user, status: Status.active },
           },
         };
       } catch (dbError) {
-        // If user creation fails, we should clean up the client record
-        // But we leave the tenant database since it's harder to clean up and can be reused
-        console.error('Failed to create user, cleaning up client:', dbError);
-
+        // If any step fails after user creation, clean up user and client
+        console.error('Failed to complete signup, cleaning up:', dbError);
+        try {
+          await this.prisma.users.delete({ where: { id: user?.id } });
+        } catch (cleanupUserError) {
+          console.error('Failed to cleanup user after error:', cleanupUserError);
+        }
         try {
           await this.prisma.clients.delete({ where: { id: client.id } });
-        } catch (cleanupError) {
-          console.error(
-            'Failed to cleanup client after user creation error:',
-            cleanupError,
-          );
+        } catch (cleanupClientError) {
+          console.error('Failed to cleanup client after error:', cleanupClientError);
         }
-
         throw new InternalServerErrorException(
-          'Failed to create user account. Please try again.',
+          'Failed to create client and user account. Please try again.',
         );
       }
     } catch (error) {
       console.error('Create client with super admin error:', error);
-
       if (error instanceof BadRequestException) {
         throw error;
       }
-
       throw new InternalServerErrorException(
         'Failed to create client and user account: ' + error.message,
       );

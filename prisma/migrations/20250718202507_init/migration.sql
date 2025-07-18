@@ -46,6 +46,9 @@ CREATE TYPE "EntityType" AS ENUM ('PRODUCT', 'CATEGORY', 'SUPPLIER', 'STORE', 'C
 -- CreateEnum
 CREATE TYPE "TaxRateType" AS ENUM ('PERCENTAGE', 'FIXED_AMOUNT');
 
+-- CreateEnum
+CREATE TYPE "PackType" AS ENUM ('ITEM', 'BOX');
+
 -- CreateTable
 CREATE TABLE "Clients" (
     "id" TEXT NOT NULL,
@@ -199,6 +202,8 @@ CREATE TABLE "SaleItem" (
     "quantity" INTEGER NOT NULL,
     "sellingPrice" DOUBLE PRECISION NOT NULL,
     "totalPrice" DOUBLE PRECISION NOT NULL,
+    "packType" "PackType" NOT NULL DEFAULT 'ITEM',
+    "packId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -509,6 +514,10 @@ CREATE TABLE "Category" (
 CREATE TABLE "Products" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "description" TEXT,
+    "brandName" TEXT,
+    "location" TEXT,
+    "attributes" JSONB[] DEFAULT ARRAY[]::JSONB[],
     "categoryId" TEXT,
     "ean" TEXT,
     "pluUpc" TEXT,
