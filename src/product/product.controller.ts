@@ -400,16 +400,6 @@ export class ProductController extends BaseProductController {
   }
 
   // Variant Management Operations
-  @ProductEndpoint.DeleteVariant()
-  @Delete('variants/:pluUpc')
-  async deleteVariant(@Req() req, @Param('pluUpc') pluUpc: string) {
-    const user = req.user;
-    return this.handleProductOperation(
-      () => this.productService.deleteVariant(pluUpc, user),
-      'Variant deleted successfully',
-    );
-  }
-
   @ProductEndpoint.DeleteSelectedVariants(DeleteVariantsDto)
   @Delete('variants/selected')
   async deleteSelectedVariants(@Req() req, @Body() deleteVariantsDto: DeleteVariantsDto) {
@@ -417,6 +407,16 @@ export class ProductController extends BaseProductController {
     return this.handleProductOperation(
       () => this.productService.deleteSelectedVariants(deleteVariantsDto.pluUpcs, user),
       'Selected variants deleted successfully',
+    );
+  }
+
+  @ProductEndpoint.DeleteVariant()
+  @Delete('variants/:pluUpc')
+  async deleteVariant(@Req() req, @Param('pluUpc') pluUpc: string) {
+    const user = req.user;
+    return this.handleProductOperation(
+      () => this.productService.deleteVariant(pluUpc, user),
+      'Variant deleted successfully',
     );
   }
 
