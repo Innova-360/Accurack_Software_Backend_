@@ -2115,6 +2115,7 @@ export class ProductService {
                     variants.push({
                       name: attributeValue.toString().trim(),
                       price: product.IndividualItemSellingPrice,
+                      quantity: product.IndividualItemQuantity,
                       pluUpc:
                         `${product['PLU/UPC'] || ''}-${attributeValue.toString().replace(/\s+/g, '').toUpperCase()}`.slice(
                           0,
@@ -2141,6 +2142,7 @@ export class ProductService {
                   variants.push({
                     name: 'Default Variant',
                     price: product.IndividualItemSellingPrice,
+                    quantity: product.IndividualItemQuantity,
                     pluUpc: product['PLU/UPC'] || null, // Use the product's PLU/UPC for the default variant
                     packIds: [pack.id],
                   });
@@ -2404,7 +2406,7 @@ export class ProductService {
     // Execute search with proper includes
     const products = await prisma.products.findMany({
       where,
-      take:50,
+      take: 50,
       include: {
         packs: true,
         productSuppliers: {
