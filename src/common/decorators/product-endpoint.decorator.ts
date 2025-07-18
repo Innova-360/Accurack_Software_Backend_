@@ -3,6 +3,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -94,6 +95,15 @@ export const ProductEndpoint = {
         schema: createdResponseSchema('Product created successfully', {
           id: 'uuid-product-id',
           name: 'Premium Coffee Beans',
+          description: 'A premium blend of Arabica coffee beans.',
+          brandName: 'Starbucks',
+          location: 'Aisle 3, Shelf B',
+          attributes: [
+            { name: "roast", value: "dark" },
+            { weight: 500, unit: "grams" },
+            { isOrganic: true },
+            "premium quality"
+          ],
           category: 'Beverages',
           ean: '1234567890123',
           pluUpc: 'UPC123456',
@@ -247,6 +257,15 @@ export const ProductEndpoint = {
             {
               id: 'uuid-product-id',
               name: 'Premium Coffee Beans',
+              description: 'A premium blend of Arabica coffee beans.',
+              brandName: 'Starbucks',
+              location: 'Aisle 3, Shelf B',
+              attributes: [
+                { name: "roast", value: "dark" },
+                { weight: 500, unit: "grams" },
+                { isOrganic: true },
+                "premium quality"
+              ],
               category: 'Beverages',
               ean: '1234567890123',
               pluUpc: 'UPC123456',
@@ -329,6 +348,15 @@ export const ProductEndpoint = {
         schema: successResponseSchema('Product retrieved successfully', {
           id: 'uuid-product-id',
           name: 'Premium Coffee Beans',
+          description: 'A premium blend of Arabica coffee beans.',
+          brandName: 'Starbucks',
+          location: 'Aisle 3, Shelf B',
+          attributes: [
+            { name: "roast", value: "dark" },
+            { weight: 500, unit: "grams" },
+            { isOrganic: true },
+            "premium quality"
+          ],
           category: 'Beverages',
           ean: '1234567890123',
           pluUpc: 'UPC123456',
@@ -421,6 +449,16 @@ export const ProductEndpoint = {
         schema: successResponseSchema('Product updated successfully', {
           id: 'uuid-product-id',
           name: 'Updated Coffee Beans',
+          description: 'An updated premium blend of Arabica coffee beans.',
+          brandName: 'Starbucks Premium',
+          location: 'Aisle 3, Shelf C',
+          attributes: [
+            { name: "roast", value: "medium" },
+            { weight: 750, unit: "grams" },
+            { isOrganic: true },
+            { isFairTrade: true },
+            "premium quality updated"
+          ],
           category: 'Beverages',
           ean: '1234567890123',
           pluUpc: 'UPC123456',
@@ -834,6 +872,162 @@ export const ProductEndpoint = {
           404,
           'Product with variant PLU/UPC not found',
         ),
+      }),
+      ...standardErrorResponses(),
+      ApiBearerAuth('JWT-auth'),
+    ),
+
+  // Variant Management Operations
+  DeleteVariant: () =>
+    applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.DELETE,
+        PermissionScope.STORE,
+      ),
+      ApiOperation({
+        summary: 'Delete a single product variant by PLU/UPC',
+        description:
+          'Deletes a specific variant from a product by PLU/UPC code. Requires product deletion permissions.',
+      }),
+      ApiParam({
+        name: 'pluUpc',
+        description: 'PLU/UPC code of the variant to delete',
+        example: 'UPC123456',
+      }),
+      ApiResponse({
+        status: 200,
+        description: 'Variant deleted successfully',
+        schema: successResponseSchema('Variant deleted successfully', {
+          message: 'Variant with PLU/UPC UPC123456 has been deleted',
+          deletedVariantPluUpc: 'UPC123456',
+          deletedVariant: {
+            name: 'Dark Roast',
+            pluUpc: 'UPC123456',
+            price: 25.99,
+            quantity: 100,
+          },
+        }),
+      }),
+      ApiResponse({
+        status: 400,
+        description: 'Bad request - Invalid PLU/UPC',
+        schema: errorResponseSchema(400, 'Invalid PLU/UPC provided'),
+      }),
+      ApiResponse({
+        status: 403,
+        description: 'Forbidden - insufficient permissions',
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to delete variants',
+        ),
+      }),
+      ApiResponse({
+        status: 404,
+        description: 'Variant not found',
+        schema: errorResponseSchema(404, 'Variant with PLU/UPC not found'),
+      }),
+      ...standardErrorResponses(),
+      ApiBearerAuth('JWT-auth'),
+    ),
+
+  DeleteSelectedVariants: (dtoType: any) =>
+    applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.DELETE,
+        PermissionScope.STORE,
+      ),
+      ApiOperation({
+        summary: 'Delete selected variants by PLU/UPC (bulk operation)',
+        description:
+          'Deletes multiple selected variants by their PLU/UPC codes. This is a bulk operation that requires product deletion permissions.',
+      }),
+      ApiBody({ type: dtoType }),
+      ApiResponse({
+        status: 200,
+        description: 'Selected variants deleted successfully',
+        schema: successResponseSchema('Selected variants deleted successfully', {
+          message: 'Successfully deleted 3 variants',
+          deletedCount: 3,
+          deletedVariants: [
+            {
+              name: 'Dark Roast',
+              pluUpc: 'UPC123456',
+              price: 25.99,
+              quantity: 100,
+            },
+            {
+              name: 'Medium Roast', 
+              pluUpc: 'UPC123457',
+              price: 23.99,
+              quantity: 75,
+            },
+          ],
+          affectedProducts: ['uuid-product-1', 'uuid-product-2'],
+          notFoundPluUpcs: ['UPC999999'],
+        }),
+      }),
+      ApiResponse({
+        status: 400,
+        description: 'Bad request - Invalid or empty PLU/UPC list',
+        schema: errorResponseSchema(400, 'PLU/UPC list cannot be empty'),
+      }),
+      ApiResponse({
+        status: 403,
+        description: 'Forbidden - insufficient permissions',
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to delete variants',
+        ),
+      }),
+      ...standardErrorResponses(),
+      ApiBearerAuth('JWT-auth'),
+    ),
+
+  // Pack Management Operations
+  DeletePack: () =>
+    applyDecorators(
+      RequirePermissions(
+        PermissionResource.PRODUCT,
+        PermissionAction.DELETE,
+        PermissionScope.STORE,
+      ),
+      ApiOperation({
+        summary: 'Delete a specific pack',
+        description:
+          'Deletes a specific pack by pack ID. Requires product deletion permissions.',
+      }),
+      ApiParam({
+        name: 'packId',
+        description: 'ID of the pack to delete',
+        example: 'uuid-pack-id',
+      }),
+      ApiResponse({
+        status: 200,
+        description: 'Pack deleted successfully',
+        schema: successResponseSchema('Pack deleted successfully', {
+          message: 'Pack with ID uuid-pack-id has been deleted',
+          deletedPackId: 'uuid-pack-id',
+        }),
+      }),
+      ApiResponse({
+        status: 400,
+        description: 'Bad request - Invalid pack ID',
+        schema: errorResponseSchema(400, 'Invalid pack ID provided'),
+      }),
+      ApiResponse({
+        status: 403,
+        description: 'Forbidden - insufficient permissions',
+        schema: errorResponseSchema(
+          403,
+          'Insufficient permissions to delete packs',
+        ),
+      }),
+      ApiResponse({
+        status: 404,
+        description: 'Pack not found',
+        schema: errorResponseSchema(404, 'Pack not found'),
       }),
       ...standardErrorResponses(),
       ApiBearerAuth('JWT-auth'),

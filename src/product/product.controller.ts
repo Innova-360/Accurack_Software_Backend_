@@ -34,6 +34,7 @@ import {
   UpdateProductDto,
   AssignSupplierDto,
   UpdateVariantQuantityDto,
+  DeleteVariantsDto,
 } from './dto/product.dto';
 import { UpdateProductQuantityDto } from './dto/update-product-quantity.dto';
 
@@ -395,6 +396,38 @@ export class ProductController extends BaseProductController {
           updateVariantQuantityDto.quantity,
         ),
       'Variant quantity updated successfully',
+    );
+  }
+
+  // Variant Management Operations
+  @ProductEndpoint.DeleteVariant()
+  @Delete('variants/:pluUpc')
+  async deleteVariant(@Req() req, @Param('pluUpc') pluUpc: string) {
+    const user = req.user;
+    return this.handleProductOperation(
+      () => this.productService.deleteVariant(pluUpc, user),
+      'Variant deleted successfully',
+    );
+  }
+
+  @ProductEndpoint.DeleteSelectedVariants(DeleteVariantsDto)
+  @Delete('variants/selected')
+  async deleteSelectedVariants(@Req() req, @Body() deleteVariantsDto: DeleteVariantsDto) {
+    const user = req.user;
+    return this.handleProductOperation(
+      () => this.productService.deleteSelectedVariants(deleteVariantsDto.pluUpcs, user),
+      'Selected variants deleted successfully',
+    );
+  }
+
+  // Pack Management Operations
+  @ProductEndpoint.DeletePack()
+  @Delete('packs/:packId')
+  async deletePack(@Req() req, @Param('packId') packId: string) {
+    const user = req.user;
+    return this.handleProductOperation(
+      () => this.productService.deletePack(packId, user),
+      'Pack deleted successfully',
     );
   }
 }

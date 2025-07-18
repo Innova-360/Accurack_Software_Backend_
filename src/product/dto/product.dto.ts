@@ -270,6 +270,38 @@ export class CreateProductDto {
   @IsOptional()
   description?: string;
 
+  @ApiPropertyOptional({
+    example: 'Starbucks',
+    description: 'Brand name of the product',
+  })
+  @IsString()
+  @IsOptional()
+  brandName?: string;
+
+  @ApiPropertyOptional({
+    example: 'Aisle 3, Shelf B',
+    description: 'Location/position of the product in store',
+  })
+  @IsString()
+  @IsOptional()
+  location?: string;
+
+  @ApiPropertyOptional({
+    type: [Object],
+    example: [
+      { name: "color", value: "red" },
+      { size: 42, unit: "cm" },
+      { isAvailable: true },
+      { specifications: { weight: "2kg", material: "cotton" } },
+      "simple string attribute",
+      123
+    ],
+    description: 'Optional array of product attributes. Can contain any structure - strings, numbers, booleans, or objects. Only for products where hasVariants is false.',
+  })
+  @IsArray()
+  @IsOptional()
+  attributes?: any[];
+
   @ApiProperty({
     example: 'Premium Coffee Beans',
     description: 'Name of the product',
@@ -486,6 +518,46 @@ export class CreateProductDto {
 }
 
 export class UpdateProductDto {
+  @ApiPropertyOptional({
+    example: 'Updated premium blend of Arabica coffee beans.',
+    description: 'Optional description of the product',
+  })
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @ApiPropertyOptional({
+    example: 'Starbucks',
+    description: 'Brand name of the product',
+  })
+  @IsString()
+  @IsOptional()
+  brandName?: string;
+
+  @ApiPropertyOptional({
+    example: 'Aisle 3, Shelf B',
+    description: 'Location/position of the product in store',
+  })
+  @IsString()
+  @IsOptional()
+  location?: string;
+
+  @ApiPropertyOptional({
+    type: [Object],
+    example: [
+      { name: "color", value: "blue" },
+      { size: 44, unit: "cm" },
+      { isAvailable: false },
+      { specifications: { weight: "2.5kg", material: "organic cotton" } },
+      "updated string attribute",
+      456
+    ],
+    description: 'Optional array of product attributes. Can contain any structure - strings, numbers, booleans, or objects. Only for products where hasVariants is false.',
+  })
+  @IsArray()
+  @IsOptional()
+  attributes?: any[];
+
   @ApiProperty({
     example: 'Updated Coffee Beans',
     description: 'Name of the product',
@@ -728,6 +800,17 @@ export class UpdateProductDto {
   variants?: VariantDto[];
 }
 
+export class DeleteVariantsDto {
+  @ApiProperty({
+    type: [String],
+    example: ['UPC001', 'UPC002', 'UPC003'],
+    description: 'Array of PLU/UPC codes of variants to delete',
+  })
+  @IsArray()
+  @IsString({ each: true })
+  pluUpcs: string[];
+}
+
 export class ProductResponseDto {
   @ApiProperty({
     example: 'uuid-product-id',
@@ -740,6 +823,38 @@ export class ProductResponseDto {
     description: 'Name of the product',
   })
   name: string;
+
+  @ApiPropertyOptional({
+    example: 'A premium blend of Arabica coffee beans.',
+    description: 'Optional description of the product',
+  })
+  description?: string;
+
+  @ApiPropertyOptional({
+    example: 'Starbucks',
+    description: 'Brand name of the product',
+  })
+  brandName?: string;
+
+  @ApiPropertyOptional({
+    example: 'Aisle 3, Shelf B',
+    description: 'Location/position of the product in store',
+  })
+  location?: string;
+
+  @ApiPropertyOptional({
+    type: [Object],
+    example: [
+      { name: "color", value: "red" },
+      { size: 42, unit: "cm" },
+      { isAvailable: true },
+      { specifications: { weight: "2kg", material: "cotton" } },
+      "simple string attribute",
+      123
+    ],
+    description: 'Optional array of product attributes with flexible structure',
+  })
+  attributes?: any[];
 
   @ApiProperty({ example: 'Beverages', description: 'Category of the product' })
   categoryId: string;
