@@ -515,7 +515,6 @@ export class SaleService {
       prisma.sales.count({ where }),
     ]);
 
-    console.log('sales', sales, 'total', total);
 
 
     return {
