@@ -59,8 +59,8 @@ export class AuthController extends BaseAuthController {
     try {
       const isProduction = process.env.NODE_ENV === 'production';
       let redirectUrl = process.env.FRONTEND_URL
-        ? `${process.env.FRONTEND_URL}/stores`
-        : 'http://localhost:5173/stores';
+        ? `${process.env.FRONTEND_URL}`
+        : 'http://localhost:5173';
 
       if (!process.env.FRONTEND_URL && !isProduction) {
         throw new Error('FRONTEND_URL environment variable is not set');
