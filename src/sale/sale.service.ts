@@ -36,7 +36,7 @@ export class SaleService {
     private prisma: PrismaClientService,
     private invoiceService: InvoiceService,
     private readonly tenantContext: TenantContextService, // Add tenant context
-  ) {}
+  ) { }
 
   // Customer Management
   async createCustomer(dto: CreateCustomerDto) {
@@ -296,7 +296,7 @@ export class SaleService {
             `Insufficient inventory for product ${product.name}`,
           );
         }
-        
+
         // Update inventory
         await tx.products.update({
           where: { id: item.productId },
@@ -376,11 +376,11 @@ export class SaleService {
           website: dto.companyMail ? `mailto:${dto.companyMail}` : undefined,
           logoUrl: undefined,
         };
-        
+
         // Set business info before creating invoice
         await this.invoiceService.setBusinessInfo(dto.storeId, businessData, user);
       }
-      
+
       const invoiceNumber = dto.invoiceNumber ?? await this.generateInvoiceNumber();
       invoice = await this.invoiceService.createInvoice(
         { saleId: result.sale.id, invoiceNumber },
@@ -415,7 +415,7 @@ export class SaleService {
         // Generate invoice
         const invoiceNumber = await this.generateInvoiceNumber();
         const invoice = await this.invoiceService.createInvoice(
-          { saleId: sale.id ,invoiceNumber},
+          { saleId: sale.id, invoiceNumber },
           user,
         );
 
@@ -458,7 +458,7 @@ export class SaleService {
   async getSales(query: SaleQueryDto, storeId: string) {
     const prisma = await this.tenantContext.getPrismaClient();
     const {
-      page = '1', 
+      page = '1',
       limit = '20',
       customerId,
       status,
@@ -484,13 +484,7 @@ export class SaleService {
       prisma.sales.findMany({
         where,
         include: {
-          customer: {
-            select: {
-              id: true,
-              customerName: true,
-              phoneNumber: true,
-            },
-          },
+          customer: true,
           saleItems: {
             include: {
               product: {
@@ -885,7 +879,11 @@ export class SaleService {
               select: {
                 id: true,
                 customerName: true,
-                customerAddress: true,
+                customerStreetAddress: true,
+                country: true,
+                state: true,
+                city: true,
+                zipCode: true,
                 phoneNumber: true,
                 telephoneNumber: true,
                 customerMail: true,

@@ -49,10 +49,33 @@ export class CreateCustomerDto {
   @IsString()
   customerName: string;
 
-  @ApiPropertyOptional({ description: 'Customer address' })
+  @ApiProperty({ description: 'Customer Street address' })
   @IsOptional()
   @IsString()
-  customerAddress?: string;
+  customerStreetAddress: string;
+
+
+  @ApiProperty({ description: 'Customer County' })
+  @IsOptional()
+  @IsString()
+  country: string;
+
+
+  @ApiProperty({ description: 'Customer State' })
+  @IsOptional()
+  @IsString()
+  state: string;
+
+
+  @ApiProperty({ description: 'Customer City' })
+  @IsOptional()
+  @IsString()
+  city: string;
+
+  @ApiProperty({ description: 'Customer Zip Code' })
+  @IsOptional()
+  @IsString()
+  zipCode: string;
 
   @ApiProperty({ description: 'Phone number' })
   @IsString()
