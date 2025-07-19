@@ -147,11 +147,11 @@ model SaleAdjustment {
 model Customer {
   id              String         @id @default(uuid())
   customerName    String
-  customerStreetAddress String
-  country String
-  state String
-  city String
-  zipCode String
+  customerStreetAddress String?
+  country String?
+  state String?
+  city String?
+  zipCode String?
   phoneNumber     String         @unique
   telephoneNumber String?
   customerMail    String?
