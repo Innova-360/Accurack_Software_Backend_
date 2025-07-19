@@ -239,6 +239,13 @@ export const ProductEndpoint = {
         example: 'desc',
         enum: ['asc', 'desc'],
       }),
+      ApiQuery({
+        name: 'categoryId',
+        required: false,
+        type: String,
+        description: 'Filter products by exact category UUID',
+        example: 'e7c9b7e2-8b6a-4b9a-9c2e-123456789abc',
+      }),
       ApiResponse({
         status: 200,
         description: 'Products retrieved successfully',
