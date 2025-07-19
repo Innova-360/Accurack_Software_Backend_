@@ -18,6 +18,7 @@ import { InvoiceModule } from './invoice/invoice.module';
 import { HealthController } from './health/health.controller';
 import { ValidatorModule } from './validator/validator.module';
 import { DriverModule } from './driver/driver.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 
@@ -46,7 +47,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
     UsersModule,
     TaxModule,
     ValidatorModule,
-    DriverModule
+    DriverModule,
+    DashboardModule
   ],
   providers: [
     {
