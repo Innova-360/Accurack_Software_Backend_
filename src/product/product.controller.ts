@@ -70,6 +70,7 @@ export class ProductController extends BaseProductController {
     @Query('limit') limit: string = '15000',
     @Query('sortBy') sortBy: string = 'createdAt',
     @Query('sortOrder') sortOrder: string = 'desc',
+    @Query('categoryId') categoryId?: string,
   ) {
     const user = req.user;
     return this.handleProductOperation(
@@ -95,6 +96,7 @@ export class ProductController extends BaseProductController {
             | 'supplier'
             | 'minimumSellingQuantity',
           sortOrder as 'asc' | 'desc',
+          categoryId, 
         ),
       'Products retrieved successfully',
     );
@@ -113,6 +115,7 @@ export class ProductController extends BaseProductController {
       'Products found successfully',
     );
   }
+
 
   @Get('search/advanced')
   @ApiOperation({
