@@ -46,7 +46,7 @@ export class ProductService {
     private readonly prisma: PrismaClientService, // Keep for fallback/master DB operations
     private readonly tenantContext: TenantContextService, // Add tenant context
     private readonly categoryService: CategoryService, // Add category service
-  ) {}
+  ) { }
 
   private validateProductOperationPermissions(
     user: any,
@@ -101,6 +101,7 @@ export class ProductService {
       }
     }
   }
+
   private async validatePluUniqueness(
     checkPluExists: (plu: string) => Promise<boolean>,
     plu: string,
@@ -110,6 +111,7 @@ export class ProductService {
       throw new BadRequestException('PLU/UPC already exists');
     }
   }
+
   private async validateVariantPluUniqueness(
     variants: any[],
     productId?: string,
@@ -150,6 +152,7 @@ export class ProductService {
       }
     }
   }
+
   private formatProductResponse(product: any): ProductResponseDto {
     // Calculate profit from primary supplier or first supplier
     // Use ProductSupplier relationship to get cost price
@@ -608,8 +611,10 @@ export class ProductService {
       | 'supplier'
       | 'minimumSellingQuantity' = 'createdAt',
     sortOrder: 'asc' | 'desc' = 'desc',
+    categoryId?: string,
   ) {
     this.validateProductAccess(user, storeId);
+    console.log('user', user);
 
     // Get the tenant-specific Prisma client
     const prisma = await this.tenantContext.getPrismaClient();
@@ -690,16 +695,21 @@ export class ProductService {
       where.storeId = storeId;
     }
 
+    // --- CATEGORY FILTERING ---
+    if (categoryId) {
+      where.categoryId = categoryId;
+    }
+
     // Get total count first
     const total = await prisma.products.count({ where });
 
     // If limit is large (>1000), use batching to prevent connection pool exhaustion
-    if (limit > 1000) {
+    if (limit > 500) {
       console.log(
         `Large query detected (limit: ${limit}), using batching approach`,
       );
 
-      const batchSize = 500; // Process 500 products at a time
+      const batchSize = 100; // Process 500 products at a time
       const allProducts: any[] = [];
       let currentSkip = skip;
       let remainingLimit = limit;
@@ -825,6 +835,7 @@ export class ProductService {
     };
   }
 
+
   private sortProductsBySupplier(
     products: any[],
     sortOrder: 'asc' | 'desc',
@@ -906,6 +917,7 @@ export class ProductService {
 
     return this.formatProductResponse(product);
   }
+
   async updateProduct(
     user: any,
     id: string,
@@ -1846,6 +1858,7 @@ export class ProductService {
       },
     });
   }
+
   async checkInventoryFileStatus(
     file: Express.Multer.File,
     user: any,
