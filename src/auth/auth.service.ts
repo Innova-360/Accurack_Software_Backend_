@@ -1809,19 +1809,10 @@ export class AuthService {
         companyAddress,
       } = dto;
 
-      // 1. Check for existing user
-      const existingUser = await this.prisma.users.findUnique({
-        where: { email },
-        select: { id: true, status: true },
-      });
-
-      if (existingUser) {
-        if (existingUser.status === 'pending') {
-          // Delete pending user to allow fresh signup
-          await this.prisma.users.delete({ where: { email } });
-        } else {
-          throw new BadRequestException('User email already exists');
-        }
+      // 1. Check for existing user in all databases (master and tenants)
+      const existingUserAnywhere = await this.findUserAcrossDatabases(email, { id: true, status: true });
+      if (existingUserAnywhere) {
+        throw new BadRequestException('User email already exists in the system');
       }
 
       // 2. Check for existing client
