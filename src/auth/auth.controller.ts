@@ -74,9 +74,9 @@ export class AuthController extends BaseAuthController {
           lastName: req.user?.lastName || '',
           picture: req.user?.picture || '',
         }), {
-          httpOnly: true,
+          httpOnly: false,
           secure: true,
-          sameSite:'none',
+          sameSite: 'none',
           maxAge: 5 * 60 * 1000, // 5 minutes
         });
         redirectUrl = `${redirectUrl}/signup`;
@@ -93,9 +93,9 @@ export class AuthController extends BaseAuthController {
           lastName: req.user?.lastName || '',
           picture: req.user?.picture || '',
         }), {
-          httpOnly: true,
-          secure: true,
-          sameSite:'none',
+          httpOnly: false,
+          secure: isProduction,
+          sameSite: isProduction ? 'none' : 'lax',
           maxAge: 5 * 60 * 1000, // 5 minutes
         });
         redirectUrl = `${redirectUrl}/signup`;
@@ -104,13 +104,13 @@ export class AuthController extends BaseAuthController {
 
       res.cookie('accessToken', access_token, {
         httpOnly: true,
-        secure: true,
-        sameSite:'none',
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
       });
       res.cookie('refreshToken', refresh_token, {
         httpOnly: true,
-        secure: true,
-        sameSite:'none',
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
       });
 
       return res.redirect(redirectUrl);
@@ -124,9 +124,9 @@ export class AuthController extends BaseAuthController {
           lastName: req.user?.lastName || '',
           picture: req.user?.picture || '',
         }), {
-          httpOnly: true,
-          secure: true,
-          sameSite:'none',
+          httpOnly: false,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
           maxAge: 5 * 60 * 1000, // 5 minutes
         });
       }
