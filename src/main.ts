@@ -9,6 +9,7 @@ import { ResponseInterceptor, GlobalExceptionFilter } from './common';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { disconnectAllTenantPrismaClients } from './tenant/prisma-tenant-cache';
+import * as basicAuth from 'express-basic-auth';
 
 import * as dotenv from 'dotenv';
 
@@ -76,6 +77,18 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     exposedHeaders: ['Set-Cookie'],
   });
+  // Protect Swagger UI with basic auth using env variables
+  app.use(
+    ['/api/v1/swagger'],
+    basicAuth({
+      challenge: true,
+      users: {
+        [(process.env.SWAGGER_USER || '')]: process.env.SWAGGER_PASSWORD || '',
+      },
+      unauthorizedResponse: (req) => 'Unauthorized',
+    }),
+  );
+
   // Swagger Configuration
   const config = new DocumentBuilder()
     .setTitle('Accurack Software API')
