@@ -8,6 +8,7 @@ import * as cookieParser from 'cookie-parser';
 import { ResponseInterceptor, GlobalExceptionFilter } from './common';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { disconnectAllTenantPrismaClients } from './tenant/prisma-tenant-cache';
 
 import * as dotenv from 'dotenv';
 
@@ -134,5 +135,18 @@ async function bootstrap() {
   });
 
   await app.listen(4000);
+
+  // Graceful shutdown for tenant PrismaClients
+  process.on('SIGINT', async () => {
+    console.log('SIGINT received: closing tenant Prisma connections...');
+    await disconnectAllTenantPrismaClients();
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', async () => {
+    console.log('SIGTERM received: closing tenant Prisma connections...');
+    await disconnectAllTenantPrismaClients();
+    process.exit(0);
+  });
 }
 bootstrap();

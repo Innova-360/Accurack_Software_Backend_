@@ -6,6 +6,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { MultiTenantService } from '../database/multi-tenant.service';
 import { PrismaClient } from '@prisma/client';
+import { getTenantPrismaClient } from '../tenant/prisma-tenant-cache';
 
 // JWT payload structure
 interface JwtPayload {
@@ -106,46 +107,38 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           if (credentials) {
             const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
 
-            const tenantPrisma = new PrismaClient({
-              datasources: { db: { url: tenantDatabaseUrl } },
-            });
+            const tenantPrisma = getTenantPrismaClient(payload.clientId, tenantDatabaseUrl);
 
-            try {
-              await tenantPrisma.$connect();
-
-              user = await tenantPrisma.users.findUnique({
-                where: { id: payload.id },
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  email: true,
-                  role: true,
-                  clientId: true,
-                  googleId: true,
-                  status: true,
-                  businessId: true,
-                  createdAt: true,
-                  updatedAt: true,
-                  stores: {
-                    select: {
-                      storeId: true,
-                    },
-                  },
-                  business: {
-                    select: {
-                      id: true,
-                      businessName: true,
-                      contactNo: true,
-                      website: true,
-                      logoUrl: true,
-                    },
+            user = await tenantPrisma.users.findUnique({
+              where: { id: payload.id },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                role: true,
+                clientId: true,
+                googleId: true,
+                status: true,
+                businessId: true,
+                createdAt: true,
+                updatedAt: true,
+                stores: {
+                  select: {
+                    storeId: true,
                   },
                 },
-              });
-            } finally {
-              await tenantPrisma.$disconnect();
-            }
+                business: {
+                  select: {
+                    id: true,
+                    businessName: true,
+                    contactNo: true,
+                    website: true,
+                    logoUrl: true,
+                  },
+                },
+              },
+            });
           }
         } catch (error) {
           console.error('Error validating user in tenant database:', error);

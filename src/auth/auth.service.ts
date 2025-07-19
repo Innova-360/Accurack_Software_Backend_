@@ -29,6 +29,7 @@ import { Role, Status } from '@prisma/client';
 
 import * as crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
+import { getTenantPrismaClient } from '../tenant/prisma-tenant-cache';
 
 @Injectable()
 export class AuthService {
@@ -130,19 +131,12 @@ export class AuthService {
           const credentials = await this.multiTenantService['getTenantCredentials'](user.clientId);
           if (credentials) {
             const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
-            const tenantPrisma = new PrismaClient({
-              datasources: { db: { url: tenantDatabaseUrl } },
-            });
-            try {
-              await tenantPrisma.$connect();
-              const permissions = await this.permissionsService.getUserPermissionsWithClient(
-                tenantPrisma,
-                user.id,
-              );
-              userPermissions = permissions;
-            } finally {
-              await tenantPrisma.$disconnect();
-            }
+            const tenantPrisma = getTenantPrismaClient(user.clientId, tenantDatabaseUrl);
+            const permissions = await this.permissionsService.getUserPermissionsWithClient(
+              tenantPrisma,
+              user.id,
+            );
+            userPermissions = permissions;
           }
         } else {
           // For master database users (super_admin, admin), get permissions from master database
@@ -163,22 +157,15 @@ export class AuthService {
           const credentials = await this.multiTenantService['getTenantCredentials'](user.clientId);
           if (credentials) {
             const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
-            const tenantPrisma = new PrismaClient({
-              datasources: { db: { url: tenantDatabaseUrl } },
+            const tenantPrisma = getTenantPrismaClient(user.clientId, tenantDatabaseUrl);
+            await tenantPrisma.auditLogs.create({
+              data: {
+                userId: user.id,
+                action: 'google_login',
+                resource: 'auth',
+                details: { email: user.email },
+              },
             });
-            try {
-              await tenantPrisma.$connect();
-              await tenantPrisma.auditLogs.create({
-                data: {
-                  userId: user.id,
-                  action: 'google_login',
-                  resource: 'auth',
-                  details: { email: user.email },
-                },
-              });
-            } finally {
-              await tenantPrisma.$disconnect();
-            }
           }
         } else {
           await this.prisma.auditLogs.create({
@@ -606,34 +593,26 @@ export class AuthService {
       // Search each tenant database for the user
       for (const client of clients) {
         try {
-          const credentials = await this.multiTenantService[
-            'getTenantCredentials'
-          ](client.id);
+          const credentials = await this.multiTenantService['getTenantCredentials'](
+            client.id,
+          );
           if (!credentials) continue;
 
           const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
 
-          const tenantPrisma = new PrismaClient({
-            datasources: { db: { url: tenantDatabaseUrl } },
+          const tenantPrisma = getTenantPrismaClient(client.id, tenantDatabaseUrl);
+
+          const tenantUser = await tenantPrisma.users.findUnique({
+            where: { email },
+            select: selectFields,
           });
 
-          try {
-            await tenantPrisma.$connect();
-
-            const tenantUser = await tenantPrisma.users.findUnique({
-              where: { email },
-              select: selectFields,
-            });
-
-            if (tenantUser) {
-              user = tenantUser;
-              console.log(
-                `Found user ${email} in tenant database for client: ${client.name}`,
-              );
-              break;
-            }
-          } finally {
-            await tenantPrisma.$disconnect();
+          if (tenantUser) {
+            user = tenantUser;
+            console.log(
+              `Found user ${email} in tenant database for client: ${client.name}`,
+            );
+            break;
           }
         } catch (error) {
           console.error(
@@ -670,20 +649,12 @@ export class AuthService {
         if (credentials) {
           const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
 
-          const tenantPrisma = new PrismaClient({
-            datasources: { db: { url: tenantDatabaseUrl } },
+          const tenantPrisma = getTenantPrismaClient(clientId, tenantDatabaseUrl);
+
+          user = await tenantPrisma.users.findUnique({
+            where: { id: userId },
+            select: selectFields,
           });
-
-          try {
-            await tenantPrisma.$connect();
-
-            user = await tenantPrisma.users.findUnique({
-              where: { id: userId },
-              select: selectFields,
-            });
-          } finally {
-            await tenantPrisma.$disconnect();
-          }
         }
       } catch (error) {
         console.error('Error finding user in tenant database:', error);
@@ -766,28 +737,20 @@ export class AuthService {
     try {
       if (user.clientId) {
         // User is from tenant database, create audit log there
-        const credentials = await this.multiTenantService[
-          'getTenantCredentials'
-        ](user.clientId);
+        const credentials = await this.multiTenantService['getTenantCredentials'](
+          user.clientId,
+        );
         if (credentials) {
           const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
-          const tenantPrisma = new PrismaClient({
-            datasources: { db: { url: tenantDatabaseUrl } },
+          const tenantPrisma = getTenantPrismaClient(user.clientId, tenantDatabaseUrl);
+          await tenantPrisma.auditLogs.create({
+            data: {
+              userId: user.id,
+              action: 'login',
+              resource: 'auth',
+              details: { email },
+            },
           });
-
-          try {
-            await tenantPrisma.$connect();
-            await tenantPrisma.auditLogs.create({
-              data: {
-                userId: user.id,
-                action: 'login',
-                resource: 'auth',
-                details: { email },
-              },
-            });
-          } finally {
-            await tenantPrisma.$disconnect();
-          }
         }
       } else {
         // User is from master database
@@ -810,27 +773,19 @@ export class AuthService {
     try {
       if (user.clientId) {
         // For tenant users, get permissions from their tenant database
-        const credentials = await this.multiTenantService[
-          'getTenantCredentials'
-        ](user.clientId);
+        const credentials = await this.multiTenantService['getTenantCredentials'](
+          user.clientId,
+        );
         if (credentials) {
           const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
-          const tenantPrisma = new PrismaClient({
-            datasources: { db: { url: tenantDatabaseUrl } },
-          });
-
-          try {
-            await tenantPrisma.$connect();
-            // Get permissions for all stores the user has access to
-            const permissions =
-              await this.permissionsService.getUserPermissionsWithClient(
-                tenantPrisma,
-                user.id,
-              );
-            userPermissions = permissions;
-          } finally {
-            await tenantPrisma.$disconnect();
-          }
+          const tenantPrisma = getTenantPrismaClient(user.clientId, tenantDatabaseUrl);
+          // Get permissions for all stores the user has access to
+          const permissions =
+            await this.permissionsService.getUserPermissionsWithClient(
+              tenantPrisma,
+              user.id,
+            );
+          userPermissions = permissions;
         }
       } else {
         // For master database users (super_admin, admin), get permissions from master database
@@ -957,14 +912,12 @@ export class AuthService {
 
       if (isTenantUser && user.clientId) {
         // User is from tenant database (employee/manager), create reset token there
-        const credentials = await this.multiTenantService[
-          'getTenantCredentials'
-        ](user.clientId);
+        const credentials = await this.multiTenantService['getTenantCredentials'](
+          user.clientId,
+        );
         if (credentials) {
           const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
-          const tenantPrisma = new PrismaClient({
-            datasources: { db: { url: tenantDatabaseUrl } },
-          });
+          const tenantPrisma = getTenantPrismaClient(user.clientId, tenantDatabaseUrl);
 
           try {
             await tenantPrisma.$connect();
@@ -1105,47 +1058,39 @@ export class AuthService {
     // Search each tenant database for the reset token
     for (const client of clients) {
       try {
-        const credentials = await this.multiTenantService[
-          'getTenantCredentials'
-        ](client.id);
+        const credentials = await this.multiTenantService['getTenantCredentials'](
+          client.id,
+        );
         if (!credentials) continue;
 
         const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
 
-        const tenantPrisma = new PrismaClient({
-          datasources: { db: { url: tenantDatabaseUrl } },
-        });
+        const tenantPrisma = getTenantPrismaClient(client.id, tenantDatabaseUrl);
 
-        try {
-          await tenantPrisma.$connect();
+        const tenantResetToken =
+          await tenantPrisma.passwordResetTokens.findUnique({
+            where: { token },
+            select: { id: true, userId: true, expiresAt: true, usedAt: true },
+          });
 
-          const tenantResetToken =
-            await tenantPrisma.passwordResetTokens.findUnique({
-              where: { token },
-              select: { id: true, userId: true, expiresAt: true, usedAt: true },
-            });
+        if (tenantResetToken) {
+          // Token found in tenant database, get user info
+          const tenantUser = await tenantPrisma.users.findUnique({
+            where: { id: tenantResetToken.userId },
+            select: { id: true, email: true, clientId: true, role: true },
+          });
 
-          if (tenantResetToken) {
-            // Token found in tenant database, get user info
-            const tenantUser = await tenantPrisma.users.findUnique({
-              where: { id: tenantResetToken.userId },
-              select: { id: true, email: true, clientId: true, role: true },
-            });
-
-            if (tenantUser) {
-              console.log(
-                `Found reset token ${token} in tenant database for client: ${client.name}`,
-              );
-              return {
-                resetToken: tenantResetToken,
-                user: tenantUser,
-                isTenantUser: true,
-                clientId: client.id,
-              };
-            }
+          if (tenantUser) {
+            console.log(
+              `Found reset token ${token} in tenant database for client: ${client.name}`,
+            );
+            return {
+              resetToken: tenantResetToken,
+              user: tenantUser,
+              isTenantUser: true,
+              clientId: client.id,
+            };
           }
-        } finally {
-          await tenantPrisma.$disconnect();
         }
       } catch (error) {
         console.error(
@@ -1200,9 +1145,7 @@ export class AuthService {
           await this.multiTenantService['getTenantCredentials'](clientId);
         if (credentials) {
           const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
-          const tenantPrisma = new PrismaClient({
-            datasources: { db: { url: tenantDatabaseUrl } },
-          });
+          const tenantPrisma = getTenantPrismaClient(clientId, tenantDatabaseUrl);
 
           try {
             await tenantPrisma.$connect();
@@ -1503,27 +1446,19 @@ export class AuthService {
       try {
         if (user.clientId) {
           // For tenant users, get permissions from their tenant database
-          const credentials = await this.multiTenantService[
-            'getTenantCredentials'
-          ](user.clientId);
+          const credentials = await this.multiTenantService['getTenantCredentials'](
+            user.clientId,
+          );
           if (credentials) {
             const tenantDatabaseUrl = `postgresql://${credentials.userName}:${credentials.password}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${credentials.databaseName}`;
-            const tenantPrisma = new PrismaClient({
-              datasources: { db: { url: tenantDatabaseUrl } },
-            });
-
-            try {
-              await tenantPrisma.$connect();
-              // Get permissions for all stores the user has access to
-              const permissions =
-                await this.permissionsService.getUserPermissionsWithClient(
-                  tenantPrisma,
-                  user.id,
-                );
-              userPermissions = permissions;
-            } finally {
-              await tenantPrisma.$disconnect();
-            }
+            const tenantPrisma = getTenantPrismaClient(user.clientId, tenantDatabaseUrl);
+            // Get permissions for all stores the user has access to
+            const permissions =
+              await this.permissionsService.getUserPermissionsWithClient(
+                tenantPrisma,
+                user.id,
+              );
+            userPermissions = permissions;
           }
         } else {
           // For master database users (super_admin, admin), get permissions from master database
